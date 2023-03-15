@@ -6,19 +6,19 @@
       <profile name="Maven default annotation processors profile" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="kroxylicious-multitenant" />
         <module name="integrationtests.main" />
         <module name="kroxylicious-filter-api.main" />
-        <module name="kroxylicious-api.main" />
-        <module name="kroxylicious-multitenant.main" />
-        <module name="integrationtests.test" />
-        <module name="kroxylicious-multitenant.test" />
         <module name="kroxylicious-api.test" />
+        <module name="kroxylicious-api.main" />
         <module name="kroxylicious-filter-api.test" />
+        <module name="integrationtests.test" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="integrationtests" target="19" />
-      <module name="kroxylicious" target="11" />
+      <module name="kroxylicious" target="1.5" />
       <module name="kroxylicious-api" target="11" />
       <module name="kroxylicious-api.main" target="11" />
       <module name="kroxylicious-api.test" target="19" />
@@ -28,6 +28,8 @@
       <module name="kroxylicious-krpc-plugin" target="11" />
       <module name="kroxylicious-krpc-plugin.main" target="11" />
       <module name="kroxylicious-krpc-plugin.test" target="19" />
+      <module name="kroxylicious-multitenant.main" target="11" />
+      <module name="kroxylicious-multitenant.test" target="19" />
       <module name="kroxylicious.main" target="11" />
       <module name="kroxylicious.test" target="19" />
     </bytecodeTargetLevel>
