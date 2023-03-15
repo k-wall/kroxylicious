@@ -6,21 +6,31 @@
       <profile name="Maven default annotation processors profile" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
-        <outputRelativeToContentRoot value="true" />
-        <module name="kroxylicious-multitenant" />
-        <module name="kroxylicious.main" />
         <module name="integrationtests.main" />
-        <module name="kroxylicious-api" />
-        <module name="kroxylicious-krpc-plugin.main" />
-        <module name="kroxylicious.test" />
-        <module name="kroxylicious" />
-        <module name="kroxylicious-filter-api" />
-        <module name="kroxylicious-krpc-plugin" />
-        <module name="integrationtests" />
-        <module name="kroxylicious-krpc-plugin.test" />
+        <module name="kroxylicious-filter-api.main" />
+        <module name="kroxylicious-api.main" />
+        <module name="kroxylicious-multitenant.main" />
         <module name="integrationtests.test" />
+        <module name="kroxylicious-multitenant.test" />
+        <module name="kroxylicious-api.test" />
+        <module name="kroxylicious-filter-api.test" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="integrationtests" target="19" />
+      <module name="kroxylicious" target="11" />
+      <module name="kroxylicious-api" target="11" />
+      <module name="kroxylicious-api.main" target="11" />
+      <module name="kroxylicious-api.test" target="19" />
+      <module name="kroxylicious-filter-api" target="11" />
+      <module name="kroxylicious-filter-api.main" target="11" />
+      <module name="kroxylicious-filter-api.test" target="19" />
+      <module name="kroxylicious-krpc-plugin" target="11" />
+      <module name="kroxylicious-krpc-plugin.main" target="11" />
+      <module name="kroxylicious-krpc-plugin.test" target="19" />
+      <module name="kroxylicious.main" target="11" />
+      <module name="kroxylicious.test" target="19" />
+    </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
@@ -29,11 +39,17 @@
       <module name="integrationtests.test" options="-parameters" />
       <module name="kroxylicious" options="-parameters" />
       <module name="kroxylicious-api" options="-parameters" />
+      <module name="kroxylicious-api.main" options="-parameters" />
+      <module name="kroxylicious-api.test" options="-parameters" />
       <module name="kroxylicious-filter-api" options="-parameters" />
+      <module name="kroxylicious-filter-api.main" options="-parameters" />
+      <module name="kroxylicious-filter-api.test" options="-parameters" />
       <module name="kroxylicious-krpc-plugin" options="-parameters" />
       <module name="kroxylicious-krpc-plugin.main" options="-parameters" />
       <module name="kroxylicious-krpc-plugin.test" options="-parameters" />
       <module name="kroxylicious-multitenant" options="-parameters" />
+      <module name="kroxylicious-multitenant.main" options="-parameters" />
+      <module name="kroxylicious-multitenant.test" options="-parameters" />
       <module name="kroxylicious-parent" options="-parameters" />
       <module name="kroxylicious.main" options="-parameters" />
       <module name="kroxylicious.test" options="-parameters" />
