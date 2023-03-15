@@ -1,9 +1,0 @@
-= Operating proxies
-
-== Logging
-
-== Configuring TLS
-
-== Reconfiguration
-
-== Monitoring and observability
