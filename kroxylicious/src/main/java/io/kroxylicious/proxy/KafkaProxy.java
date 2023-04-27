@@ -46,6 +46,7 @@ import io.kroxylicious.proxy.internal.MeterRegistries;
 import io.kroxylicious.proxy.internal.VirtualClusterResolutionException;
 import io.kroxylicious.proxy.internal.VirtualClusterResolver;
 import io.kroxylicious.proxy.internal.admin.AdminHttpInitializer;
+import io.kroxylicious.proxy.internal.net.EndpointRegistry;
 import io.kroxylicious.proxy.internal.net.NetworkBinding;
 import io.kroxylicious.proxy.internal.util.Metrics;
 import io.kroxylicious.proxy.service.ClusterEndpointConfigProvider;
@@ -55,6 +56,7 @@ public final class KafkaProxy implements AutoCloseable, VirtualClusterResolver {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaProxy.class);
 
+    private final EndpointRegistry endpointRegistry = new EndpointRegistry();
     private Map<ClusterEndpointConfigProvider, VirtualCluster> endpointProviders;
 
     private record EventGroupConfig(EventLoopGroup bossGroup, EventLoopGroup workerGroup, Class<? extends ServerChannel> clazz) {

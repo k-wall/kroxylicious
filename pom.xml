@@ -30,6 +30,7 @@
         <skipITs>${skipTests}</skipITs>
         <skipUTs>${skipTests}</skipUTs>
 
+        <awaitility.version>4.2.0</awaitility.version>
         <debezium.version>1.9.0.Final</debezium.version>
         <freemarker.version>2.3.32</freemarker.version>
         <guava.version>31.1-jre</guava.version>
@@ -187,6 +188,12 @@
                 <groupId>org.assertj</groupId>
                 <artifactId>assertj-core</artifactId>
                 <version>${assertj-core.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.awaitility</groupId>
+                <artifactId>awaitility</artifactId>
+                <version>${awaitility.version}</version>
                 <scope>test</scope>
             </dependency>
             <dependency>
