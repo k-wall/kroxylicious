@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,7 +35,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class EndpointRegistryTest {
-    private EndpointRegistry endpointRegistry = new EndpointRegistry();
+    private final EndpointRegistry endpointRegistry = new EndpointRegistry();
     @Mock
     private VirtualCluster virtualCluster1;
     @Mock
@@ -43,6 +44,11 @@ class EndpointRegistryTest {
     private VirtualCluster virtualCluster2;
     @Mock
     private ClusterEndpointConfigProvider endpointProvider2;
+
+    @AfterEach
+    public void afterEach() throws Exception {
+        endpointRegistry.close();
+    }
 
     @Test
     public void registerVirtualCluster() throws Exception {
@@ -182,9 +188,8 @@ class EndpointRegistryTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"mycluster1:9192,true",
-                "localhost:9192,false"}
-    )
+    @CsvSource({ "mycluster1:9192,true",
+            "localhost:9192,false" })
     public void lookupBootstrap(@ConvertWith(HostPortConverter.class) HostPort address, boolean tls) throws Exception {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, address.toString(), tls);
 
@@ -242,7 +247,7 @@ class EndpointRegistryTest {
     }
 
     private NetworkUnbindRequest getNetworkUnbindRequest(int port) {
-        return new NetworkUnbindRequest(port, false, CompletableFuture.completedFuture(null));
+        return new NetworkUnbindRequest(port, false, CompletableFuture.completedFuture(null), null);
     }
 
     private void configureVirtualClusterMock(VirtualCluster cluster, ClusterEndpointConfigProvider configProvider, String address, boolean tls) {
@@ -256,7 +261,7 @@ class EndpointRegistryTest {
         assertThat(endpointRegistry.countNetworkEvents()).as("unexpected number of events").isEqualTo(expectedEvents.length);
         var expectedEventIterator = Arrays.stream(expectedEvents).iterator();
         while (endpointRegistry.hasNetworkEvents()) {
-            var networkBinding = endpointRegistry.popNetworkBindingEvent();
+            var networkBinding = endpointRegistry.takeNetworkBindingEvent();
             var expectedNetworkEvent = expectedEventIterator.next();
             assertThat(networkBinding.getClass()).as("unexpected binding operation").isEqualTo(expectedNetworkEvent.getClass());
             if (networkBinding instanceof NetworkBindRequest networkBindRequest) {

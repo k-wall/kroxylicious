@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 
 public abstract class NetworkBindingOperation {
@@ -69,4 +70,6 @@ public abstract class NetworkBindingOperation {
                 "port=" + port + ", " +
                 "tls=" + tls + ']';
     }
+
+    public abstract void performBindingOperation(ServerBootstrap serverBootstrap);
 }

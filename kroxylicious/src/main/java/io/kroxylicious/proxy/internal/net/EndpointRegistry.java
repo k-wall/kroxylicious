@@ -6,16 +6,15 @@
 
 package io.kroxylicious.proxy.internal.net;
 
-import java.util.Deque;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -32,10 +31,9 @@ import io.kroxylicious.proxy.service.HostPort;
  *
  *
  */
-public class EndpointRegistry {
+public class EndpointRegistry implements AutoCloseable {
 
     protected static final AttributeKey<Map<RoutingKey, VirtualClusterBinding>> CHANNEL_BINDINGS = AttributeKey.newInstance("channelBindings");
-
 
     private record VirtualClusterRecord(CompletionStage<Endpoint> registration,
                                         AtomicReference<CompletionStage<Void>> deregistration) {
@@ -44,8 +42,7 @@ public class EndpointRegistry {
         }
     }
 
-
-    private final Deque<NetworkBindingOperation> queue = new ConcurrentLinkedDeque<>();
+    private final BlockingQueue<NetworkBindingOperation> queue = new LinkedBlockingQueue<>();
 
     private final Map<VirtualCluster, VirtualClusterRecord> registeredVirtualClusters = new ConcurrentHashMap<>();
 
@@ -55,8 +52,8 @@ public class EndpointRegistry {
         return !queue.isEmpty();
     }
 
-    public NetworkBindingOperation popNetworkBindingEvent() {
-        return queue.pop();
+    public NetworkBindingOperation takeNetworkBindingEvent() throws InterruptedException {
+        return queue.take();
     }
 
     /* test */ int countNetworkEvents() {
@@ -152,7 +149,7 @@ public class EndpointRegistry {
                 var toRemove = allEntries.stream().filter(be -> be.getValue().virtualCluster().equals(virtualCluster)).collect(Collectors.toSet());
                 allEntries.removeAll(toRemove);
                 if (bindingMap.isEmpty()) {
-                    var unbind = NetworkUnbindRequest.createNetworkUnbindRequest(e.getKey(), virtualCluster.isUseTls());
+                    var unbind = NetworkUnbindRequest.createNetworkUnbindRequest(e.getKey(), virtualCluster.isUseTls(), channel);
                     queue.add(unbind);
                     return unbind.getCompletionStage();
                 }
@@ -196,4 +193,14 @@ public class EndpointRegistry {
         }
     }
 
+    public CompletionStage<Void> shutdown() {
+        return CompletableFuture.allOf(
+                registeredVirtualClusters.keySet().stream().map(this::deregisterVirtualCluster)
+                        .map(CompletionStage::toCompletableFuture).toArray(CompletableFuture<?>[]::new));
+    }
+
+    @Override
+    public void close() throws Exception {
+        shutdown().toCompletableFuture().get();
+    }
 }
