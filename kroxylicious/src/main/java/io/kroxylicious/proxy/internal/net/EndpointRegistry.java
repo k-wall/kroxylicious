@@ -7,6 +7,7 @@
 package io.kroxylicious.proxy.internal.net;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
@@ -33,14 +34,35 @@ import io.kroxylicious.proxy.service.HostPort;
  */
 public class EndpointRegistry implements AutoCloseable, EndpointResolver {
 
+    interface RoutingKey {
+        RoutingKey NULL_ROUTING_KEY = new NullRoutingKey();
+
+        static RoutingKey createBindingKey(String sniHostname) {
+            if (sniHostname == null || sniHostname.isEmpty()) {
+                return NULL_ROUTING_KEY;
+            }
+            return new SniRoutingKey(sniHostname);
+        }
+
+    }
+
+    private static class NullRoutingKey implements RoutingKey {
+    }
+
+    private record SniRoutingKey(String sniHostname) implements RoutingKey {
+
+    private SniRoutingKey(String sniHostname) {
+            Objects.requireNonNull(sniHostname);
+            this.sniHostname = sniHostname.toLowerCase(Locale.ROOT);
+        }}
+
     protected static final AttributeKey<Map<RoutingKey, VirtualClusterBinding>> CHANNEL_BINDINGS = AttributeKey.newInstance("channelBindings");
 
-    private record VirtualClusterRecord(CompletionStage<Endpoint> registration,
-                                        AtomicReference<CompletionStage<Void>> deregistration) {
-        private static VirtualClusterRecord createVirtualClusterRecord() {
+    private record VirtualClusterRecord(CompletionStage<Endpoint> registration, AtomicReference<CompletionStage<Void>> deregistration) {
+
+    private static VirtualClusterRecord createVirtualClusterRecord() {
             return new VirtualClusterRecord(new CompletableFuture<>(), new AtomicReference<>());
-        }
-    }
+        }}
 
     private final BlockingQueue<NetworkBindingOperation> queue = new LinkedBlockingQueue<>();
 
@@ -117,7 +139,7 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
 
         return channelStage.thenApply(c -> {
             var bindings = c.attr(CHANNEL_BINDINGS);
-            RoutingKey bindingKey = virtualCluster.getClusterEndpointProvider().requiresTls() ? RoutingKey.createBindingKey(host) : RoutingKey.NULL_BINDING_KEY;
+            var bindingKey = virtualCluster.getClusterEndpointProvider().requiresTls() ? RoutingKey.createBindingKey(host) : RoutingKey.NULL_ROUTING_KEY;
             bindings.setIfAbsent(new ConcurrentHashMap<>());
             bindings.get().put(bindingKey, new VirtualClusterBinding(virtualCluster, nodeId));
             return key;
@@ -125,7 +147,6 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
     }
 
     public CompletionStage<Void> deregisterVirtualCluster(VirtualCluster virtualCluster) {
-
         Objects.requireNonNull(virtualCluster, "virtualCluster cannot be null");
 
         CompletableFuture<Void> deregisterFuture = new CompletableFuture<>();
@@ -178,7 +199,7 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
                 throw buildEndpointResolutionException("No channel bindings found for ", bindingAddress, port, sniHostname, tls);
             }
             // We first look for a binding matching by SNI name, then fallback to a null match.
-            var binding = bindings.get().getOrDefault(RoutingKey.createBindingKey(sniHostname), bindings.get().get(RoutingKey.NULL_BINDING_KEY));
+            var binding = bindings.get().getOrDefault(RoutingKey.createBindingKey(sniHostname), bindings.get().get(RoutingKey.NULL_ROUTING_KEY));
             if (binding == null) {
                 throw buildEndpointResolutionException("No channel bindings found for ", bindingAddress, port, sniHostname, tls);
             }
@@ -193,17 +214,6 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
                         port,
                         sniHostname == null ? "<none>" : sniHostname,
                         tls));
-    }
-
-    protected record RoutingKey(String sniHostname) {
-        private static final RoutingKey NULL_BINDING_KEY = new RoutingKey(null);
-
-        public static RoutingKey createBindingKey(String sniHostname) {
-            if (sniHostname == null) {
-                return NULL_BINDING_KEY;
-            }
-            return new RoutingKey(sniHostname);
-        }
     }
 
     public CompletionStage<Void> shutdown() {

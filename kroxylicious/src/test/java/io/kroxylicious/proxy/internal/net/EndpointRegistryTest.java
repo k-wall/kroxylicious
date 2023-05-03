@@ -7,6 +7,7 @@
 package io.kroxylicious.proxy.internal.net;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -204,6 +205,36 @@ class EndpointRegistryTest {
         assertThat(binding.virtualCluster()).isEqualTo(virtualCluster1);
     }
 
+    @ParameterizedTest
+    @CsvSource({ "mycluster1:9192,mycluster2:9192", "mycluster1:9192,mycluster1:9191" })
+    public void resolveBootstrapResolutionException(@ConvertWith(HostPortConverter.class) HostPort address, @ConvertWith(HostPortConverter.class) HostPort resolve)
+            throws Exception {
+        configureVirtualClusterMock(virtualCluster1, endpointProvider1, address.toString(), true);
+
+        var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
+        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
+        assertThat(f.isDone()).isTrue();
+
+        var executionException = assertThrows(ExecutionException.class,
+                () -> endpointRegistry.resolve(null, resolve.port(), resolve.host(), true).toCompletableFuture().get());
+        assertThat(executionException).hasCauseInstanceOf(EndpointResolutionException.class);
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "mycluster1:9192,MyClUsTeR1", "69.2.0.192.in-addr.arpa:9192,69.2.0.192.in-ADDR.ARPA" })
+    public void resolveRespectsCaseInsensitivityRfc4343(@ConvertWith(HostPortConverter.class) HostPort address, String sniHostname) throws Exception {
+        configureVirtualClusterMock(virtualCluster1, endpointProvider1, address.toString(), true);
+
+        var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
+        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(address.port()));
+        assertThat(f.isDone()).isTrue();
+
+        var binding = endpointRegistry.resolve(null, address.port(), sniHostname, true).toCompletableFuture().get();
+        assertThat(binding).isNotNull();
+        assertThat(binding.nodeId()).isNull();
+        assertThat(binding.virtualCluster()).isEqualTo(virtualCluster1);
+    }
+
     @Test
     public void resolveBrokerAddress() throws Exception {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, "localhost:9192", false);
@@ -221,16 +252,30 @@ class EndpointRegistryTest {
     }
 
     @Test
-    public void resolveBootstrapUnknownPort() throws Exception {
+    public void bindingAddressEndpointSeparation() throws Exception {
+        var bindingAddress1 = "127.0.0.1";
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, "localhost:9192", false);
+        when(endpointProvider1.getBindAddress()).thenReturn(Optional.of(bindingAddress1));
 
-        var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
-        assertThat(f.isDone()).isTrue();
+        var bindingAddress2 = "192.168.0.1";
+        configureVirtualClusterMock(virtualCluster2, endpointProvider2, "myhost:9192", false);
+        when(endpointProvider2.getBindAddress()).thenReturn(Optional.of(bindingAddress2));
 
-        var executionException = assertThrows(ExecutionException.class, () -> endpointRegistry.resolve(null, 9191, null, false).toCompletableFuture().get());
+        var f1 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
+        var f2 = endpointRegistry.registerVirtualCluster(virtualCluster2).toCompletableFuture();
+        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192), getNetworkBindRequest(9192));
+        assertThat(CompletableFuture.allOf(f1, f2).isDone()).isTrue();
+
+        var b1 = endpointRegistry.resolve(bindingAddress1, 9192, null, false).toCompletableFuture().get();
+        assertThat(b1).isNotNull();
+        assertThat(b1.virtualCluster()).isEqualTo(virtualCluster1);
+
+        var b2 = endpointRegistry.resolve(bindingAddress2, 9192, null, false).toCompletableFuture().get();
+        assertThat(b2).isNotNull();
+        assertThat(b2.virtualCluster()).isEqualTo(virtualCluster2);
+
+        var executionException = assertThrows(ExecutionException.class, () -> endpointRegistry.resolve(null, 9192, null, false).toCompletableFuture().get());
         assertThat(executionException).hasCauseInstanceOf(EndpointResolutionException.class);
-
     }
 
     private Channel createMockNettyChannel() {
