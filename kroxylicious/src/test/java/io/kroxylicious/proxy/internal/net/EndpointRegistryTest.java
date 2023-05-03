@@ -122,6 +122,20 @@ class EndpointRegistryTest {
         assertThat(f.isDone()).isTrue();
         assertThat(f.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, false));
     }
+    // @Test
+    // public void registerRejectsDuplicatedBinding() throws Exception {
+    // configureVirtualClusterMock(virtualCluster1, endpointProvider1, "localhost:9191", false);
+    // configureVirtualClusterMock(virtualCluster2, endpointProvider2, "localhost:9191", false);
+    //
+    // var f1 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
+    // verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9191));
+    // assertThat(f1.isDone()).isTrue();
+    //
+    // verifyAndProcessNetworkEventQueue();
+    // var executionException = assertThrows(ExecutionException.class,
+    // () -> endpointRegistry.registerVirtualCluster(virtualCluster2).toCompletableFuture().get());
+    // assertThat(executionException).hasCauseInstanceOf(EndpointBindingException.class);
+    // }
 
     @Test
     public void deregisterVirtualCluster() throws Exception {

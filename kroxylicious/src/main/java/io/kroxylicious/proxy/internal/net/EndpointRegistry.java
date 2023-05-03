@@ -47,6 +47,10 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
     }
 
     private static class NullRoutingKey implements RoutingKey {
+        @Override
+        public String toString() {
+            return "NullRoutingKey[]";
+        }
     }
 
     private record SniRoutingKey(String sniHostname) implements RoutingKey {
@@ -141,7 +145,12 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             var bindings = c.attr(CHANNEL_BINDINGS);
             var bindingKey = virtualCluster.getClusterEndpointProvider().requiresTls() ? RoutingKey.createBindingKey(host) : RoutingKey.NULL_ROUTING_KEY;
             bindings.setIfAbsent(new ConcurrentHashMap<>());
-            bindings.get().put(bindingKey, new VirtualClusterBinding(virtualCluster, nodeId));
+
+            Map<RoutingKey, VirtualClusterBinding> bindingMap = bindings.get();
+            var existing = bindingMap.putIfAbsent(bindingKey, new VirtualClusterBinding(virtualCluster, nodeId));
+            if (existing != null) {
+                throw new EndpointBindingException("Endpoint %s cannot be bound with key %s, that key is already bound".formatted(key, bindingKey));
+            }
             return key;
         });
     }

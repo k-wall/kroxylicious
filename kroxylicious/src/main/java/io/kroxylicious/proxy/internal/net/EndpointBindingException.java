@@ -6,12 +6,12 @@
 
 package io.kroxylicious.proxy.internal.net;
 
-public class EndpointResolutionException extends EndpointException {
-    public EndpointResolutionException(String message) {
+public class EndpointBindingException extends EndpointException {
+    public EndpointBindingException(String message) {
         super(message);
     }
 
-    public EndpointResolutionException(String message, Throwable cause) {
+    public EndpointBindingException(String message, Throwable cause) {
         super(message, cause);
     }
 }
