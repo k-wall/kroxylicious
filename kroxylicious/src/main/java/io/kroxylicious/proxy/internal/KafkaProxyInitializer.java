@@ -5,6 +5,8 @@
  */
 package io.kroxylicious.proxy.internal;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Map;
 
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -23,12 +25,15 @@ import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.util.concurrent.Future;
 
+import io.kroxylicious.proxy.bootstrap.FilterChainFactory;
 import io.kroxylicious.proxy.config.Configuration;
-import io.kroxylicious.proxy.config.VirtualCluster;
+import io.kroxylicious.proxy.filter.KrpcFilter;
+import io.kroxylicious.proxy.filter.MetadataResponseFilter;
 import io.kroxylicious.proxy.internal.codec.KafkaRequestDecoder;
 import io.kroxylicious.proxy.internal.codec.KafkaResponseEncoder;
-import io.kroxylicious.proxy.internal.filter.UpstreamBrokerAddressCachingNetFilter;
 import io.kroxylicious.proxy.internal.net.EndpointResolver;
+import io.kroxylicious.proxy.internal.net.VirtualClusterBinding;
+import io.kroxylicious.proxy.service.HostPort;
 
 public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
 
@@ -75,7 +80,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
                             return null;
                         }
                         else {
-                            KafkaProxyInitializer.this.addHandlers(ch, virtualCluster);
+                            KafkaProxyInitializer.this.addHandlers(ch, binding);
                             promise.setSuccess(sslContext.get());
                             return null;
                         }
@@ -106,7 +111,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
                             return null;
                         }
                         var virtualCluster = binding.virtualCluster();
-                        KafkaProxyInitializer.this.addHandlers(ch, virtualCluster);
+                        KafkaProxyInitializer.this.addHandlers(ch, binding);
                         ctx.fireChannelActive();
                         pipeline.remove(this);
                         return null;
@@ -117,7 +122,8 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
         }
     }
 
-    private void addHandlers(SocketChannel ch, VirtualCluster virtualCluster) {
+    private void addHandlers(SocketChannel ch, VirtualClusterBinding binding) {
+        var virtualCluster = binding.virtualCluster();
         ChannelPipeline pipeline = ch.pipeline();
         if (virtualCluster.isLogNetwork()) {
             pipeline.addLast("networkLogger", new LoggingHandler("io.kroxylicious.proxy.internal.DownstreamNetworkLogger", LogLevel.INFO));
@@ -146,9 +152,49 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
             pipeline.addLast(new KafkaAuthnHandler(ch, authnHandlers));
         }
 
-        var netFilter = new UpstreamBrokerAddressCachingNetFilter(config, virtualCluster);
+        var frontendHandler = new KafkaProxyFrontendHandler(context -> {
+            var filterChainFactory = new FilterChainFactory(config, virtualCluster.getClusterEndpointProvider());
 
-        pipeline.addLast("netHandler", new KafkaProxyFrontendHandler(netFilter, dp, virtualCluster.isLogNetwork(), virtualCluster.isLogFrames()));
+            var filters = new ArrayList<>(Arrays.stream(filterChainFactory.createFilters()).toList());
+
+            // Add a filter to the *end of the chain* that gathers the true nodeId/upstream broker mapping.
+            filters.add((MetadataResponseFilter) (header, response, filterContext) -> {
+                response.brokers().forEach(b -> {
+                    var replacement = new HostPort(b.host(), b.port());
+                    var existing = virtualCluster.updateUpstreamClusterAddressForNode(b.nodeId(), replacement);
+                    if (!replacement.equals(existing)) {
+                        LOGGER.info("Got upstream for broker {} : {}", b.nodeId(), replacement);
+                    }
+                });
+                filterContext.forwardResponse(response);
+            });
+
+            var targetBootstrapServers = virtualCluster.targetCluster().bootstrapServers();
+            var targetBootstrapServersParts = targetBootstrapServers.split(",");
+            var targetClusterBootstrap = HostPort.parse(targetBootstrapServersParts[0]);
+
+            HostPort target;
+            if (binding.nodeId() != null) {
+                var upstreamBroker = virtualCluster.getUpstreamClusterAddressForNode(binding.nodeId());
+                if (upstreamBroker != null) {
+                    target = upstreamBroker;
+                }
+                else {
+                    // TODO: this behaviour is sub-optimal as it means a client will proceed with a connection to the wrong broker.
+                    // This will lead to difficult to diagnose failure cases later (produces going to the wrong broker, metadata refresh cycles, etc).
+                    LOGGER.warn("An upstream address for broker {} is not yet known, connecting the client to bootstrap instead.", binding.nodeId());
+                    target = targetClusterBootstrap;
+                }
+            }
+            else {
+                target = targetClusterBootstrap;
+            }
+
+            context.initiateConnect(target.host(), target.port(), filters.toArray(new KrpcFilter[0]));
+        }, dp, virtualCluster.isLogNetwork(), virtualCluster.isLogFrames());
+
+        pipeline.addLast("netHandler", frontendHandler);
+
         LOGGER.debug("{}: Initial pipeline: {}", ch, pipeline);
     }
 
