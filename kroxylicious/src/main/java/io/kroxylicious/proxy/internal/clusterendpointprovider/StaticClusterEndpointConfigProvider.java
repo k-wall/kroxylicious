@@ -16,8 +16,6 @@ import io.kroxylicious.proxy.service.HostPort;
 
 public class StaticClusterEndpointConfigProvider implements ClusterEndpointConfigProvider {
 
-    private static final EndpointMatchResult BOOTSTRAP_MATCHED = new EndpointMatchResult(true, null);
-    private static final EndpointMatchResult NO_MATCH = new EndpointMatchResult(false, null);
     private final HostPort bootstrapAddress;
     private final Map<Integer, HostPort> brokers;
     private final Map<Integer, EndpointMatchResult> portToNodeIdMatchedMap;
@@ -46,14 +44,6 @@ public class StaticClusterEndpointConfigProvider implements ClusterEndpointConfi
     @Override
     public int getNumberOfBrokerEndpointsToPrebind() {
         return this.brokers.size();
-    }
-
-    @Override
-    public EndpointMatchResult hasMatchingEndpoint(String sniHostname, int port) {
-        if (bootstrapAddress.port() == port) {
-            return BOOTSTRAP_MATCHED;
-        }
-        return portToNodeIdMatchedMap.getOrDefault(port, NO_MATCH);
     }
 
     public static class StaticClusterEndpointProviderConfig extends BaseConfig {

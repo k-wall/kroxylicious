@@ -14,8 +14,6 @@ import io.kroxylicious.proxy.service.HostPort;
 
 public class SniRoutingClusterEndpointConfigProvider implements ClusterEndpointConfigProvider {
 
-    private static final EndpointMatchResult BOOTSTRAP_MATCHED = new EndpointMatchResult(true, null);
-    private static final EndpointMatchResult NO_MATCH = new EndpointMatchResult(false, null);
     private static final Pattern NODE_ID_TOKEN = Pattern.compile("\\$\\(nodeId\\)");
     public static final String LITERAL_NODE_ID = "$(nodeId)";
     private final HostPort bootstrapAddress;
@@ -41,21 +39,6 @@ public class SniRoutingClusterEndpointConfigProvider implements ClusterEndpointC
         }
         // TODO: consider introducing an cache (LRU?)
         return new HostPort(brokerAddressPattern.replace(LITERAL_NODE_ID, Integer.toString(nodeId)), bootstrapAddress.port());
-    }
-
-    @Override
-    public EndpointMatchResult hasMatchingEndpoint(String sniHostname, int port) {
-        if (sniHostname == null || bootstrapAddress.port() != port) {
-            return NO_MATCH;
-        }
-        else if (bootstrapAddress.host().equals(sniHostname) || bootstrapAddress.host().equalsIgnoreCase(sniHostname)) {
-            return BOOTSTRAP_MATCHED;
-        }
-        var matcher = brokerAddressPatternRegExp.matcher(sniHostname);
-        if (matcher.find()) {
-            return new EndpointMatchResult(true, Integer.parseInt(matcher.group(1)));
-        }
-        return NO_MATCH;
     }
 
     @Override

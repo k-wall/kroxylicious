@@ -31,16 +31,6 @@ public interface ClusterEndpointConfigProvider {
     HostPort getBrokerAddress(int nodeId) throws IllegalArgumentException;
 
     /**
-     * Tests whether this endpoint providers has a matching endpoint for the given parameters.  This considers both bootstrap and broker endpoints.
-     * If the endpoint is known and corresponds to a broker endpoint, the result encapsulates the {@code nodeId} of the endpoint.
-     *
-     * @param sniHostname sniHostname provided by TLS negotiation or null if TLS is not in use or SNI is not available.
-     * @param port local port number of the connection
-     * @return an {@link EndpointMatchResult}
-     */
-    EndpointMatchResult hasMatchingEndpoint(String sniHostname, int port);
-
-    /**
      * Provides the number of broker endpoints to pre-bind.
      * Kroxylicious will pre-bind all the broker end-points between
      * 0..{@code numberOfWarmStartBrokerEndpoints}-1 on startup, rather
