@@ -33,7 +33,6 @@ public final class NetworkUnbindRequest extends NetworkBindingOperation {
         var addr = channel.localAddress();
         LOGGER.info("Unbinding {}", addr);
 
-        channel.closeFuture().addListener((ChannelFutureListener) channelFuture -> getCompletionStage().toCompletableFuture().complete(channelFuture.channel()));
-        channel.close();
+        channel.close().addListener((ChannelFutureListener) channelFuture -> getCompletionStage().toCompletableFuture().complete(channelFuture.channel()));
     }
 }

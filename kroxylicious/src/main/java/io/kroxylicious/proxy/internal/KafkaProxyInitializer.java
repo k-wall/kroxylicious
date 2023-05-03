@@ -68,24 +68,28 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
             pipeline.addLast(new SniHandler((sniHostname, promise) -> {
                 try {
                     var stage = endpointResolver.resolve(bindingAddress, targetPort, sniHostname, tls);
-                    stage.handle((binding, t) -> {
-                        if (t != null) {
-                            promise.setFailure(t);
-                            return null;
+                    // completes the netty promise when then resolution completes (success/otherwise).
+                    var unused = stage.handle((binding, t) -> {
+                        try {
+                            if (t != null) {
+                                promise.setFailure(t);
+                                return null;
+                            }
+                            var virtualCluster = binding.virtualCluster();
+                            var sslContext = virtualCluster.buildSslContext();
+                            if (sslContext.isEmpty()) {
+                                promise.setFailure(new IllegalStateException("Virtual cluster %s does not provide SSL context".formatted(virtualCluster)));
+                            }
+                            else {
+                                KafkaProxyInitializer.this.addHandlers(ch, binding);
+                                promise.setSuccess(sslContext.get());
+                            }
                         }
-                        var virtualCluster = binding.virtualCluster();
-                        var sslContext = virtualCluster.buildSslContext();
-                        if (sslContext.isEmpty()) {
-                            promise.setFailure(new IllegalStateException("Virtual cluster %s does not provide SSL context".formatted(virtualCluster)));
-                            return null;
+                        catch (Throwable t1) {
+                            promise.setFailure(t1);
                         }
-                        else {
-                            KafkaProxyInitializer.this.addHandlers(ch, binding);
-                            promise.setSuccess(sslContext.get());
-                            return null;
-                        }
+                        return null;
                     });
-                    // return value of handle deliberately ignored.
                     return promise;
                 }
                 catch (Throwable cause) {
@@ -105,18 +109,23 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
                 @Override
                 public void channelActive(ChannelHandlerContext ctx) {
                     var stage = endpointResolver.resolve(bindingAddress, targetPort, null, tls);
-                    stage.handle((binding, t) -> {
+                    var unused = stage.handle((binding, t) -> {
                         if (t != null) {
                             ctx.fireExceptionCaught(t);
                             return null;
                         }
-                        var virtualCluster = binding.virtualCluster();
-                        KafkaProxyInitializer.this.addHandlers(ch, binding);
-                        ctx.fireChannelActive();
-                        pipeline.remove(this);
+                        try {
+                            KafkaProxyInitializer.this.addHandlers(ch, binding);
+                            ctx.fireChannelActive();
+                        }
+                        catch (Throwable t1) {
+                            ctx.fireExceptionCaught(t1);
+                        }
+                        finally {
+                            pipeline.remove(this);
+                        }
                         return null;
                     });
-                    // return value of handle deliberately ignored.
                 }
             });
         }
