@@ -11,10 +11,4 @@ public record Endpoint(String bindingAddress, int port, boolean tls) {
         return new Endpoint(bindingAddress, port, tls);
     }
 
-    public Endpoint cloneWithOverriddenAssignedPort(int actualPort) {
-        if (actualPort < 1) {
-            throw new IllegalArgumentException("actualPort must be greater 0");
-        }
-        return new Endpoint(bindingAddress(), actualPort, tls());
-    }
 }

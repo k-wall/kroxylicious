@@ -13,7 +13,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +45,6 @@ import io.kroxylicious.proxy.internal.admin.AdminHttpInitializer;
 import io.kroxylicious.proxy.internal.net.Endpoint;
 import io.kroxylicious.proxy.internal.net.EndpointRegistry;
 import io.kroxylicious.proxy.internal.util.Metrics;
-import io.kroxylicious.proxy.service.ClusterEndpointConfigProvider;
 
 public final class KafkaProxy implements AutoCloseable {
 
@@ -58,7 +56,6 @@ public final class KafkaProxy implements AutoCloseable {
         return t;
     });
     private final EndpointRegistry endpointRegistry = new EndpointRegistry();
-    private Map<ClusterEndpointConfigProvider, VirtualCluster> endpointProviders;
 
     private record EventGroupConfig(EventLoopGroup bossGroup, EventLoopGroup workerGroup, Class<? extends ServerChannel> clazz) {
         public List<Future<?>> shutdownGracefully() {
@@ -99,9 +96,6 @@ public final class KafkaProxy implements AutoCloseable {
 
         maybeStartMetricsListener(adminEventGroup, meterRegistries);
 
-        this.endpointProviders = virtualClusterMap.entrySet().stream()
-                .collect(Collectors.toMap(e -> e.getValue().getClusterEndpointProvider(), Map.Entry::getValue));
-
         var tlsServerBootstrap = buildServerBootstrap(serverEventGroup, new KafkaProxyInitializer(config, true, endpointRegistry, false, Map.of()));
         var plainServerBootstrap = buildServerBootstrap(serverEventGroup, new KafkaProxyInitializer(config, false, endpointRegistry, false, Map.of()));
 
@@ -119,7 +113,7 @@ public final class KafkaProxy implements AutoCloseable {
             }
         });
 
-        // TODO: startup should return a completionstage?
+        // TODO: startup/shutdown should return a completionstage
         List<CompletableFuture<Endpoint>> futures = new ArrayList<>();
         virtualClusterMap.forEach((n, vc) -> {
             futures.add(endpointRegistry.registerVirtualCluster(vc).toCompletableFuture());
