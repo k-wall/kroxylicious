@@ -31,7 +31,7 @@ import io.kroxylicious.proxy.service.HostPort;
  *
  *
  */
-public class EndpointRegistry implements AutoCloseable {
+public class EndpointRegistry implements AutoCloseable, EndpointResolver {
 
     protected static final AttributeKey<Map<RoutingKey, VirtualClusterBinding>> CHANNEL_BINDINGS = AttributeKey.newInstance("channelBindings");
 
@@ -165,21 +165,34 @@ public class EndpointRegistry implements AutoCloseable {
         });
     }
 
-    public CompletionStage<VirtualClusterBinding> lookup(String bindingAddress, int port, boolean tls, String sniHostname) {
+    @Override
+    public CompletionStage<VirtualClusterBinding> resolve(String bindingAddress, int port, String sniHostname, boolean tls) {
         var endpoint = new Endpoint(bindingAddress, port, tls);
         CompletionStage<Channel> channelCompletionStage = this.listeningChannels.get(endpoint);
         if (channelCompletionStage == null) {
-            return CompletableFuture.completedStage(null);
+            return CompletableFuture.failedStage(buildEndpointResolutionException("Failed to find channel matching ", bindingAddress, port, sniHostname, tls));
         }
         return channelCompletionStage.thenApply(channel -> {
             var bindings = channel.attr(CHANNEL_BINDINGS);
-            var bindingKey = RoutingKey.createBindingKey(sniHostname);
             if (bindings == null || bindings.get() == null) {
-                return null;
+                throw buildEndpointResolutionException("No channel bindings found for ", bindingAddress, port, sniHostname, tls);
             }
-            var binding = bindings.get().get(bindingKey);
+            // We first look for a binding matching by SNI name, then fallback to a null match.
+            var binding = bindings.get().getOrDefault(RoutingKey.createBindingKey(sniHostname), bindings.get().get(RoutingKey.NULL_BINDING_KEY));
+            if (binding == null) {
+                throw buildEndpointResolutionException("No channel bindings found for ", bindingAddress, port, sniHostname, tls);
+            }
             return binding;
         });
+    }
+
+    private EndpointResolutionException buildEndpointResolutionException(String prefix, String bindingAddress, int port, String sniHostname, boolean tls) {
+        return new EndpointResolutionException(
+                ("%s binding address: %s, port %d, sniHostname: %s, tls %s").formatted(prefix,
+                        bindingAddress == null ? "any" : bindingAddress,
+                        port,
+                        sniHostname == null ? "<none>" : sniHostname,
+                        tls));
     }
 
     protected record RoutingKey(String sniHostname) {

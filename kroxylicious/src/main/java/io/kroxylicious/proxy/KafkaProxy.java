@@ -42,15 +42,13 @@ import io.kroxylicious.proxy.config.VirtualCluster;
 import io.kroxylicious.proxy.config.admin.AdminHttpConfiguration;
 import io.kroxylicious.proxy.internal.KafkaProxyInitializer;
 import io.kroxylicious.proxy.internal.MeterRegistries;
-import io.kroxylicious.proxy.internal.VirtualClusterResolutionException;
-import io.kroxylicious.proxy.internal.VirtualClusterResolver;
 import io.kroxylicious.proxy.internal.admin.AdminHttpInitializer;
 import io.kroxylicious.proxy.internal.net.Endpoint;
 import io.kroxylicious.proxy.internal.net.EndpointRegistry;
 import io.kroxylicious.proxy.internal.util.Metrics;
 import io.kroxylicious.proxy.service.ClusterEndpointConfigProvider;
 
-public final class KafkaProxy implements AutoCloseable, VirtualClusterResolver {
+public final class KafkaProxy implements AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaProxy.class);
 
@@ -104,8 +102,8 @@ public final class KafkaProxy implements AutoCloseable, VirtualClusterResolver {
         this.endpointProviders = virtualClusterMap.entrySet().stream()
                 .collect(Collectors.toMap(e -> e.getValue().getClusterEndpointProvider(), Map.Entry::getValue));
 
-        var tlsServerBootstrap = buildServerBootstrap(serverEventGroup, new KafkaProxyInitializer(config, true, this, false, Map.of()));
-        var plainServerBootstrap = buildServerBootstrap(serverEventGroup, new KafkaProxyInitializer(config, false, this, false, Map.of()));
+        var tlsServerBootstrap = buildServerBootstrap(serverEventGroup, new KafkaProxyInitializer(config, true, endpointRegistry, false, Map.of()));
+        var plainServerBootstrap = buildServerBootstrap(serverEventGroup, new KafkaProxyInitializer(config, false, endpointRegistry, false, Map.of()));
 
         networkBindingExecutor.submit(() -> {
             try {
@@ -242,31 +240,4 @@ public final class KafkaProxy implements AutoCloseable, VirtualClusterResolver {
         }
     }
 
-    @Override
-    public VirtualCluster resolve(String sniHostname, int targetPort) {
-        var matchingVirtualClusters = endpointProviders.entrySet().stream()
-                .filter(e -> e.getKey().hasMatchingEndpoint(sniHostname, targetPort).matched()).map(Map.Entry::getValue).toList();
-        // We only expect one match
-        if (matchingVirtualClusters.isEmpty()) {
-            throw new VirtualClusterResolutionException("Failed to find matching virtual cluster for %s on port %d".formatted(sniHostname, targetPort));
-        }
-        else if (matchingVirtualClusters.size() > 1) {
-            throw new VirtualClusterResolutionException("Found too many virtual cluster matches for %s on port %d".formatted(sniHostname, targetPort));
-        }
-        return matchingVirtualClusters.get(0);
-    }
-
-    @Override
-    public VirtualCluster resolve(int targetPort) {
-        var matchingVirtualClusters = endpointProviders.entrySet().stream()
-                .filter(e -> e.getKey().hasMatchingEndpoint(null, targetPort).matched()).map(Map.Entry::getValue).toList();
-        // We only expect one match
-        if (matchingVirtualClusters.isEmpty()) {
-            throw new VirtualClusterResolutionException("Failed to find matching virtual cluster for port %d".formatted(targetPort));
-        }
-        else if (matchingVirtualClusters.size() > 1) {
-            throw new VirtualClusterResolutionException("Found too many virtual cluster matches for port %d".formatted(targetPort));
-        }
-        return matchingVirtualClusters.get(0);
-    }
 }

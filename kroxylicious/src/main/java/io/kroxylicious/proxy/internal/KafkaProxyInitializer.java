@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
@@ -27,6 +28,7 @@ import io.kroxylicious.proxy.config.VirtualCluster;
 import io.kroxylicious.proxy.internal.codec.KafkaRequestDecoder;
 import io.kroxylicious.proxy.internal.codec.KafkaResponseEncoder;
 import io.kroxylicious.proxy.internal.filter.UpstreamBrokerAddressCachingNetFilter;
+import io.kroxylicious.proxy.internal.net.EndpointResolver;
 
 public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
 
@@ -34,16 +36,16 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
 
     private final boolean haproxyProtocol;
     private final Map<KafkaAuthnHandler.SaslMechanism, AuthenticateCallbackHandler> authnHandlers;
-    private final boolean requireTls;
-    private final VirtualClusterResolver virtualClusterResolver;
+    private final boolean tls;
+    private final EndpointResolver endpointResolver;
     private final Configuration config;
 
-    public KafkaProxyInitializer(Configuration config, boolean requireTls, VirtualClusterResolver virtualClusterResolver, boolean haproxyProtocol,
+    public KafkaProxyInitializer(Configuration config, boolean tls, EndpointResolver endpointResolver, boolean haproxyProtocol,
                                  Map<KafkaAuthnHandler.SaslMechanism, AuthenticateCallbackHandler> authnMechanismHandlers) {
         this.haproxyProtocol = haproxyProtocol;
         this.authnHandlers = authnMechanismHandlers != null ? authnMechanismHandlers : Map.of();
-        this.requireTls = requireTls;
-        this.virtualClusterResolver = virtualClusterResolver;
+        this.tls = tls;
+        this.endpointResolver = endpointResolver;
         this.config = config;
     }
 
@@ -55,16 +57,35 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
         ChannelPipeline pipeline = ch.pipeline();
 
         int targetPort = ch.localAddress().getPort();
-        if (requireTls) {
+        var bindingAddress = ch.parent().localAddress().getAddress().isAnyLocalAddress() ? null : ch.localAddress().getAddress().getHostAddress();
+        if (tls) {
             LOGGER.debug("Adding SSL/SNI handler");
-            pipeline.addLast(new SniHandler(hostname -> {
-                var virtualCluster = virtualClusterResolver.resolve(hostname, targetPort);
-                var sslContext = virtualCluster.buildSslContext();
-                if (sslContext.isEmpty()) {
-                    throw new IllegalStateException("Virtual cluster %s does not provide SSL context".formatted(virtualCluster));
+            pipeline.addLast(new SniHandler((sniHostname, promise) -> {
+                try {
+                    var stage = endpointResolver.resolve(bindingAddress, targetPort, sniHostname, tls);
+                    stage.handle((binding, t) -> {
+                        if (t != null) {
+                            promise.setFailure(t);
+                            return null;
+                        }
+                        var virtualCluster = binding.virtualCluster();
+                        var sslContext = virtualCluster.buildSslContext();
+                        if (sslContext.isEmpty()) {
+                            promise.setFailure(new IllegalStateException("Virtual cluster %s does not provide SSL context".formatted(virtualCluster)));
+                            return null;
+                        }
+                        else {
+                            KafkaProxyInitializer.this.addHandlers(ch, virtualCluster);
+                            promise.setSuccess(sslContext.get());
+                            return null;
+                        }
+                    });
+                    // return value of handle deliberately ignored.
+                    return promise;
                 }
-                addHandlers(ch, virtualCluster);
-                return sslContext.get();
+                catch (Throwable cause) {
+                    return promise.setFailure(cause);
+                }
             }) {
 
                 @Override
@@ -75,8 +96,24 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
             });
         }
         else {
-            var virtualCluster = virtualClusterResolver.resolve(targetPort);
-            addHandlers(ch, virtualCluster);
+            pipeline.addLast(new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelActive(ChannelHandlerContext ctx) {
+                    var stage = endpointResolver.resolve(bindingAddress, targetPort, null, tls);
+                    stage.handle((binding, t) -> {
+                        if (t != null) {
+                            ctx.fireExceptionCaught(t);
+                            return null;
+                        }
+                        var virtualCluster = binding.virtualCluster();
+                        KafkaProxyInitializer.this.addHandlers(ch, virtualCluster);
+                        ctx.fireChannelActive();
+                        pipeline.remove(this);
+                        return null;
+                    });
+                    // return value of handle deliberately ignored.
+                }
+            });
         }
     }
 

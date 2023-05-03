@@ -9,6 +9,7 @@ package io.kroxylicious.proxy.internal.net;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import io.kroxylicious.proxy.service.HostPort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -188,23 +190,22 @@ class EndpointRegistryTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "mycluster1:9192,true",
-            "localhost:9192,false" })
-    public void lookupBootstrap(@ConvertWith(HostPortConverter.class) HostPort address, boolean tls) throws Exception {
-        configureVirtualClusterMock(virtualCluster1, endpointProvider1, address.toString(), tls);
+    @CsvSource({ "mycluster1:9192,true,true", "mycluster1:9192,true,false", "localhost:9192,false,false" })
+    public void resolveBootstrap(@ConvertWith(HostPortConverter.class) HostPort address, boolean tls, boolean sni) throws Exception {
+        configureVirtualClusterMock(virtualCluster1, endpointProvider1, address.toString(), tls, sni);
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
         verifyAndProcessNetworkEventQueue(getNetworkBindRequest(address.port()));
         assertThat(f.isDone()).isTrue();
 
-        var binding = endpointRegistry.lookup(null, address.port(), tls, tls ? address.host() : null).toCompletableFuture().get();
+        var binding = endpointRegistry.resolve(null, address.port(), tls ? address.host() : null, tls).toCompletableFuture().get();
         assertThat(binding).isNotNull();
         assertThat(binding.nodeId()).isNull();
         assertThat(binding.virtualCluster()).isEqualTo(virtualCluster1);
     }
 
     @Test
-    public void lookupBrokerAddress() throws Exception {
+    public void resolveBrokerAddress() throws Exception {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, "localhost:9192", false);
         when(endpointProvider1.getNumberOfBrokerEndpointsToPrebind()).thenReturn(1);
         when(endpointProvider1.getBrokerAddress(0)).thenReturn(HostPort.parse("localhost:9193"));
@@ -213,22 +214,23 @@ class EndpointRegistryTest {
         verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192), getNetworkBindRequest(9193));
         assertThat(f.isDone()).isTrue();
 
-        var binding = endpointRegistry.lookup(null, 9193, false, null).toCompletableFuture().get();
+        var binding = endpointRegistry.resolve(null, 9193, null, false).toCompletableFuture().get();
         assertThat(binding).isNotNull();
         assertThat(binding.nodeId()).isEqualTo(0);
         assertThat(binding.virtualCluster()).isEqualTo(virtualCluster1);
     }
 
     @Test
-    public void lookupBootstrapUnknownPort() throws Exception {
+    public void resolveBootstrapUnknownPort() throws Exception {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, "localhost:9192", false);
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
         verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
         assertThat(f.isDone()).isTrue();
 
-        var binding = endpointRegistry.lookup(null, 9191, false, null).toCompletableFuture().get();
-        assertThat(binding).isNull();
+        var executionException = assertThrows(ExecutionException.class, () -> endpointRegistry.resolve(null, 9191, null, false).toCompletableFuture().get());
+        assertThat(executionException).hasCauseInstanceOf(EndpointResolutionException.class);
+
     }
 
     private Channel createMockNettyChannel() {
@@ -243,7 +245,7 @@ class EndpointRegistryTest {
 
     private NetworkBindRequest getNetworkBindRequest(int expectedPort) {
         Channel mock = createMockNettyChannel();
-        return new NetworkBindRequest(expectedPort, false, CompletableFuture.completedFuture(mock));
+        return new NetworkBindRequest(null, expectedPort, false, CompletableFuture.completedFuture(mock));
     }
 
     private NetworkUnbindRequest getNetworkUnbindRequest(int port) {
@@ -251,10 +253,14 @@ class EndpointRegistryTest {
     }
 
     private void configureVirtualClusterMock(VirtualCluster cluster, ClusterEndpointConfigProvider configProvider, String address, boolean tls) {
+        configureVirtualClusterMock(cluster, configProvider, address, tls, tls);
+    }
+
+    private void configureVirtualClusterMock(VirtualCluster cluster, ClusterEndpointConfigProvider configProvider, String address, boolean tls, boolean sni) {
         when(cluster.getClusterEndpointProvider()).thenReturn(configProvider);
         when(cluster.isUseTls()).thenReturn(tls);
         when(configProvider.getClusterBootstrapAddress()).thenReturn(HostPort.parse(address));
-        when(configProvider.requiresTls()).thenReturn(tls);
+        when(configProvider.requiresTls()).thenReturn(sni);
     }
 
     private void verifyAndProcessNetworkEventQueue(NetworkBindingOperation... expectedEvents) throws Exception {
