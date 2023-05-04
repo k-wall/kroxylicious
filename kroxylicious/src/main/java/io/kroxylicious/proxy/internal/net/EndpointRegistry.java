@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import io.netty.channel.Channel;
@@ -89,70 +90,48 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
     public CompletionStage<Endpoint> registerVirtualCluster(VirtualCluster virtualCluster) {
         Objects.requireNonNull(virtualCluster, "virtualCluster cannot be null");
 
-        var current = registeredVirtualClusters.computeIfAbsent(virtualCluster, (u) -> {
-            var vcr = VirtualClusterRecord.createVirtualClusterRecord();
+        var vcr = VirtualClusterRecord.createVirtualClusterRecord();
+        var current = registeredVirtualClusters.putIfAbsent(virtualCluster, vcr);
+        if (current != null) {
+            return current.registration();
+        }
 
-            var provider = virtualCluster.getClusterEndpointProvider();
-            var tls = virtualCluster.isUseTls();
-            var bootstrapAddress = provider.getClusterBootstrapAddress();
-            var bindingAddress = provider.getBindAddress().orElse(null);
+        var provider = virtualCluster.getClusterEndpointProvider();
+        var tls = virtualCluster.isUseTls();
+        var bootstrapAddress = provider.getClusterBootstrapAddress();
+        var bindingAddress = provider.getBindAddress().orElse(null);
 
-            var initialBindings = new LinkedHashMap<HostPort, Integer>();
-            initialBindings.put(bootstrapAddress, null); // bootstrap is index 0.
-            for (int i = 0; i < provider.getNumberOfBrokerEndpointsToPrebind(); i++) {
-                initialBindings.put(provider.getBrokerAddress(i), i);
-            }
+        var initialBindings = new LinkedHashMap<HostPort, Integer>();
+        initialBindings.put(bootstrapAddress, null); // bootstrap is at index 0.
+        for (int i = 0; i < provider.getNumberOfBrokerEndpointsToPrebind(); i++) {
+            initialBindings.put(provider.getBrokerAddress(i), i);
+        }
 
-            var endpointFutures = initialBindings.entrySet().stream().map(e -> {
-                var hp = e.getKey();
-                var nodeId = e.getValue();
-                var key = Endpoint.createEndpoint(bindingAddress, hp.port(), tls);
-                return registerEndpoint(key, hp.host(), virtualCluster, nodeId).toCompletableFuture();
-                // TODO cache endpoints when future completes
-            }).toList();
+        var endpointFutures = initialBindings.entrySet().stream().map(e -> {
+            var hp = e.getKey();
+            var nodeId = e.getValue();
+            var key = Endpoint.createEndpoint(bindingAddress, hp.port(), tls);
+            return registerBinding(key, hp.host(), new VirtualClusterBinding(virtualCluster, nodeId)).toCompletableFuture();
+            // TODO cache endpoints when future completes
+        }).toList();
 
-            CompletableFuture.allOf(endpointFutures.toArray(new CompletableFuture<?>[0])).whenComplete((unused, t) -> {
-                var future = vcr.registration.toCompletableFuture();
-                if (t == null) {
-                    try {
-                        future.complete(endpointFutures.get(0).get());
-                    }
-                    catch (InterruptedException | ExecutionException e) {
-                        future.completeExceptionally(e);
-                    }
+        CompletableFuture.allOf(endpointFutures.toArray(new CompletableFuture<?>[0])).whenComplete((unused, t) -> {
+            var future = vcr.registration.toCompletableFuture();
+            if (t == null) {
+                try {
+                    future.complete(endpointFutures.get(0).get());
                 }
-                else {
-                    future.completeExceptionally(t);
+                catch (InterruptedException | ExecutionException e) {
+                    future.completeExceptionally(e);
                 }
-            });
-            return vcr;
-        });
-
-        return current.registration();
-    }
-
-    private CompletionStage<Endpoint> registerEndpoint(Endpoint key, String host, VirtualCluster virtualCluster, Integer nodeId) {
-        Objects.requireNonNull(key, "key cannot be null");
-        Objects.requireNonNull(virtualCluster, "virtualCluster cannot be null");
-
-        var channelStage = listeningChannels.computeIfAbsent(key, (u) -> {
-            var bindReq = NetworkBindRequest.createNetworkBindRequest(key, virtualCluster.isUseTls());
-            queue.add(bindReq);
-            return bindReq.getCompletionStage();
-        });
-
-        return channelStage.thenApply(c -> {
-            var bindings = c.attr(CHANNEL_BINDINGS);
-            var bindingKey = virtualCluster.getClusterEndpointProvider().requiresTls() ? RoutingKey.createBindingKey(host) : RoutingKey.NULL_ROUTING_KEY;
-            bindings.setIfAbsent(new ConcurrentHashMap<>());
-
-            Map<RoutingKey, VirtualClusterBinding> bindingMap = bindings.get();
-            var existing = bindingMap.putIfAbsent(bindingKey, new VirtualClusterBinding(virtualCluster, nodeId));
-            if (existing != null) {
-                throw new EndpointBindingException("Endpoint %s cannot be bound with key %s, that key is already bound".formatted(key, bindingKey));
             }
-            return key;
+            else {
+                registeredVirtualClusters.remove(virtualCluster);
+                future.completeExceptionally(t);
+            }
         });
+
+        return vcr.registration();
     }
 
     public CompletionStage<Void> deregisterVirtualCluster(VirtualCluster virtualCluster) {
@@ -170,29 +149,56 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             return vcr.deregistration().get();
         }
 
-        return vcr.registration().thenCompose((u) -> {
+        return vcr.registration()
+                .thenCompose((u) -> unregisterBinding(virtualCluster, binding -> binding.virtualCluster().equals(virtualCluster)).thenApply((unused1) -> {
+                    registeredVirtualClusters.remove(virtualCluster);
+                    return null;
+                }));
+    }
 
-            // TODO cache sufficient information on the virtualclusterrecord to avoid the o(n)
-            var unbindFutures = listeningChannels.entrySet().stream().map((e) -> e.getValue().thenApply((channel) -> {
-                var bindingMap = channel.attr(EndpointRegistry.CHANNEL_BINDINGS).get();
-                var allEntries = bindingMap.entrySet();
-                var toRemove = allEntries.stream().filter(be -> be.getValue().virtualCluster().equals(virtualCluster)).collect(Collectors.toSet());
-                allEntries.removeAll(toRemove);
-                if (bindingMap.isEmpty()) {
-                    var unbind = NetworkUnbindRequest.createNetworkUnbindRequest(e.getKey(), virtualCluster.isUseTls(), channel);
-                    queue.add(unbind);
-                    return unbind.getCompletionStage();
-                }
-                else {
-                    return CompletableFuture.completedStage(channel);
-                }
-            })).map(CompletionStage::toCompletableFuture).toList();
+    private CompletionStage<Endpoint> registerBinding(Endpoint key, String host, VirtualClusterBinding virtualClusterBinding) {
+        Objects.requireNonNull(key, "key cannot be null");
+        Objects.requireNonNull(virtualClusterBinding, "virtualClusterBinding cannot be null");
+        var virtualCluster = virtualClusterBinding.virtualCluster();
 
-            return CompletableFuture.allOf(unbindFutures.toArray(new CompletableFuture<?>[0])).thenApply((unused1) -> {
-                registeredVirtualClusters.remove(virtualCluster);
-                return null;
-            });
+        var channelStage = listeningChannels.computeIfAbsent(key, (u) -> {
+            var bindReq = NetworkBindRequest.createNetworkBindRequest(key, virtualCluster.isUseTls());
+            queue.add(bindReq);
+            return bindReq.getCompletionStage();
         });
+
+        return channelStage.thenApply(c -> {
+            var bindings = c.attr(CHANNEL_BINDINGS);
+            var bindingKey = virtualCluster.getClusterEndpointProvider().requiresTls() ? RoutingKey.createBindingKey(host) : RoutingKey.NULL_ROUTING_KEY;
+            bindings.setIfAbsent(new ConcurrentHashMap<>());
+
+            Map<RoutingKey, VirtualClusterBinding> bindingMap = bindings.get();
+            var existing = bindingMap.putIfAbsent(bindingKey, virtualClusterBinding);
+            if (existing != null) {
+                throw new EndpointBindingException("Endpoint %s cannot be bound with key %s, that key is already bound".formatted(key, bindingKey));
+            }
+            return key;
+        });
+    }
+
+    private CompletionStage<Void> unregisterBinding(VirtualCluster virtualCluster, Predicate<VirtualClusterBinding> predicate) {
+        // TODO cache sufficient information on the virtualclusterrecord to avoid the o(n)
+        var unbindFutures = listeningChannels.entrySet().stream().map((e) -> e.getValue().thenApply((channel) -> {
+            var bindingMap = channel.attr(EndpointRegistry.CHANNEL_BINDINGS).get();
+            var allEntries = bindingMap.entrySet();
+            var toRemove = allEntries.stream().filter(be -> predicate.test(be.getValue())).collect(Collectors.toSet());
+            allEntries.removeAll(toRemove);
+            if (bindingMap.isEmpty()) {
+                var unbind = NetworkUnbindRequest.createNetworkUnbindRequest(e.getKey(), virtualCluster.isUseTls(), channel);
+                queue.add(unbind);
+                return unbind.getCompletionStage();
+            }
+            else {
+                return CompletableFuture.completedStage(channel);
+            }
+        })).map(CompletionStage::toCompletableFuture).toList();
+
+        return CompletableFuture.allOf(unbindFutures.toArray(new CompletableFuture<?>[0]));
     }
 
     @Override
