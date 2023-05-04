@@ -16,18 +16,31 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 
-public final class NetworkBindRequest extends NetworkBindingOperation {
-
+public class NetworkBindRequest extends NetworkBindingOperation<Channel> {
     private static final Logger LOGGER = LoggerFactory.getLogger(NetworkBindRequest.class);
     private final String bindingAddress;
+    private final int port;
+    private final CompletableFuture<Channel> future;
 
     public NetworkBindRequest(String bindingAddress, int port, boolean tls, CompletableFuture<Channel> future) {
-        super(port, tls, future);
+        super(tls);
         this.bindingAddress = bindingAddress;
+        this.port = port;
+        this.future = future;
     }
 
-    public static NetworkBindRequest createNetworkBindRequest(Endpoint key, boolean useTls) {
-        return new NetworkBindRequest(key.bindingAddress(), key.port(), useTls, new CompletableFuture<>());
+    public String getBindingAddress() {
+        return bindingAddress;
+    }
+
+    @Override
+    public int port() {
+        return port;
+    }
+
+    @Override
+    public CompletableFuture<Channel> getFuture() {
+        return future;
     }
 
     @Override
@@ -42,7 +55,7 @@ public final class NetworkBindRequest extends NetworkBindingOperation {
             LOGGER.info("Binding <any>:{}", port);
             bind = serverBootstrap.bind(port);
         }
-        bind.addListener((ChannelFutureListener) channelFuture -> getCompletionStage().toCompletableFuture().complete(channelFuture.channel()));
+        bind.addListener((ChannelFutureListener) channelFuture -> future.toCompletableFuture().complete(channelFuture.channel()));
     }
 
 }

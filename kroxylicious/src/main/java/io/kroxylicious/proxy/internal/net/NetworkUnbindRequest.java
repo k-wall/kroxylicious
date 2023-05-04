@@ -6,6 +6,7 @@
 
 package io.kroxylicious.proxy.internal.net;
 
+import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
 
 import org.slf4j.Logger;
@@ -15,17 +16,20 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 
-public final class NetworkUnbindRequest extends NetworkBindingOperation {
+public class NetworkUnbindRequest extends NetworkBindingOperation<Void> {
     private static final Logger LOGGER = LoggerFactory.getLogger(NetworkUnbindRequest.class);
     private final Channel channel;
+    private final CompletableFuture<Void> future;
 
-    public NetworkUnbindRequest(int port, boolean tls, CompletableFuture<Channel> future, Channel channel) {
-        super(port, tls, future);
+    public NetworkUnbindRequest(boolean tls, Channel channel, CompletableFuture<Void> future) {
+        super(tls);
         this.channel = channel;
+        this.future = future;
     }
 
-    public static NetworkUnbindRequest createNetworkUnbindRequest(Endpoint key, boolean useTls, Channel channel) {
-        return new NetworkUnbindRequest(key.port(), useTls, new CompletableFuture<>(), channel);
+    @Override
+    public int port() {
+        return ((InetSocketAddress) channel.localAddress()).getPort();
     }
 
     @Override
@@ -33,6 +37,11 @@ public final class NetworkUnbindRequest extends NetworkBindingOperation {
         var addr = channel.localAddress();
         LOGGER.info("Unbinding {}", addr);
 
-        channel.close().addListener((ChannelFutureListener) channelFuture -> getCompletionStage().toCompletableFuture().complete(channelFuture.channel()));
+        channel.close().addListener((ChannelFutureListener) channelFuture -> future.toCompletableFuture().complete(null));
+    }
+
+    @Override
+    public CompletableFuture<Void> getFuture() {
+        return future;
     }
 }

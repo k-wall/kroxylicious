@@ -6,6 +6,7 @@
 
 package io.kroxylicious.proxy.internal.net;
 
+import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -30,10 +31,10 @@ import io.kroxylicious.proxy.config.VirtualCluster;
 import io.kroxylicious.proxy.service.ClusterEndpointConfigProvider;
 import io.kroxylicious.proxy.service.HostPort;
 
-import static io.kroxylicious.proxy.internal.net.EndpointRegistry.CHANNEL_BINDINGS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -59,7 +60,7 @@ class EndpointRegistryTest {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, "mycluster1:9192", false);
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, false));
         assertThat(f.isDone()).isTrue();
         assertThat(f.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, false));
     }
@@ -69,7 +70,7 @@ class EndpointRegistryTest {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, "mycluster1:9192", true);
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, true));
         assertThat(f.isDone()).isTrue();
         assertThat(f.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, true));
     }
@@ -80,7 +81,7 @@ class EndpointRegistryTest {
 
         var f1 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
         var f2 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, false));
         assertThat(CompletableFuture.allOf(f1, f2).isDone()).isTrue();
         assertThat(f2.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, false));
     }
@@ -92,7 +93,7 @@ class EndpointRegistryTest {
 
         var f1 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
         var f2 = endpointRegistry.registerVirtualCluster(virtualCluster2).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, true));
         assertThat(CompletableFuture.allOf(f1, f2).isDone()).isTrue();
         assertThat(f1.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, true));
         assertThat(f2.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, true));
@@ -105,8 +106,8 @@ class EndpointRegistryTest {
 
         var f1 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
         var f2 = endpointRegistry.registerVirtualCluster(virtualCluster2).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9191),
-                getNetworkBindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9191, true),
+                createTestNetworkBindRequest(null, 9192, true));
         assertThat(CompletableFuture.allOf(f1, f2).isDone()).isTrue();
         assertThat(f1.get()).isEqualTo(Endpoint.createEndpoint(null, 9191, true));
         assertThat(f2.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, true));
@@ -119,7 +120,7 @@ class EndpointRegistryTest {
         when(endpointProvider1.getBrokerAddress(0)).thenReturn(HostPort.parse("localhost:9193"));
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192), getNetworkBindRequest(9193));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, false), createTestNetworkBindRequest(null, 9193, false));
         assertThat(f.isDone()).isTrue();
         assertThat(f.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, false));
     }
@@ -130,7 +131,7 @@ class EndpointRegistryTest {
         configureVirtualClusterMock(virtualCluster2, endpointProvider2, "localhost:9191", false);
 
         var f1 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9191));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9191, false));
         assertThat(f1.isDone()).isTrue();
 
         verifyAndProcessNetworkEventQueue();
@@ -144,11 +145,11 @@ class EndpointRegistryTest {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, "mycluster1:9192", true);
 
         var bindFuture = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, true));
         assertThat(bindFuture.isDone()).isTrue();
 
         var unbindFuture = endpointRegistry.deregisterVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkUnbindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkUnbindRequest(9192, true));
         assertThat(unbindFuture.isDone()).isTrue();
     }
 
@@ -157,11 +158,11 @@ class EndpointRegistryTest {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, "mycluster1:9192", true);
 
         var bindFuture = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, true));
         assertThat(bindFuture.isDone()).isTrue();
 
         var unbindFuture = endpointRegistry.deregisterVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkUnbindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkUnbindRequest(9192, true));
         assertThat(unbindFuture.isDone()).isTrue();
 
         var unbindFuture2 = endpointRegistry.deregisterVirtualCluster(virtualCluster1).toCompletableFuture();
@@ -176,7 +177,7 @@ class EndpointRegistryTest {
 
         var f1 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
         var f2 = endpointRegistry.registerVirtualCluster(virtualCluster2).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9191));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9191, true));
         assertThat(CompletableFuture.allOf(f1, f2).isDone()).isTrue();
 
         var unbindFuture1 = endpointRegistry.deregisterVirtualCluster(virtualCluster1).toCompletableFuture();
@@ -185,7 +186,7 @@ class EndpointRegistryTest {
         assertThat(unbindFuture1.isDone()).isTrue();
 
         var unbindFuture2 = endpointRegistry.deregisterVirtualCluster(virtualCluster2).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkUnbindRequest(9191));
+        verifyAndProcessNetworkEventQueue(createTestNetworkUnbindRequest(9191, true));
         assertThat(unbindFuture2.isDone()).isTrue();
     }
 
@@ -196,12 +197,12 @@ class EndpointRegistryTest {
         when(endpointProvider1.getBrokerAddress(0)).thenReturn(HostPort.parse("localhost:9193"));
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192), getNetworkBindRequest(9193));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, false), createTestNetworkBindRequest(null, 9193, false));
         assertThat(f.isDone()).isTrue();
         assertThat(f.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, false));
 
         var unbindFuture = endpointRegistry.deregisterVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkUnbindRequest(9193), getNetworkUnbindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkUnbindRequest(9193, false), createTestNetworkUnbindRequest(9192, false));
         assertThat(unbindFuture.isDone()).isTrue();
 
     }
@@ -212,7 +213,7 @@ class EndpointRegistryTest {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, address.toString(), tls, sni);
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(address.port()));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, address.port(), tls));
         assertThat(f.isDone()).isTrue();
 
         var binding = endpointRegistry.resolve(null, address.port(), tls ? address.host() : null, tls).toCompletableFuture().get();
@@ -228,7 +229,7 @@ class EndpointRegistryTest {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, address.toString(), true);
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, true));
         assertThat(f.isDone()).isTrue();
 
         var executionException = assertThrows(ExecutionException.class,
@@ -242,7 +243,7 @@ class EndpointRegistryTest {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, address.toString(), true);
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(address.port()));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, address.port(), true));
         assertThat(f.isDone()).isTrue();
 
         var binding = endpointRegistry.resolve(null, address.port(), sniHostname, true).toCompletableFuture().get();
@@ -258,7 +259,7 @@ class EndpointRegistryTest {
         when(endpointProvider1.getBrokerAddress(0)).thenReturn(HostPort.parse("localhost:9193"));
 
         var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192), getNetworkBindRequest(9193));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, false), createTestNetworkBindRequest(null, 9193, false));
         assertThat(f.isDone()).isTrue();
 
         var binding = endpointRegistry.resolve(null, 9193, null, false).toCompletableFuture().get();
@@ -279,7 +280,8 @@ class EndpointRegistryTest {
 
         var f1 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
         var f2 = endpointRegistry.registerVirtualCluster(virtualCluster2).toCompletableFuture();
-        verifyAndProcessNetworkEventQueue(getNetworkBindRequest(9192), getNetworkBindRequest(9192));
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(bindingAddress1, 9192, false),
+                createTestNetworkBindRequest(bindingAddress2, 9192, false));
         assertThat(CompletableFuture.allOf(f1, f2).isDone()).isTrue();
 
         var b1 = endpointRegistry.resolve(bindingAddress1, 9192, null, false).toCompletableFuture().get();
@@ -294,20 +296,36 @@ class EndpointRegistryTest {
         assertThat(executionException).hasCauseInstanceOf(EndpointResolutionException.class);
     }
 
-    private Channel createMockNettyChannel() {
+    private Channel createMockNettyChannel(int port) {
         var channel = mock(Channel.class);
-        var attr = createTestAttribute(CHANNEL_BINDINGS);
-        when(channel.attr(CHANNEL_BINDINGS)).thenReturn(attr);
+        var attr = createTestAttribute(EndpointRegistry.CHANNEL_BINDINGS);
+        when(channel.attr(EndpointRegistry.CHANNEL_BINDINGS)).thenReturn(attr);
+        var localAddress = InetSocketAddress.createUnresolved("localhost", port); // This is lenient because not all tests exercise the unbind path
+        lenient().when(channel.localAddress()).thenReturn(localAddress);
         return channel;
     }
 
-    private NetworkBindRequest getNetworkBindRequest(int expectedPort) {
-        Channel mock = createMockNettyChannel();
-        return new NetworkBindRequest(null, expectedPort, false, CompletableFuture.completedFuture(mock));
+    private NetworkBindRequest createTestNetworkBindRequest(String expectedBindingAddress, int expectedPort, boolean expectedTls) {
+        var channelMock = createMockNettyChannel(expectedPort);
+        return createTestNetworkBindRequest(expectedBindingAddress, expectedPort, expectedTls, CompletableFuture.completedFuture(channelMock));
     }
 
-    private NetworkUnbindRequest getNetworkUnbindRequest(int port) {
-        return new NetworkUnbindRequest(port, false, CompletableFuture.completedFuture(null), null);
+    private NetworkBindRequest createTestNetworkBindRequest(String expectedBindingAddress, int expectedPort, boolean expectedTls,
+                                                            CompletableFuture<Channel> channelFuture) {
+        return new NetworkBindRequest(expectedBindingAddress, expectedPort, expectedTls, channelFuture);
+    }
+
+    private NetworkUnbindRequest createTestNetworkUnbindRequest(int port, final boolean tls) {
+        return createTestNetworkUnbindRequest(port, tls, CompletableFuture.completedFuture(null));
+    }
+
+    private NetworkUnbindRequest createTestNetworkUnbindRequest(int port, final boolean tls, final CompletableFuture<Void> future) {
+        return new NetworkUnbindRequest(tls, null, future) {
+            @Override
+            public int port() {
+                return port;
+            }
+        };
     }
 
     private void configureVirtualClusterMock(VirtualCluster cluster, ClusterEndpointConfigProvider configProvider, String address, boolean tls) {
@@ -325,27 +343,42 @@ class EndpointRegistryTest {
         assertThat(endpointRegistry.countNetworkEvents()).as("unexpected number of events").isEqualTo(expectedEvents.length);
         var expectedEventIterator = Arrays.stream(expectedEvents).iterator();
         while (endpointRegistry.hasNetworkEvents()) {
-            var networkBinding = endpointRegistry.takeNetworkBindingEvent();
-            var expectedNetworkEvent = expectedEventIterator.next();
-            assertThat(networkBinding.getClass()).as("unexpected binding operation").isEqualTo(expectedNetworkEvent.getClass());
-            if (networkBinding instanceof NetworkBindRequest networkBindRequest) {
-                assertThat(networkBindRequest.port()).isEqualTo(expectedNetworkEvent.port());
-                networkBinding.complete(expectedNetworkEvent.getCompletionStage().toCompletableFuture().get());
+            var event = endpointRegistry.takeNetworkBindingEvent();
+            var expectedEvent = expectedEventIterator.next();
+            if (event instanceof NetworkBindRequest bindEvent) {
+                assertThat(bindEvent.getBindingAddress()).isEqualTo(((NetworkBindRequest) expectedEvent).getBindingAddress());
+                assertThat(bindEvent.port()).isEqualTo(expectedEvent.port());
+                assertThat(bindEvent.tls()).isEqualTo(expectedEvent.tls());
             }
-            else if (networkBinding instanceof NetworkUnbindRequest networkUnbindRequest) {
-                assertThat(networkUnbindRequest.port()).isEqualTo(expectedNetworkEvent.port());
-                networkBinding.complete(null);
+            else if (event instanceof NetworkUnbindRequest unbindEvent) {
+                assertThat(unbindEvent.port()).isEqualTo(expectedEvent.port());
+                assertThat(unbindEvent.tls()).isEqualTo(expectedEvent.tls());
             }
+            else {
+                fail("unexpected event type received");
+            }
+            propagateFutureResult(expectedEvent.getFuture(), event.getFuture());
         }
         if (expectedEventIterator.hasNext()) {
             fail("Too few events consumed");
         }
     }
 
+    private <U> void propagateFutureResult(CompletableFuture<U> source, CompletableFuture<U> dest) {
+        var unused = source.handle((c, t) -> {
+            if (t != null) {
+                dest.completeExceptionally(t);
+            }
+            else {
+                dest.complete(c);
+            }
+            return null;
+        });
+    }
+
     private <U> Attribute<U> createTestAttribute(final AttributeKey<U> key) {
         return new Attribute<U>() {
-
-            AtomicReference<U> map = new AtomicReference<>();
+            final AtomicReference<U> map = new AtomicReference<>();
 
             @Override
             public AttributeKey<U> key() {

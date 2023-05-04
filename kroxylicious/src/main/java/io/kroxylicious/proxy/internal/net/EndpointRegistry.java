@@ -162,9 +162,11 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
         var virtualCluster = virtualClusterBinding.virtualCluster();
 
         var channelStage = listeningChannels.computeIfAbsent(key, (u) -> {
-            var bindReq = NetworkBindRequest.createNetworkBindRequest(key, virtualCluster.isUseTls());
+            CompletableFuture<Channel> future = new CompletableFuture<>();
+            boolean useTls = virtualCluster.isUseTls();
+            var bindReq = new NetworkBindRequest(key.bindingAddress(), key.port(), useTls, future);
             queue.add(bindReq);
-            return bindReq.getCompletionStage();
+            return future;
         });
 
         return channelStage.thenApply(c -> {
@@ -192,9 +194,11 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             var toRemove = allEntries.stream().filter(be -> predicate.test(be.getValue())).collect(Collectors.toSet());
             allEntries.removeAll(toRemove);
             if (bindingMap.isEmpty()) {
-                var unbind = NetworkUnbindRequest.createNetworkUnbindRequest(e.getKey(), virtualCluster.isUseTls(), channel);
+                CompletableFuture<Void> future = new CompletableFuture<>();
+                boolean useTls = virtualCluster.isUseTls();
+                var unbind = new NetworkUnbindRequest(useTls, channel, future);
                 queue.add(unbind);
-                return unbind.getCompletionStage();
+                return future;
             }
             else {
                 return CompletableFuture.completedStage(channel);
