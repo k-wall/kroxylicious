@@ -182,6 +182,9 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
     }
 
     private CompletionStage<Void> unregisterBinding(VirtualCluster virtualCluster, Predicate<VirtualClusterBinding> predicate) {
+        Objects.requireNonNull(virtualCluster, "virtualCluster cannot be null");
+        Objects.requireNonNull(predicate, "predicate cannot be null");
+
         // TODO cache sufficient information on the virtualclusterrecord to avoid the o(n)
         var unbindFutures = listeningChannels.entrySet().stream().map((e) -> e.getValue().thenApply((channel) -> {
             var bindingMap = channel.attr(EndpointRegistry.CHANNEL_BINDINGS).get();

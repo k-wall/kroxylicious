@@ -9,8 +9,8 @@ package io.kroxylicious.proxy.internal.net;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -23,16 +23,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.netty.channel.Channel;
 import io.netty.util.Attribute;
+import io.netty.util.AttributeKey;
 
 import io.kroxylicious.proxy.HostPortConverter;
 import io.kroxylicious.proxy.config.VirtualCluster;
 import io.kroxylicious.proxy.service.ClusterEndpointConfigProvider;
 import io.kroxylicious.proxy.service.HostPort;
 
+import static io.kroxylicious.proxy.internal.net.EndpointRegistry.CHANNEL_BINDINGS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -295,11 +296,8 @@ class EndpointRegistryTest {
 
     private Channel createMockNettyChannel() {
         var channel = mock(Channel.class);
-        var attr = mock(Attribute.class);
-        var bindings = new ConcurrentHashMap<>();
-        when(channel.attr(EndpointRegistry.CHANNEL_BINDINGS)).thenReturn(attr);
-        when(attr.setIfAbsent(any())).thenReturn(bindings);
-        when(attr.get()).thenReturn(bindings);
+        var attr = createTestAttribute(CHANNEL_BINDINGS);
+        when(channel.attr(CHANNEL_BINDINGS)).thenReturn(attr);
         return channel;
     }
 
@@ -342,5 +340,54 @@ class EndpointRegistryTest {
         if (expectedEventIterator.hasNext()) {
             fail("Too few events consumed");
         }
+    }
+
+    private <U> Attribute<U> createTestAttribute(final AttributeKey<U> key) {
+        return new Attribute<U>() {
+
+            AtomicReference<U> map = new AtomicReference<>();
+
+            @Override
+            public AttributeKey<U> key() {
+                return key;
+            }
+
+            @Override
+            public U get() {
+                return map.get();
+            }
+
+            @Override
+            public void set(U value) {
+                map.set(value);
+            }
+
+            @Override
+            public U getAndSet(U value) {
+
+                return map.getAndSet(value);
+            }
+
+            @Override
+            public U setIfAbsent(U value) {
+                return map.compareAndExchange(null, value);
+            }
+
+            @Override
+            public U getAndRemove() {
+                return map.compareAndExchange(map.get(), null);
+            }
+
+            @Override
+            public boolean compareAndSet(U oldValue,
+                                         U newValue) {
+                return map.compareAndSet(oldValue, newValue);
+            }
+
+            @Override
+            public void remove() {
+                map.set(null);
+            }
+        };
     }
 }
