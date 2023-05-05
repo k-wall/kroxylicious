@@ -55,7 +55,14 @@ public class NetworkBindRequest extends NetworkBindingOperation<Channel> {
             LOGGER.info("Binding <any>:{}", port);
             bind = serverBootstrap.bind(port);
         }
-        bind.addListener((ChannelFutureListener) channelFuture -> future.toCompletableFuture().complete(channelFuture.channel()));
+        bind.addListener((ChannelFutureListener) channelFuture -> {
+            if (channelFuture.cause() != null) {
+                future.completeExceptionally(channelFuture.cause());
+            }
+            else {
+                future.complete(channelFuture.channel());
+            }
+        });
     }
 
 }

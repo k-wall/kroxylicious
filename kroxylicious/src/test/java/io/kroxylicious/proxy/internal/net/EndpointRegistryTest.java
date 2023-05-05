@@ -6,6 +6,7 @@
 
 package io.kroxylicious.proxy.internal.net;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Optional;
@@ -13,7 +14,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,6 +34,7 @@ import io.kroxylicious.proxy.service.HostPort;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mock.Strictness.LENIENT;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -43,17 +44,12 @@ class EndpointRegistryTest {
     private final EndpointRegistry endpointRegistry = new EndpointRegistry();
     @Mock
     private VirtualCluster virtualCluster1;
-    @Mock
+    @Mock(strictness = LENIENT)
     private ClusterEndpointConfigProvider endpointProvider1;
     @Mock
     private VirtualCluster virtualCluster2;
-    @Mock
+    @Mock(strictness = LENIENT)
     private ClusterEndpointConfigProvider endpointProvider2;
-
-    @AfterEach
-    public void afterEach() throws Exception {
-        endpointRegistry.close();
-    }
 
     @Test
     public void registerVirtualCluster() throws Exception {
@@ -63,6 +59,8 @@ class EndpointRegistryTest {
         verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, false));
         assertThat(f.isDone()).isTrue();
         assertThat(f.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, false));
+
+        assertThat(endpointRegistry.isRegistered(virtualCluster1)).isTrue();
     }
 
     @Test
@@ -134,10 +132,52 @@ class EndpointRegistryTest {
         verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9191, false));
         assertThat(f1.isDone()).isTrue();
 
+        assertThat(endpointRegistry.isRegistered(virtualCluster1)).isTrue();
+
         verifyAndProcessNetworkEventQueue();
         var executionException = assertThrows(ExecutionException.class,
                 () -> endpointRegistry.registerVirtualCluster(virtualCluster2).toCompletableFuture().get());
         assertThat(executionException).hasCauseInstanceOf(EndpointBindingException.class);
+
+        assertThat(endpointRegistry.isRegistered(virtualCluster1)).isTrue();
+        assertThat(endpointRegistry.isRegistered(virtualCluster2)).isFalse();
+    }
+
+    @Test
+    public void registerVirtualClusterFailsDueToExternalPortConflict() throws Exception {
+        configureVirtualClusterMock(virtualCluster1, endpointProvider1, "localhost:9191", false);
+
+        var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9191, false, CompletableFuture.failedFuture(new IOException("mocked port in use"))));
+        assertThat(f.isDone()).isTrue();
+        var executionException = assertThrows(ExecutionException.class, f::get);
+        assertThat(executionException).hasRootCauseInstanceOf(IOException.class);
+
+        assertThat(endpointRegistry.isRegistered(virtualCluster1)).isFalse();
+    }
+
+    @Test
+    public void registerVirtualClusterFailsDueToExternalPortConflictOnSecondAddress() throws Exception {
+        configureVirtualClusterMock(virtualCluster1, endpointProvider1, "localhost:9192", false);
+        when(endpointProvider1.getNumberOfBrokerEndpointsToPrebind()).thenReturn(1);
+        when(endpointProvider1.getBrokerAddress(0)).thenReturn(HostPort.parse("localhost:9193"));
+
+        var f = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, false),
+                createTestNetworkBindRequest(null, 9193, false, CompletableFuture.failedFuture(new IOException("mocked port in use"))));
+        // it won't be done yet
+        assertThat(f.isDone()).isFalse();
+
+        // the port conflict on port 9193 should mean it tries to unbind 9192.
+        verifyAndProcessNetworkEventQueue(createTestNetworkUnbindRequest(9192, false));
+
+        assertThat(f.isDone()).isTrue();
+
+        // now the unbinds are done, the future should be done.
+        var executionException = assertThrows(ExecutionException.class, f::get);
+        assertThat(executionException).hasRootCauseInstanceOf(IOException.class);
+
+        assertThat(endpointRegistry.isRegistered(virtualCluster1)).isFalse();
     }
 
     @Test
@@ -148,9 +188,13 @@ class EndpointRegistryTest {
         verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, true));
         assertThat(bindFuture.isDone()).isTrue();
 
+        assertThat(endpointRegistry.isRegistered(virtualCluster1)).isTrue();
+
         var unbindFuture = endpointRegistry.deregisterVirtualCluster(virtualCluster1).toCompletableFuture();
         verifyAndProcessNetworkEventQueue(createTestNetworkUnbindRequest(9192, true));
         assertThat(unbindFuture.isDone()).isTrue();
+
+        assertThat(endpointRegistry.isRegistered(virtualCluster1)).isFalse();
     }
 
     @Test
@@ -222,9 +266,10 @@ class EndpointRegistryTest {
         assertThat(binding.virtualCluster()).isEqualTo(virtualCluster1);
     }
 
-    @ParameterizedTest
-    @CsvSource({ "mycluster1:9192,mycluster2:9192", "mycluster1:9192,mycluster1:9191" })
-    public void resolveBootstrapResolutionException(@ConvertWith(HostPortConverter.class) HostPort address, @ConvertWith(HostPortConverter.class) HostPort resolve)
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({ "mismatching host,mycluster1:9192,mycluster2:9192", "mistmatching port,mycluster1:9192,mycluster1:9191" })
+    public void resolveBootstrapResolutionFailures(String name, @ConvertWith(HostPortConverter.class) HostPort address,
+                                                   @ConvertWith(HostPortConverter.class) HostPort resolve)
             throws Exception {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, address.toString(), true);
 
@@ -342,9 +387,12 @@ class EndpointRegistryTest {
     private void verifyAndProcessNetworkEventQueue(NetworkBindingOperation... expectedEvents) throws Exception {
         assertThat(endpointRegistry.countNetworkEvents()).as("unexpected number of events").isEqualTo(expectedEvents.length);
         var expectedEventIterator = Arrays.stream(expectedEvents).iterator();
-        while (endpointRegistry.hasNetworkEvents()) {
-            var event = endpointRegistry.takeNetworkBindingEvent();
+        while (expectedEventIterator.hasNext()) {
             var expectedEvent = expectedEventIterator.next();
+            if (endpointRegistry.countNetworkEvents() == 0) {
+                fail("No network event available, expecting one matching " + expectedEvent);
+            }
+            var event = endpointRegistry.takeNetworkBindingEvent();
             if (event instanceof NetworkBindRequest bindEvent) {
                 assertThat(bindEvent.getBindingAddress()).isEqualTo(((NetworkBindRequest) expectedEvent).getBindingAddress());
                 assertThat(bindEvent.port()).isEqualTo(expectedEvent.port());
@@ -358,9 +406,6 @@ class EndpointRegistryTest {
                 fail("unexpected event type received");
             }
             propagateFutureResult(expectedEvent.getFuture(), event.getFuture());
-        }
-        if (expectedEventIterator.hasNext()) {
-            fail("Too few events consumed");
         }
     }
 
@@ -377,7 +422,7 @@ class EndpointRegistryTest {
     }
 
     private <U> Attribute<U> createTestAttribute(final AttributeKey<U> key) {
-        return new Attribute<U>() {
+        return new Attribute<>() {
             final AtomicReference<U> map = new AtomicReference<>();
 
             @Override

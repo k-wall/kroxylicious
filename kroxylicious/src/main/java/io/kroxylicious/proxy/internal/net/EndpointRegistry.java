@@ -14,11 +14,13 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.netty.channel.Channel;
 import io.netty.util.AttributeKey;
@@ -34,6 +36,8 @@ import io.kroxylicious.proxy.service.HostPort;
  *
  */
 public class EndpointRegistry implements AutoCloseable, EndpointResolver {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(EndpointRegistry.class);
 
     interface RoutingKey {
         RoutingKey NULL_ROUTING_KEY = new NullRoutingKey();
@@ -117,17 +121,26 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
 
         CompletableFuture.allOf(endpointFutures.toArray(new CompletableFuture<?>[0])).whenComplete((unused, t) -> {
             var future = vcr.registration.toCompletableFuture();
-            if (t == null) {
+            if (t != null) {
+                // Try to roll back any bindings that were successfully made
+                unregisterBinding(virtualCluster, (vcb) -> vcb.virtualCluster().equals(virtualCluster))
+                        .handle((u, t1) -> {
+                            if (t1 != null) {
+                                LOGGER.warn("Registration error", t);
+                                LOGGER.warn("Secondary error occurred whilst handling a previous registration error: {}", t.getMessage(), t1);
+                            }
+                            registeredVirtualClusters.remove(virtualCluster);
+                            future.completeExceptionally(t);
+                            return null;
+                        });
+            }
+            else {
                 try {
                     future.complete(endpointFutures.get(0).get());
                 }
-                catch (InterruptedException | ExecutionException e) {
-                    future.completeExceptionally(e);
+                catch (Throwable t1) {
+                    future.completeExceptionally(t1);
                 }
-            }
-            else {
-                registeredVirtualClusters.remove(virtualCluster);
-                future.completeExceptionally(t);
             }
         });
 
@@ -156,18 +169,32 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
                 }));
     }
 
+    boolean isRegistered(VirtualCluster virtualCluster1) {
+        return registeredVirtualClusters.containsKey(virtualCluster1);
+    }
+
     private CompletionStage<Endpoint> registerBinding(Endpoint key, String host, VirtualClusterBinding virtualClusterBinding) {
         Objects.requireNonNull(key, "key cannot be null");
         Objects.requireNonNull(virtualClusterBinding, "virtualClusterBinding cannot be null");
         var virtualCluster = virtualClusterBinding.virtualCluster();
 
-        var channelStage = listeningChannels.computeIfAbsent(key, (u) -> {
-            CompletableFuture<Channel> future = new CompletableFuture<>();
+        var future = new CompletableFuture<Channel>();
+        var channelStage = listeningChannels.putIfAbsent(key, future);
+        if (channelStage == null) {
+            channelStage = future.exceptionally(t -> {
+                // Handles the case where the network bind fails
+                listeningChannels.remove(key);
+                if (t instanceof RuntimeException re) {
+                    throw re;
+                }
+                else {
+                    throw new RuntimeException(t);
+                }
+            });
             boolean useTls = virtualCluster.isUseTls();
             var bindReq = new NetworkBindRequest(key.bindingAddress(), key.port(), useTls, future);
             queue.add(bindReq);
-            return future;
-        });
+        }
 
         return channelStage.thenApply(c -> {
             var bindings = c.attr(CHANNEL_BINDINGS);
@@ -188,22 +215,26 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
         Objects.requireNonNull(predicate, "predicate cannot be null");
 
         // TODO cache sufficient information on the virtualclusterrecord to avoid the o(n)
-        var unbindFutures = listeningChannels.entrySet().stream().map((e) -> e.getValue().thenApply((channel) -> {
-            var bindingMap = channel.attr(EndpointRegistry.CHANNEL_BINDINGS).get();
-            var allEntries = bindingMap.entrySet();
-            var toRemove = allEntries.stream().filter(be -> predicate.test(be.getValue())).collect(Collectors.toSet());
-            allEntries.removeAll(toRemove);
-            if (bindingMap.isEmpty()) {
-                CompletableFuture<Void> future = new CompletableFuture<>();
-                boolean useTls = virtualCluster.isUseTls();
-                var unbind = new NetworkUnbindRequest(useTls, channel, future);
-                queue.add(unbind);
-                return future;
-            }
-            else {
-                return CompletableFuture.completedStage(channel);
-            }
-        })).map(CompletionStage::toCompletableFuture).toList();
+        var unbindFutures = listeningChannels.entrySet().stream()
+                .map(Map.Entry::getValue)
+                .map((s) -> s.thenCompose(channel -> {
+                    var bindingMap = channel.attr(EndpointRegistry.CHANNEL_BINDINGS).get();
+                    var allEntries = bindingMap.entrySet();
+                    var toRemove = allEntries.stream().filter(be -> predicate.test(be.getValue())).collect(Collectors.toSet());
+                    allEntries.removeAll(toRemove);
+                    if (bindingMap.isEmpty()) {
+                        var future = new CompletableFuture<Void>();
+                        boolean useTls = virtualCluster.isUseTls();
+                        var unbind = new NetworkUnbindRequest(useTls, channel, future);
+                        queue.add(unbind);
+                        return future;
+                    }
+                    else {
+                        return CompletableFuture.completedFuture(null);
+                    }
+                }))
+                // .map((s) -> s.thenCompose(i -> i))
+                .toList();
 
         return CompletableFuture.allOf(unbindFutures.toArray(new CompletableFuture<?>[0]));
     }
