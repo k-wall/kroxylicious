@@ -61,6 +61,7 @@ class EndpointRegistryTest {
         assertThat(f.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, false));
 
         assertThat(endpointRegistry.isRegistered(virtualCluster1)).isTrue();
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(1);
     }
 
     @Test
@@ -82,6 +83,8 @@ class EndpointRegistryTest {
         verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, false));
         assertThat(CompletableFuture.allOf(f1, f2).isDone()).isTrue();
         assertThat(f2.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, false));
+
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(1);
     }
 
     @Test
@@ -95,10 +98,12 @@ class EndpointRegistryTest {
         assertThat(CompletableFuture.allOf(f1, f2).isDone()).isTrue();
         assertThat(f1.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, true));
         assertThat(f2.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, true));
+
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(1);
     }
 
     @Test
-    public void registerTwoClustersThatUseDifferentNetworkEndpoint() throws Exception {
+    public void registerTwoClustersThatUseDistinctNetworkEndpoints() throws Exception {
         configureVirtualClusterMock(virtualCluster1, endpointProvider1, "mycluster1:9191", true);
         configureVirtualClusterMock(virtualCluster2, endpointProvider2, "mycluster2:9192", true);
 
@@ -109,6 +114,8 @@ class EndpointRegistryTest {
         assertThat(CompletableFuture.allOf(f1, f2).isDone()).isTrue();
         assertThat(f1.get()).isEqualTo(Endpoint.createEndpoint(null, 9191, true));
         assertThat(f2.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, true));
+
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(2);
     }
 
     @Test
@@ -133,6 +140,7 @@ class EndpointRegistryTest {
         assertThat(f1.isDone()).isTrue();
 
         assertThat(endpointRegistry.isRegistered(virtualCluster1)).isTrue();
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(1);
 
         verifyAndProcessNetworkEventQueue();
         var executionException = assertThrows(ExecutionException.class,
@@ -141,6 +149,7 @@ class EndpointRegistryTest {
 
         assertThat(endpointRegistry.isRegistered(virtualCluster1)).isTrue();
         assertThat(endpointRegistry.isRegistered(virtualCluster2)).isFalse();
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(1);
     }
 
     @Test
@@ -154,6 +163,7 @@ class EndpointRegistryTest {
         assertThat(executionException).hasRootCauseInstanceOf(IOException.class);
 
         assertThat(endpointRegistry.isRegistered(virtualCluster1)).isFalse();
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(0);
     }
 
     @Test
@@ -178,6 +188,7 @@ class EndpointRegistryTest {
         assertThat(executionException).hasRootCauseInstanceOf(IOException.class);
 
         assertThat(endpointRegistry.isRegistered(virtualCluster1)).isFalse();
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(0);
     }
 
     @Test
@@ -189,12 +200,14 @@ class EndpointRegistryTest {
         assertThat(bindFuture.isDone()).isTrue();
 
         assertThat(endpointRegistry.isRegistered(virtualCluster1)).isTrue();
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(1);
 
         var unbindFuture = endpointRegistry.deregisterVirtualCluster(virtualCluster1).toCompletableFuture();
         verifyAndProcessNetworkEventQueue(createTestNetworkUnbindRequest(9192, true));
         assertThat(unbindFuture.isDone()).isTrue();
 
         assertThat(endpointRegistry.isRegistered(virtualCluster1)).isFalse();
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(0);
     }
 
     @Test

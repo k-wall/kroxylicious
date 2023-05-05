@@ -6,6 +6,7 @@
 
 package io.kroxylicious.proxy.internal.net;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -15,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -38,6 +40,7 @@ import io.kroxylicious.proxy.service.HostPort;
 public class EndpointRegistry implements AutoCloseable, EndpointResolver {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(EndpointRegistry.class);
+    private final AtomicBoolean registryClosed = new AtomicBoolean(false);
 
     interface RoutingKey {
         RoutingKey NULL_ROUTING_KEY = new NullRoutingKey();
@@ -73,17 +76,13 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             return new VirtualClusterRecord(new CompletableFuture<>(), new AtomicReference<>());
         }}
 
-    private final BlockingQueue<NetworkBindingOperation> queue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<NetworkBindingOperation<?>> queue = new LinkedBlockingQueue<>();
 
     private final Map<VirtualCluster, VirtualClusterRecord> registeredVirtualClusters = new ConcurrentHashMap<>();
 
     private final Map<Endpoint, CompletionStage<Channel>> listeningChannels = new ConcurrentHashMap<>();
 
-    public boolean hasNetworkEvents() {
-        return !queue.isEmpty();
-    }
-
-    public NetworkBindingOperation takeNetworkBindingEvent() throws InterruptedException {
+    public NetworkBindingOperation<?> takeNetworkBindingEvent() throws InterruptedException {
         return queue.take();
     }
 
@@ -119,12 +118,12 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             // TODO cache endpoints when future completes
         }).toList();
 
-        CompletableFuture.allOf(endpointFutures.toArray(new CompletableFuture<?>[0])).whenComplete((unused, t) -> {
+        var unused = allOfFutures(endpointFutures).whenComplete((u, t) -> {
             var future = vcr.registration.toCompletableFuture();
             if (t != null) {
                 // Try to roll back any bindings that were successfully made
                 unregisterBinding(virtualCluster, (vcb) -> vcb.virtualCluster().equals(virtualCluster))
-                        .handle((u, t1) -> {
+                        .handle((u1, t1) -> {
                             if (t1 != null) {
                                 LOGGER.warn("Registration error", t);
                                 LOGGER.warn("Secondary error occurred whilst handling a previous registration error: {}", t.getMessage(), t1);
@@ -150,7 +149,7 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
     public CompletionStage<Void> deregisterVirtualCluster(VirtualCluster virtualCluster) {
         Objects.requireNonNull(virtualCluster, "virtualCluster cannot be null");
 
-        CompletableFuture<Void> deregisterFuture = new CompletableFuture<>();
+        var deregisterFuture = new CompletableFuture<Void>();
         var vcr = registeredVirtualClusters.get(virtualCluster);
         if (vcr == null) {
             deregisterFuture.complete(null);
@@ -162,15 +161,27 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             return vcr.deregistration().get();
         }
 
-        return vcr.registration()
-                .thenCompose((u) -> unregisterBinding(virtualCluster, binding -> binding.virtualCluster().equals(virtualCluster)).thenApply((unused1) -> {
-                    registeredVirtualClusters.remove(virtualCluster);
-                    return null;
-                }));
+        var unused = vcr.registration()
+                .thenCompose((u) -> unregisterBinding(virtualCluster, binding -> binding.virtualCluster().equals(virtualCluster))
+                        .handle((unused1, t) -> {
+                            registeredVirtualClusters.remove(virtualCluster);
+                            if (t != null) {
+                                deregisterFuture.completeExceptionally(t);
+                            }
+                            else {
+                                deregisterFuture.complete(null);
+                            }
+                            return null;
+                        }));
+        return deregisterFuture;
     }
 
-    boolean isRegistered(VirtualCluster virtualCluster1) {
-        return registeredVirtualClusters.containsKey(virtualCluster1);
+    /* test */ boolean isRegistered(VirtualCluster virtualCluster) {
+        return registeredVirtualClusters.containsKey(virtualCluster);
+    }
+
+    /* test */ int listeningChannelCount() {
+        return listeningChannels.size();
     }
 
     private CompletionStage<Endpoint> registerBinding(Endpoint key, String host, VirtualClusterBinding virtualClusterBinding) {
@@ -215,15 +226,17 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
         Objects.requireNonNull(predicate, "predicate cannot be null");
 
         // TODO cache sufficient information on the virtualclusterrecord to avoid the o(n)
-        var unbindFutures = listeningChannels.entrySet().stream()
-                .map(Map.Entry::getValue)
-                .map((s) -> s.thenCompose(channel -> {
+        var unbindStages = listeningChannels.entrySet().stream()
+                .map((e) -> e.getValue().thenCompose(channel -> {
                     var bindingMap = channel.attr(EndpointRegistry.CHANNEL_BINDINGS).get();
                     var allEntries = bindingMap.entrySet();
                     var toRemove = allEntries.stream().filter(be -> predicate.test(be.getValue())).collect(Collectors.toSet());
-                    allEntries.removeAll(toRemove);
-                    if (bindingMap.isEmpty()) {
+                    if (allEntries.removeAll(toRemove) && bindingMap.isEmpty()) {
                         var future = new CompletableFuture<Void>();
+                        future.whenComplete((u, t) -> {
+                            listeningChannels.remove(e.getKey());
+                        });
+
                         boolean useTls = virtualCluster.isUseTls();
                         var unbind = new NetworkUnbindRequest(useTls, channel, future);
                         queue.add(unbind);
@@ -232,11 +245,9 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
                     else {
                         return CompletableFuture.completedFuture(null);
                     }
-                }))
-                // .map((s) -> s.thenCompose(i -> i))
-                .toList();
+                })).toList();
 
-        return CompletableFuture.allOf(unbindFutures.toArray(new CompletableFuture<?>[0]));
+        return allOfStage(unbindStages);
     }
 
     @Override
@@ -269,14 +280,28 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
                         tls));
     }
 
+    public boolean isRegistryClosed() {
+        return registryClosed.get();
+    }
+
     public CompletionStage<Void> shutdown() {
-        return CompletableFuture.allOf(
-                registeredVirtualClusters.keySet().stream().map(this::deregisterVirtualCluster)
-                        .map(CompletionStage::toCompletableFuture).toArray(CompletableFuture<?>[]::new));
+        return allOfStage(registeredVirtualClusters.keySet().stream().map(this::deregisterVirtualCluster).toList())
+                .whenComplete((u, t) -> {
+                    LOGGER.debug("EndpointRegistry shutdown complete.");
+                    registryClosed.set(true);
+                });
     }
 
     @Override
     public void close() throws Exception {
         shutdown().toCompletableFuture().get();
+    }
+
+    private static <T> CompletableFuture<Void> allOfStage(Collection<CompletionStage<T>> futures) {
+        return allOfFutures(futures.stream().map(CompletionStage::toCompletableFuture).toList());
+    }
+
+    private static <T> CompletableFuture<Void> allOfFutures(Collection<CompletableFuture<T>> futures) {
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]));
     }
 }

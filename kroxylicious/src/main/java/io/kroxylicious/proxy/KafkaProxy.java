@@ -57,9 +57,22 @@ public final class KafkaProxy implements AutoCloseable {
     });
     private final EndpointRegistry endpointRegistry = new EndpointRegistry();
 
-    private record EventGroupConfig(EventLoopGroup bossGroup, EventLoopGroup workerGroup, Class<? extends ServerChannel> clazz) {
+    private record EventGroupConfig(String name, EventLoopGroup bossGroup, EventLoopGroup workerGroup, Class<? extends ServerChannel> clazz) {
+
         public List<Future<?>> shutdownGracefully() {
-            return List.of(bossGroup.shutdownGracefully(), workerGroup.shutdownGracefully());
+
+            var workerShutdownFuture = workerGroup.shutdownGracefully();
+            workerShutdownFuture.addListener(l -> {
+                LOGGER.debug("{} :Shutdown worker group", name);
+            });
+
+            // TODO: workaround - I am seeing a hang with shutdownGracefully if channels are being unbound.
+            bossGroup.shutdown();
+//            var bossShutdownFuture = bossGroup.shutdownGracefully();
+//            bossShutdownFuture.addListener(l -> {
+//                LOGGER.debug("{}: Shutdown boss", name);
+//            });
+            return List.of(/*bossShutdownFuture,*/ workerShutdownFuture);
         }
     };
 
@@ -91,8 +104,8 @@ public final class KafkaProxy implements AutoCloseable {
         var availableCores = Runtime.getRuntime().availableProcessors();
         var meterRegistries = new MeterRegistries(micrometerConfig);
 
-        this.adminEventGroup = buildNettyEventGroups(availableCores, config.isUseIoUring());
-        this.serverEventGroup = buildNettyEventGroups(availableCores, config.isUseIoUring());
+        this.adminEventGroup = buildNettyEventGroups("admin", availableCores, config.isUseIoUring());
+        this.serverEventGroup = buildNettyEventGroups("server", availableCores, config.isUseIoUring());
 
         maybeStartMetricsListener(adminEventGroup, meterRegistries);
 
@@ -105,11 +118,14 @@ public final class KafkaProxy implements AutoCloseable {
                     var networkBindingOperation = endpointRegistry.takeNetworkBindingEvent();
                     var bootstrap = networkBindingOperation.tls() ? tlsServerBootstrap : plainServerBootstrap;
                     networkBindingOperation.performBindingOperation(bootstrap);
-                } while (!Thread.interrupted() && running.get());
+                } while (!(Thread.interrupted() || endpointRegistry.isRegistryClosed()));
             }
             catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException(e);
+            }
+            finally {
+                LOGGER.debug("Shutting down network event processor");
             }
         });
 
@@ -141,7 +157,7 @@ public final class KafkaProxy implements AutoCloseable {
                 .childOption(ChannelOption.TCP_NODELAY, true);
     }
 
-    private EventGroupConfig buildNettyEventGroups(int availableCores, boolean useIoUring) {
+    private EventGroupConfig buildNettyEventGroups(String name, int availableCores, boolean useIoUring) {
         final Class<? extends ServerChannel> channelClass;
         final EventLoopGroup bossGroup;
         final EventLoopGroup workerGroup;
@@ -169,7 +185,7 @@ public final class KafkaProxy implements AutoCloseable {
             workerGroup = new NioEventLoopGroup(availableCores);
             channelClass = NioServerSocketChannel.class;
         }
-        return new EventGroupConfig(bossGroup, workerGroup, channelClass);
+        return new EventGroupConfig(name, bossGroup, workerGroup, channelClass);
     }
 
     private void maybeStartMetricsListener(EventGroupConfig eventGroupConfig,
@@ -212,7 +228,13 @@ public final class KafkaProxy implements AutoCloseable {
                 closeFutures.addAll(adminEventGroup.shutdownGracefully());
                 closeFutures.forEach(Future::syncUninterruptibly);
                 if (t != null) {
-                    throw new RuntimeException(t);
+                    if (t instanceof RuntimeException re) {
+                        throw re;
+
+                    }
+                    else {
+                        throw new RuntimeException(t);
+                    }
                 }
                 return null;
             }).toCompletableFuture().get();
@@ -233,5 +255,4 @@ public final class KafkaProxy implements AutoCloseable {
             shutdown();
         }
     }
-
 }

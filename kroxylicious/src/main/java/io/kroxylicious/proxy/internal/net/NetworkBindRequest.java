@@ -45,24 +45,29 @@ public class NetworkBindRequest extends NetworkBindingOperation<Channel> {
 
     @Override
     public void performBindingOperation(ServerBootstrap serverBootstrap) {
-        int port = port();
-        ChannelFuture bind;
-        if (bindingAddress != null) {
-            LOGGER.info("Binding {}:{}", bindingAddress, port);
-            bind = serverBootstrap.bind(bindingAddress, port);
-        }
-        else {
-            LOGGER.info("Binding <any>:{}", port);
-            bind = serverBootstrap.bind(port);
-        }
-        bind.addListener((ChannelFutureListener) channelFuture -> {
-            if (channelFuture.cause() != null) {
-                future.completeExceptionally(channelFuture.cause());
+        try {
+            int port = port();
+            ChannelFuture bind;
+            if (bindingAddress != null) {
+                LOGGER.info("Binding {}:{}", bindingAddress, port);
+                bind = serverBootstrap.bind(bindingAddress, port);
             }
             else {
-                future.complete(channelFuture.channel());
+                LOGGER.info("Binding <any>:{}", port);
+                bind = serverBootstrap.bind(port);
             }
-        });
+            bind.addListener((ChannelFutureListener) channelFuture -> {
+                if (channelFuture.cause() != null) {
+                    future.completeExceptionally(channelFuture.cause());
+                }
+                else {
+                    future.complete(channelFuture.channel());
+                }
+            });
+        }
+        catch (Throwable t) {
+            future.completeExceptionally(t);
+        }
     }
 
 }
