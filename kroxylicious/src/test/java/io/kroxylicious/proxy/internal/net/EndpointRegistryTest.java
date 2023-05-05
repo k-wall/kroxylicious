@@ -274,9 +274,7 @@ class EndpointRegistryTest {
         assertThat(f.isDone()).isTrue();
 
         var binding = endpointRegistry.resolve(null, address.port(), tls ? address.host() : null, tls).toCompletableFuture().get();
-        assertThat(binding).isNotNull();
-        assertThat(binding.nodeId()).isNull();
-        assertThat(binding.virtualCluster()).isEqualTo(virtualCluster1);
+        assertThat(binding).isEqualTo(VirtualClusterBinding.createBinding(virtualCluster1));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -305,9 +303,7 @@ class EndpointRegistryTest {
         assertThat(f.isDone()).isTrue();
 
         var binding = endpointRegistry.resolve(null, address.port(), sniHostname, true).toCompletableFuture().get();
-        assertThat(binding).isNotNull();
-        assertThat(binding.nodeId()).isNull();
-        assertThat(binding.virtualCluster()).isEqualTo(virtualCluster1);
+        assertThat(binding).isEqualTo(VirtualClusterBinding.createBinding(virtualCluster1));
     }
 
     @Test
@@ -321,9 +317,7 @@ class EndpointRegistryTest {
         assertThat(f.isDone()).isTrue();
 
         var binding = endpointRegistry.resolve(null, 9193, null, false).toCompletableFuture().get();
-        assertThat(binding).isNotNull();
-        assertThat(binding.nodeId()).isEqualTo(0);
-        assertThat(binding.virtualCluster()).isEqualTo(virtualCluster1);
+        assertThat(binding).isEqualTo(VirtualClusterBinding.createBinding(virtualCluster1, 0));
     }
 
     @Test

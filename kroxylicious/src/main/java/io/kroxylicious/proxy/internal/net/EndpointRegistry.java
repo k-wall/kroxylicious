@@ -114,7 +114,8 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             var hp = e.getKey();
             var nodeId = e.getValue();
             var key = Endpoint.createEndpoint(bindingAddress, hp.port(), tls);
-            return registerBinding(key, hp.host(), new VirtualClusterBinding(virtualCluster, nodeId)).toCompletableFuture();
+            VirtualClusterBinding virtualClusterBinding = VirtualClusterBinding.createBinding(virtualCluster, nodeId);
+            return registerBinding(key, hp.host(), virtualClusterBinding).toCompletableFuture();
             // TODO cache endpoints when future completes
         }).toList();
 
@@ -122,7 +123,7 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             var future = vcr.registration.toCompletableFuture();
             if (t != null) {
                 // Try to roll back any bindings that were successfully made
-                unregisterBinding(virtualCluster, (vcb) -> vcb.virtualCluster().equals(virtualCluster))
+                deregisterBinding(virtualCluster, (vcb) -> vcb.virtualCluster().equals(virtualCluster))
                         .handle((u1, t1) -> {
                             if (t1 != null) {
                                 LOGGER.warn("Registration error", t);
@@ -162,7 +163,7 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
         }
 
         var unused = vcr.registration()
-                .thenCompose((u) -> unregisterBinding(virtualCluster, binding -> binding.virtualCluster().equals(virtualCluster))
+                .thenCompose((u) -> deregisterBinding(virtualCluster, binding -> binding.virtualCluster().equals(virtualCluster))
                         .handle((unused1, t) -> {
                             registeredVirtualClusters.remove(virtualCluster);
                             if (t != null) {
@@ -211,17 +212,19 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             var bindings = c.attr(CHANNEL_BINDINGS);
             var bindingKey = virtualCluster.getClusterEndpointProvider().requiresTls() ? RoutingKey.createBindingKey(host) : RoutingKey.NULL_ROUTING_KEY;
             bindings.setIfAbsent(new ConcurrentHashMap<>());
+            var bindingMap = bindings.get();
 
-            Map<RoutingKey, VirtualClusterBinding> bindingMap = bindings.get();
             var existing = bindingMap.putIfAbsent(bindingKey, virtualClusterBinding);
+
             if (existing != null) {
                 throw new EndpointBindingException("Endpoint %s cannot be bound with key %s, that key is already bound".formatted(key, bindingKey));
             }
+
             return key;
         });
     }
 
-    private CompletionStage<Void> unregisterBinding(VirtualCluster virtualCluster, Predicate<VirtualClusterBinding> predicate) {
+    private CompletionStage<Void> deregisterBinding(VirtualCluster virtualCluster, Predicate<VirtualClusterBinding> predicate) {
         Objects.requireNonNull(virtualCluster, "virtualCluster cannot be null");
         Objects.requireNonNull(predicate, "predicate cannot be null");
 
