@@ -15,7 +15,7 @@ import java.util.concurrent.CompletionStage;
 public interface EndpointResolver {
 
     /**
-     * Uses channel metadata from the incoming connection to a {@link VirtualClusterBinding}.
+     * Uses channel metadata from the incoming connection to resolve a {@link VirtualClusterBinding}.
      *
      * @param bindingAddress binding address of the accepting socket
      * @param targetPort target port of this connection

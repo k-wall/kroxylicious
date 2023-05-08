@@ -10,6 +10,10 @@ import java.util.Objects;
 
 import io.kroxylicious.proxy.config.VirtualCluster;
 
+/**
+ * Used to represent a binding from an @{@link Endpoint} to a @{@link VirtualCluster}.
+ * This is a binding to specific broker (indicated by nodeId).
+ */
 public final class VirtualClusterBrokerBinding extends VirtualClusterBinding {
     private final int nodeId;
 

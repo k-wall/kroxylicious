@@ -31,14 +31,46 @@ import io.kroxylicious.proxy.config.VirtualCluster;
 import io.kroxylicious.proxy.service.HostPort;
 
 /**
+ * The endpoint registry is responsible for associating network endpoints with broker/bootstrap addresses of virtual clusters.
+ * Pictorially the registry looks like this:
  *
-
- *  *
+ * <pre><code>
+ * Registry
+ *    ├─ Endpoint (tls 9092)
+ *    │    ╰───┬──→ cluster1.kafka.com         ──→ Virtual Cluster A bootstrap
+ *    │        ├──→ broker1-cluster1.kafka.com ──→ Virtual Cluster A broker node 1
+ *    │        ╰──→ broker2-cluster1.kafka.com ──→ Virtual Cluster A broker node 2
+ *    ├─ Endpoint (plain 19092)
+ *    │        ╰───→  (null)                   ──→ Virtual Cluster B bootstrap
+ *    ├─ Endpoint (plain 19093)
+ *    │        ╰───→  (null)                   ──→ Virtual Cluster B broker 1
+ *    ╰─ Endpoint (plain 12094)
+ *             ╰───→  (null)                   ──→ Virtual Cluster B broker 2
+ * </code></pre>
  *
+ * The association from endpoint to virtual cluster/broker is represented by a {@link RoutingKey} instance and
+ * a {@link VirtualClusterBinding}.  The {@link RoutingKey} encapsulates a hostname (that is used to match against
+ * the SNI name), or a null routing used for a broker per port pattern. A {@link VirtualClusterBinding}
+ * identifies a bootstrap.  The {@link VirtualClusterBrokerBinding} subclass identifies a broker node binding.
+ * <br/>
+ * The registry does not take direct responsibility for binding and unbinding network sockets.  Instead, it exposes
+ * a queue of network binding operation requests {@link NetworkBindingOperation}.  Callers get the next network
+ * event by calling the {@link #takeNetworkBindingEvent()}.  Once the underlying network operation is complete, the caller
+ * must complete the provided future.
+ * <br/>
+ * The registry exposes methods for the registration {@link #registerVirtualCluster(VirtualCluster)} and deregistration
+ * {@link #deregisterVirtualCluster(VirtualCluster)} of virtual clusters.  The registry emits the required network binding
+ * operations to expose the virtual cluster to the network.  These API calls return futures that will complete once
+ * the underlying network operations are completed.
+ * <br/>
+ * The registry provides an {@link EndpointResolver}.  The {@link #resolve(String, int, String, boolean)} method accepts
+ * connection metadata (port, SNI etc) and resolves this to a @{@link VirtualClusterBinding}.  This allows
+ * Kroxylicious to determine the destination of any incoming connection.
+ * <br/>
+ * The registry is thread safe for all operations.
  *
  */
 public class EndpointRegistry implements AutoCloseable, EndpointResolver {
-
     private static final Logger LOGGER = LoggerFactory.getLogger(EndpointRegistry.class);
     private final AtomicBoolean registryClosed = new AtomicBoolean(false);
 
@@ -76,12 +108,23 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
             return new VirtualClusterRecord(new CompletableFuture<>(), new AtomicReference<>());
         }}
 
+    /** Queue of network binding operations */
     private final BlockingQueue<NetworkBindingOperation<?>> queue = new LinkedBlockingQueue<>();
 
+    /** Registry of virtual clusters that have been registered */
     private final Map<VirtualCluster, VirtualClusterRecord> registeredVirtualClusters = new ConcurrentHashMap<>();
 
+    /** Registry of endpoints and their underlying Netty Channel */
     private final Map<Endpoint, CompletionStage<Channel>> listeningChannels = new ConcurrentHashMap<>();
 
+    /**
+     * Blocking operation that gets the next binding operation.  Once the network operation is complete,
+     * the caller must complete the {@link NetworkBindingOperation#getFuture()}.
+     *
+     * @return network binding operation
+     *
+     * @throws InterruptedException - operation interrupted
+     */
     public NetworkBindingOperation<?> takeNetworkBindingEvent() throws InterruptedException {
         return queue.take();
     }
@@ -90,6 +133,16 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
         return queue.size();
     }
 
+    /**
+     * Registers a virtual cluster with the registry.  The registry refers to the endpoint configuration
+     * of the virtual cluster to understand its port requirements, binding new listening ports as necessary.
+     * This operation returns a {@link CompletionStage<Endpoint>}.  The completion stage will complete once
+     * all necessary network bind operations are completed.  The returned {@link Endpoint} refers to the
+     * bootstrap endpoint of the virtual cluster.
+     *
+     * @param virtualCluster virtual cluster to be registered.
+     * @return completion stage that will complete after registration is finished.
+     */
     public CompletionStage<Endpoint> registerVirtualCluster(VirtualCluster virtualCluster) {
         Objects.requireNonNull(virtualCluster, "virtualCluster cannot be null");
 
@@ -147,6 +200,14 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
         return vcr.registration();
     }
 
+    /**
+     * Deregisters a virtual cluster from the registry, removing all existing endpoint bindings, and
+     * closing any listening sockets that are no longer required. This operation returns a {@link CompletionStage<Endpoint>}.
+     * The completion stage will complete once any necessary network unbind operations are completed.
+     *
+     * @param virtualCluster virtual cluster to be deregistered.
+     * @return completion stage that will complete after registration is finished.
+     */
     public CompletionStage<Void> deregisterVirtualCluster(VirtualCluster virtualCluster) {
         Objects.requireNonNull(virtualCluster, "virtualCluster cannot be null");
 
@@ -228,12 +289,13 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
         Objects.requireNonNull(virtualCluster, "virtualCluster cannot be null");
         Objects.requireNonNull(predicate, "predicate cannot be null");
 
-        // TODO cache sufficient information on the virtualclusterrecord to avoid the o(n)
+        // Search the listening channels for bindings matching the predicate. We could cache more information on the vcr to optimise
         var unbindStages = listeningChannels.entrySet().stream()
                 .map((e) -> e.getValue().thenCompose(channel -> {
                     var bindingMap = channel.attr(EndpointRegistry.CHANNEL_BINDINGS).get();
                     var allEntries = bindingMap.entrySet();
                     var toRemove = allEntries.stream().filter(be -> predicate.test(be.getValue())).collect(Collectors.toSet());
+                    // If our removal leaves the channel without bindings, trigger its unbinding
                     if (allEntries.removeAll(toRemove) && bindingMap.isEmpty()) {
                         var future = new CompletableFuture<Void>();
                         future.whenComplete((u, t) -> {
@@ -253,6 +315,15 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
         return allOfStage(unbindStages);
     }
 
+    /**
+     * Uses channel metadata (port, SNI name etc.) from the incoming connection to resolve a {@link VirtualClusterBinding}.
+     *
+     * @param bindingAddress binding address of the accepting socket
+     * @param port target port of this connection
+     * @param sniHostname SNI hostname, may be null.
+     * @param tls true if this connection uses TLS.
+     * @return completion stage yielding the {@link VirtualClusterBinding} or exceptionally a EndpointResolutionException.
+     */
     @Override
     public CompletionStage<VirtualClusterBinding> resolve(String bindingAddress, int port, String sniHostname, boolean tls) {
         var endpoint = new Endpoint(bindingAddress, port, tls);
@@ -283,10 +354,20 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
                         tls));
     }
 
+    /**
+     * Indicates if the registry is in closed state.
+     * @return true if the registry has been closed.
+     */
     public boolean isRegistryClosed() {
         return registryClosed.get();
     }
 
+    /**
+     * Signals that the registry should be shut down.  The operation returns a {@link java.util.concurrent.CompletionStage}
+     * that will complete once shutdown is complete (endpoints unbound).
+     *
+     * @return CompletionStage that completes once shut-down is complete.
+     */
     public CompletionStage<Void> shutdown() {
         return allOfStage(registeredVirtualClusters.keySet().stream().map(this::deregisterVirtualCluster).toList())
                 .whenComplete((u, t) -> {

@@ -10,6 +10,10 @@ import java.util.concurrent.CompletableFuture;
 
 import io.netty.bootstrap.ServerBootstrap;
 
+/**
+ * Abstract encapsulation of a network binding operation.
+ * @param <U> the type yielded by the future signalling the completion of the binding operation.
+ */
 public abstract class NetworkBindingOperation<U> {
 
     protected final boolean tls;

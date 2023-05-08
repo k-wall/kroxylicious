@@ -10,6 +10,10 @@ import java.util.Objects;
 
 import io.kroxylicious.proxy.config.VirtualCluster;
 
+/**
+ * Used to represent a binding from an @{@link Endpoint} to a @{@link VirtualCluster}.
+ * This is the broker-less binding and is used to represent the bootstrap.
+ */
 public class VirtualClusterBinding {
     private final VirtualCluster virtualCluster;
 

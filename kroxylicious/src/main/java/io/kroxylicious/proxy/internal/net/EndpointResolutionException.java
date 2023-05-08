@@ -6,6 +6,9 @@
 
 package io.kroxylicious.proxy.internal.net;
 
+/**
+ * Signals that an endpoint could not be resolved into a known virtual cluster binding.
+ */
 public class EndpointResolutionException extends EndpointException {
     public EndpointResolutionException(String message) {
         super(message);

@@ -6,6 +6,9 @@
 
 package io.kroxylicious.proxy.internal.net;
 
+/**
+ * Signals that an endpoint could not be bound due to an error condition.
+ */
 public class EndpointBindingException extends EndpointException {
     public EndpointBindingException(String message) {
         super(message);

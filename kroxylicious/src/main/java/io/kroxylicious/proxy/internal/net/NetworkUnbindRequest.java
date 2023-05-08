@@ -16,6 +16,9 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 
+/**
+ * Request for a network endpoint to be unbound.
+ */
 public class NetworkUnbindRequest extends NetworkBindingOperation<Void> {
     private static final Logger LOGGER = LoggerFactory.getLogger(NetworkUnbindRequest.class);
     private final Channel channel;

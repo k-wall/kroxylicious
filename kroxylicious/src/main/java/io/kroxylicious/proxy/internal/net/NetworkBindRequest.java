@@ -16,6 +16,10 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 
+/**
+ * Request for a network endpoint to be bound.
+ *
+ */
 public class NetworkBindRequest extends NetworkBindingOperation<Channel> {
     private static final Logger LOGGER = LoggerFactory.getLogger(NetworkBindRequest.class);
     private final String bindingAddress;
