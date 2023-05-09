@@ -102,6 +102,7 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
 
     protected static final AttributeKey<Map<RoutingKey, VirtualClusterBinding>> CHANNEL_BINDINGS = AttributeKey.newInstance("channelBindings");
 
+    /** Used to track the registration state of the virtual clusters in the registry */
     private record VirtualClusterRecord(CompletionStage<Endpoint> registration, AtomicReference<CompletionStage<Void>> deregistration) {
 
     private static VirtualClusterRecord createVirtualClusterRecord() {
@@ -114,8 +115,15 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
     /** Registry of virtual clusters that have been registered */
     private final Map<VirtualCluster, VirtualClusterRecord> registeredVirtualClusters = new ConcurrentHashMap<>();
 
+    /** Used to track the state of the channels in the registry */
+    private record ListeningChannelRecord(CompletionStage<Channel> bind, AtomicReference<CompletionStage<Void>> unbind) {
+
+    private static ListeningChannelRecord createListeningChannelRecord() {
+            return new ListeningChannelRecord(new CompletableFuture<>(), new AtomicReference<>());
+        }}
+
     /** Registry of endpoints and their underlying Netty Channel */
-    private final Map<Endpoint, CompletionStage<Channel>> listeningChannels = new ConcurrentHashMap<>();
+    private final Map<Endpoint, ListeningChannelRecord> listeningChannels = new ConcurrentHashMap<>();
 
     /**
      * Blocking operation that gets the next binding operation.  Once the network operation is complete,
@@ -251,25 +259,26 @@ public class EndpointRegistry implements AutoCloseable, EndpointResolver {
         Objects.requireNonNull(virtualClusterBinding, "virtualClusterBinding cannot be null");
         var virtualCluster = virtualClusterBinding.virtualCluster();
 
-        var future = new CompletableFuture<Channel>();
+        var future = ListeningChannelRecord.createListeningChannelRecord(); // TODO rename me
         var channelStage = listeningChannels.putIfAbsent(key, future);
         if (channelStage == null) {
-            channelStage = future.exceptionally(t -> {
-                // Handles the case where the network bind fails
-                listeningChannels.remove(key);
-                if (t instanceof RuntimeException re) {
-                    throw re;
-                }
-                else {
-                    throw new RuntimeException(t);
-                }
-            });
+            channelStage = future;
+//            channelStage = future.bind().exceptionally(t -> {
+//                // Handles the case where the network bind fails
+//                listeningChannels.remove(key);
+//                if (t instanceof RuntimeException re) {
+//                    throw re;
+//                }
+//                else {
+//                    throw new RuntimeException(t);
+//                }
+//            });
             boolean useTls = virtualCluster.isUseTls();
-            var bindReq = new NetworkBindRequest(key.bindingAddress(), key.port(), useTls, future);
+            var bindReq = new NetworkBindRequest(key.bindingAddress(), key.port(), useTls, future.bind());
             queue.add(bindReq);
         }
 
-        return channelStage.thenApply(c -> {
+        return channelStage.bind().thenApply(c -> {
             var bindings = c.attr(CHANNEL_BINDINGS);
             var bindingKey = virtualCluster.getClusterEndpointProvider().requiresTls() ? RoutingKey.createBindingKey(host) : RoutingKey.NULL_ROUTING_KEY;
             bindings.setIfAbsent(new ConcurrentHashMap<>());

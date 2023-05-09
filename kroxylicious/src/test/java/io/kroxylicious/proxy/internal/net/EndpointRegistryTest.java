@@ -261,9 +261,33 @@ class EndpointRegistryTest {
         var unbindFuture = endpointRegistry.deregisterVirtualCluster(virtualCluster1).toCompletableFuture();
         verifyAndProcessNetworkEventQueue(createTestNetworkUnbindRequest(9193, false), createTestNetworkUnbindRequest(9192, false));
         assertThat(unbindFuture.isDone()).isTrue();
-
     }
 
+    @Test
+    public void registerClusterWhileAnotherIsDeregistering() throws Exception {
+        configureVirtualClusterMock(virtualCluster1, endpointProvider1, "mycluster1:9192", true);
+        configureVirtualClusterMock(virtualCluster2, endpointProvider2, "mycluster2:9192", true);
+
+        var r1 = endpointRegistry.registerVirtualCluster(virtualCluster1).toCompletableFuture();
+        verifyAndProcessNetworkEventQueue(createTestNetworkBindRequest(null, 9192, true));
+        assertThat(r1.isDone()).isTrue();
+
+        var d1 = endpointRegistry.deregisterVirtualCluster(virtualCluster1).toCompletableFuture();
+        // The deregistration for cluster1 is queued up so the future won't be completed.
+        assertThat(d1.isDone()).isFalse();
+
+        var r2 = endpointRegistry.registerVirtualCluster(virtualCluster2).toCompletableFuture();
+        assertThat(r1.isDone()).isFalse();
+
+        // we expect an unbind for 9192 followed by an immediate rebind of the same port.
+        verifyAndProcessNetworkEventQueue(createTestNetworkUnbindRequest(9192, true),
+                                          createTestNetworkBindRequest(null, 9192, true));
+
+
+        assertThat(CompletableFuture.allOf(d1, r2).isDone()).isTrue();
+        assertThat(r2.get()).isEqualTo(Endpoint.createEndpoint(null, 9192, true));
+        assertThat(endpointRegistry.listeningChannelCount()).isEqualTo(1);
+    }
     @ParameterizedTest
     @CsvSource({ "mycluster1:9192,true,true", "mycluster1:9192,true,false", "localhost:9192,false,false" })
     public void resolveBootstrap(@ConvertWith(HostPortConverter.class) HostPort address, boolean tls, boolean sni) throws Exception {
