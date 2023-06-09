@@ -17,7 +17,14 @@ import io.sundr.builder.annotations.ExternalBuildables;
         "io.kroxylicious.proxy.config.VirtualCluster",
         "io.kroxylicious.proxy.config.admin.AdminHttpConfiguration",
         "io.kroxylicious.proxy.config.admin.EndpointsConfiguration",
-        "io.kroxylicious.proxy.config.admin.PrometheusMetricsConfig" })
+        "io.kroxylicious.proxy.config.admin.PrometheusMetricsConfig",
+        // "io.kroxylicious.proxy.config.tls.PasswordSource",
+        "io.kroxylicious.proxy.config.tls.FilePasswordSource",
+        "io.kroxylicious.proxy.config.tls.StringPasswordSource",
+        "io.kroxylicious.proxy.config.tls.Tls",
+        "io.kroxylicious.proxy.config.tls.KeyStore",
+        "io.kroxylicious.proxy.config.tls.KeyPair"
+})
 public final class BuilderConfig {
     public static final String TARGET_CONFIG_PACKAGE = "io.kroxylicious.proxy.config";
 

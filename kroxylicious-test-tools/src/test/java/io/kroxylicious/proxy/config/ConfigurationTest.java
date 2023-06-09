@@ -54,6 +54,29 @@ class ConfigurationTest {
                                 bootstrapAddress: cluster1:9192
                                 brokerAddressPattern: broker-$(nodeId):$(portNumber)
                         """),
+                Arguments.of("Downstream/Upstream TLS", """
+                        virtualClusters:
+                          demo1:
+                            tls:
+                                keyStore:
+                                  storeFile: /tmp/foo.jks
+                                  storePassword:
+                                    password: password
+                                  storeType: JKS
+                            targetCluster:
+                              bootstrap_servers: kafka.example:1234
+                              tls:
+                                trustStore:
+                                 storeFile: /tmp/foo.jks
+                                 storePassword:
+                                   password: password
+                                 storeType: JKS
+                            clusterNetworkAddressConfigProvider:
+                              type: SniRouting
+                              config:
+                                bootstrapAddress: cluster1:9192
+                                brokerAddressPattern: broker-$(nodeId):$(portNumber)
+                        """),
                 Arguments.of("Filters", """
                         filters:
                         - type: ProduceRequestTransformation
@@ -124,6 +147,55 @@ class ConfigurationTest {
                                   demo:
                                     targetCluster:
                                       bootstrap_servers: kafka.example:1234
+                                    clusterNetworkAddressConfigProvider:
+                                      type: SniRouting
+                                      config:
+                                        bootstrapAddress: cluster1:9192
+                                        brokerAddressPattern: broker-$(nodeId):$(portNumber)
+                                """),
+                Arguments.of("Downstream/Upstream TLS",
+                        new ConfigurationBuilder()
+                                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                                        .withNewTargetCluster()
+                                        .withBootstrapServers("kafka.example:1234")
+                                        .withNewTls()
+                                        .withNewTrustStore()
+                                        .withStoreFile("/tmp/client.jks")
+                                        .withStoreType("JKS")
+                                        .withNewStringPasswordSourceStore("storepassword")
+                                        .endTrustStore()
+                                        .endTls()
+                                        .endTargetCluster()
+                                        .withNewTls()
+                                        .withNewKeyPair()
+                                        .withCertificateFile("/tmp/cert")
+                                        .withPrivateKeyFile("/tmp/key")
+                                        .withNewStringPasswordSourceKey("keypassword")
+                                        .endKeyPair()
+                                        .endTls()
+                                        .withClusterNetworkAddressConfigProvider(
+                                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("SniRouting")
+                                                        .withConfig("bootstrapAddress", "cluster1:9192", "brokerAddressPattern", "broker-$(nodeId):$(portNumber)")
+                                                        .build())
+                                        .build())
+                                .build(),
+                        """
+                                virtualClusters:
+                                  demo:
+                                    targetCluster:
+                                      bootstrap_servers: kafka.example:1234
+                                      tls:
+                                         trustStore:
+                                            storeFile: /tmp/client.jks
+                                            storePassword:
+                                              password: storepassword
+                                            storeType: JKS
+                                    tls:
+                                       keyPair:
+                                         certificateFile: /tmp/cert
+                                         privateKeyFile: /tmp/key
+                                         keyPassword:
+                                           password: keypassword
                                     clusterNetworkAddressConfigProvider:
                                       type: SniRouting
                                       config:

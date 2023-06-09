@@ -89,8 +89,12 @@ public class ExpositionIT {
 
         var demo = builder.getVirtualClusters().get("demo");
         demo = new VirtualClusterBuilder(demo)
-                .withKeyPassword(brokerCertificateGenerator.getPassword())
-                .withKeyStoreFile(brokerCertificateGenerator.getKeyStoreLocation())
+                .withNewTls()
+                .withNewKeyStore()
+                .withStoreFile(brokerCertificateGenerator.getKeyStoreLocation())
+                .withNewStringPasswordSourceStore(brokerCertificateGenerator.getPassword())
+                .endKeyStore()
+                .endTls()
                 .build();
         builder.addToVirtualClusters("demo", demo);
 
@@ -175,8 +179,12 @@ public class ExpositionIT {
                             new ClusterNetworkAddressConfigProviderDefinitionBuilder("SniRouting").withConfig("bootstrapAddress", virtualClusterFQDN + ":9192",
                                     "brokerAddressPattern", virtualClusterBrokerAddressPattern.formatted(i))
                                     .build())
-                    .withKeyPassword(brokerCertificateGenerator.getPassword())
-                    .withKeyStoreFile(brokerCertificateGenerator.getKeyStoreLocation())
+                    .withNewTls()
+                    .withNewKeyStore()
+                    .withStoreFile(brokerCertificateGenerator.getKeyStoreLocation())
+                    .withNewStringPasswordSourceStore(brokerCertificateGenerator.getPassword())
+                    .endKeyStore()
+                    .endTls()
                     .withLogNetwork(true)
                     .withLogFrames(true)
                     .build();
