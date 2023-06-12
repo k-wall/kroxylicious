@@ -13,12 +13,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class BaseContributorTest {
-    static class LongConfig extends BaseConfig {
+    static class LongConfig implements BaseConfig {
         private final Long value = 2L;
 
     }
 
-    static class AnotherConfig extends BaseConfig {
+    static class AnotherConfig implements BaseConfig {
     }
 
     @Test
@@ -37,7 +37,7 @@ class BaseContributorTest {
         builder.add("one", () -> 1L);
         BaseContributor<Long> baseContributor = new BaseContributor<>(builder) {
         };
-        Long instance = baseContributor.getInstance("one", new BaseConfig());
+        Long instance = baseContributor.getInstance("one", new AnotherConfig());
         assertThat(instance).isEqualTo(1L);
     }
 

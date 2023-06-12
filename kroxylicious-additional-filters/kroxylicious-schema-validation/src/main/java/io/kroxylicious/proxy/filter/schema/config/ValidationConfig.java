@@ -19,7 +19,7 @@ import io.kroxylicious.proxy.config.BaseConfig;
  * the data for all topic-partitions with a ProduceRequest and how to handle partial failures (where
  * some topic-partitions are valid and others are invalid within a single ProduceRequest)
  */
-public class ValidationConfig extends BaseConfig {
+public class ValidationConfig implements BaseConfig {
 
     /**
      * If this is enabled then the proxy will (for non-transactional requests):

@@ -8,7 +8,10 @@ package io.kroxylicious.proxy.config;
 import java.util.Arrays;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import io.sundr.builder.annotations.Buildable;
 
 import io.kroxylicious.proxy.service.HostPort;
 
@@ -16,6 +19,11 @@ import io.kroxylicious.proxy.service.HostPort;
  * Represents the target (upstream) kafka cluster.
  */
 public record TargetCluster(@JsonProperty(value = "bootstrap_servers", required = true)  String bootstrapServers) {
+
+    @Buildable(editableEnabled = false, generateBuilderPackage = true, builderPackage = BuilderConfig.TARGET_CONFIG_PACKAGE)
+    @JsonCreator
+    public TargetCluster {
+    }
 
     /**
      * A list of host/port pairs to use for establishing the initial connection to the target (upstream) Kafka cluster.

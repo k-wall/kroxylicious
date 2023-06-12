@@ -68,9 +68,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.kroxylicious.net.IntegrationTestInetAddressResolverProvider;
-import io.kroxylicious.proxy.config.ClusterNetworkAddressConfigProviderDefinitionBuilder;
 import io.kroxylicious.proxy.config.ConfigurationBuilder;
-import io.kroxylicious.proxy.config.FilterDefinitionBuilder;
 import io.kroxylicious.proxy.config.VirtualClusterBuilder;
 import io.kroxylicious.proxy.service.HostPort;
 import io.kroxylicious.test.tester.KroxyliciousTester;
@@ -584,9 +582,12 @@ public class MultiTenantIT {
                         .withNewTargetCluster()
                         .withBootstrapServers(cluster.getBootstrapServers())
                         .endTargetCluster()
-                        .withClusterNetworkAddressConfigProvider(
-                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", TENANT_1_PROXY_ADDRESS)
-                                        .build())
+                        .withNewClusterNetworkAddressConfigProvider()
+                        .withType("PortPerBroker")
+                        .withNewGenericDefinitionBaseConfig()
+                        .addToConfig("bootstrapAddress", TENANT_1_PROXY_ADDRESS)
+                        .endGenericDefinitionBaseConfig()
+                        .endClusterNetworkAddressConfigProvider()
                         .withKeyPassword(certificateGenerator.getPassword())
                         .withKeyStoreFile(certificateGenerator.getKeyStoreLocation())
                         .build())
@@ -594,14 +595,17 @@ public class MultiTenantIT {
                         .withNewTargetCluster()
                         .withBootstrapServers(cluster.getBootstrapServers())
                         .endTargetCluster()
-                        .withClusterNetworkAddressConfigProvider(
-                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", TENANT_2_PROXY_ADDRESS)
-                                        .build())
+                        .withNewClusterNetworkAddressConfigProvider()
+                        .withType("PortPerBroker")
+                        .withNewGenericDefinitionBaseConfig()
+                        .addToConfig("bootstrapAddress", TENANT_2_PROXY_ADDRESS)
+                        .endGenericDefinitionBaseConfig()
+                        .endClusterNetworkAddressConfigProvider()
                         .withKeyPassword(certificateGenerator.getPassword())
                         .withKeyStoreFile(certificateGenerator.getKeyStoreLocation())
                         .build())
-                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build())
-                .addToFilters(new FilterDefinitionBuilder("MultiTenant").build());
+                .addNewFilter().withType("ApiVersions").endFilter()
+                .addNewFilter().withType("MultiTenant").endFilter();
     }
 
     @NotNull

@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import io.kroxylicious.proxy.config.ClusterNetworkAddressConfigProviderDefinitionBuilder;
 import io.kroxylicious.proxy.config.ConfigurationBuilder;
 import io.kroxylicious.proxy.config.VirtualClusterBuilder;
 import io.kroxylicious.test.Request;
@@ -184,9 +183,12 @@ public class KroxyliciousTestersTest {
                 .withNewTargetCluster()
                 .withBootstrapServers(clusterBootstrapServers)
                 .endTargetCluster()
-                .withClusterNetworkAddressConfigProvider(
-                        new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", defaultProxyBootstrap)
-                                .build())
+                .withNewClusterNetworkAddressConfigProvider()
+                        .withType("PortPerBroker")
+                        .withNewGenericDefinitionBaseConfig()
+                        .addToConfig("bootstrapAddress", defaultProxyBootstrap)
+                        .endGenericDefinitionBaseConfig()
+                        .endClusterNetworkAddressConfigProvider()
                 .build());
     }
 

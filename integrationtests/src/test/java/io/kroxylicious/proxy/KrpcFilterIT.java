@@ -25,7 +25,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import io.kroxylicious.proxy.config.FilterDefinitionBuilder;
 import io.kroxylicious.proxy.filter.CreateTopicRejectFilter;
 import io.kroxylicious.proxy.internal.filter.ByteBufferTransformation;
 import io.kroxylicious.proxy.service.HostPort;
@@ -126,7 +125,7 @@ public class KrpcFilterIT {
     @Test
     public void requestFiltersCanRespondWithoutProxying(KafkaCluster cluster, Admin admin) throws Exception {
         var config = withDefaultFilters(proxy(cluster))
-                .addToFilters(new FilterDefinitionBuilder("CreateTopicRejectFilter").build());
+                .addNewFilter().withType("CreateTopicRejectFilter").endFilter();
 
         try (var tester = kroxyliciousTester(config);
                 var proxyAdmin = tester.admin()) {
@@ -154,7 +153,12 @@ public class KrpcFilterIT {
                 new NewTopic(TOPIC_2, 1, (short) 1))).all().get();
 
         var config = withDefaultFilters(proxy(cluster))
-                .addToFilters(new FilterDefinitionBuilder("ProduceRequestTransformation").withConfig("transformation", TestEncoder.class.getName()).build());
+                .addNewFilter()
+                .withType("ProduceRequestTransformation")
+                .withNewGenericDefinitionBaseConfig()
+                .addToConfig("transformation", TestEncoder.class.getName())
+                .endGenericDefinitionBaseConfig()
+                .endFilter();
 
         try (var tester = kroxyliciousTester(config);
                 var producer = tester.producer(Map.of(CLIENT_ID_CONFIG, "shouldModifyProduceMessage", DELIVERY_TIMEOUT_MS_CONFIG, 3_600_000));
@@ -187,8 +191,12 @@ public class KrpcFilterIT {
                 new NewTopic(TOPIC_2, 1, (short) 1))).all().get();
 
         var config = withDefaultFilters(proxy(cluster))
-                .addToFilters(new FilterDefinitionBuilder("FetchResponseTransformation").withConfig("transformation", TestDecoder.class.getName()).build());
-
+                .addNewFilter()
+                .withType("FetchResponseTransformation")
+                .withNewGenericDefinitionBaseConfig()
+                .addToConfig("transformation", TestDecoder.class.getName())
+                .endGenericDefinitionBaseConfig()
+                .endFilter();
         try (var tester = kroxyliciousTester(config);
                 var producer = tester.producer(Serdes.String(), Serdes.ByteArray(),
                         Map.of(CLIENT_ID_CONFIG, "shouldModifyFetchMessage", DELIVERY_TIMEOUT_MS_CONFIG, 3_600_000));

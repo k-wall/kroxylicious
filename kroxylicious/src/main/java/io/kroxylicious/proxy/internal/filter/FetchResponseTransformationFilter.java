@@ -38,7 +38,7 @@ import io.kroxylicious.proxy.internal.util.MemoryRecordsHelper;
  */
 public class FetchResponseTransformationFilter implements FetchResponseFilter {
 
-    public static class FetchResponseTransformationConfig extends BaseConfig {
+    public static class FetchResponseTransformationConfig implements BaseConfig {
 
         private final String transformation;
 

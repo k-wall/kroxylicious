@@ -94,7 +94,7 @@ public class PortPerBrokerClusterNetworkAddressConfigProvider implements Cluster
     /**
      * Creates the configuration for this provider.
      */
-    public static class PortPerBrokerClusterNetworkAddressConfigProviderConfig extends BaseConfig {
+    public static class PortPerBrokerClusterNetworkAddressConfigProviderConfig implements BaseConfig {
         private final HostPort bootstrapAddress;
         private final String brokerAddressPattern;
         private final int brokerStartPort;

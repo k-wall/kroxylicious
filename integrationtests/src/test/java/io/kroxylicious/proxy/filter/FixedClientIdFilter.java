@@ -17,7 +17,7 @@ public class FixedClientIdFilter implements RequestFilter, ResponseFilter {
 
     private final String clientId;
 
-    public static class FixedClientIdFilterConfig extends BaseConfig {
+    public static class FixedClientIdFilterConfig implements BaseConfig {
 
         private final String clientId;
 

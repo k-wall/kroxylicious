@@ -16,5 +16,5 @@ import com.fasterxml.jackson.annotation.JsonCreator;
  * Subclasses should be immutable and have a constructor annotated with {@link JsonCreator}.
  * </p>
  */
-public class BaseConfig {
+public interface BaseConfig {
 }

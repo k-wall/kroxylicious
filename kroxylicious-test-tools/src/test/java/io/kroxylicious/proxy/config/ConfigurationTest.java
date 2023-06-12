@@ -98,8 +98,12 @@ class ConfigurationTest {
 
                 Arguments.of("With filter",
                         new ConfigurationBuilder()
-                                .addToFilters(new FilterDefinitionBuilder("ProduceRequestTransformation")
-                                        .withConfig("transformation", ProduceRequestTransformationFilter.UpperCasing.class.getName()).build())
+                                .addNewFilter()
+                                .withType("ProduceRequestTransformation")
+                                .withNewGenericDefinitionBaseConfig()
+                                .addToConfig("transformation", ProduceRequestTransformationFilter.UpperCasing.class.getName())
+                                .endGenericDefinitionBaseConfig()
+                                .endFilter()
                                 .build(),
                         """
                                 filters:
@@ -113,10 +117,13 @@ class ConfigurationTest {
                                         .withNewTargetCluster()
                                         .withBootstrapServers("kafka.example:1234")
                                         .endTargetCluster()
-                                        .withClusterNetworkAddressConfigProvider(
-                                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("SniRouting")
-                                                        .withConfig("bootstrapAddress", "cluster1:9192", "brokerAddressPattern", "broker-$(nodeId):$(portNumber)")
-                                                        .build())
+                                        .withNewClusterNetworkAddressConfigProvider()
+                                        .withType("SniRouting")
+                                        .withNewGenericDefinitionBaseConfig()
+                                        .addToConfig("bootstrapAddress", "cluster1:9192")
+                                        .addToConfig("brokerAddressPattern", "broker-$(nodeId):$(portNumber)")
+                                        .endGenericDefinitionBaseConfig()
+                                        .endClusterNetworkAddressConfigProvider()
                                         .build())
                                 .build(),
                         """

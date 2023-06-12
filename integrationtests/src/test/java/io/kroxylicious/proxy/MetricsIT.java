@@ -19,7 +19,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.micrometer.core.instrument.Metrics;
 import io.netty.handler.codec.http.HttpResponseStatus;
 
-import io.kroxylicious.proxy.config.MicrometerDefinitionBuilder;
 import io.kroxylicious.test.tester.AdminHttpClient;
 import io.kroxylicious.testing.kafka.api.KafkaCluster;
 import io.kroxylicious.testing.kafka.junit5ext.KafkaClusterExtension;
@@ -60,7 +59,12 @@ public class MetricsIT {
     @Test
     public void shouldOfferPrometheusMetricsWithNamedBinder(KafkaCluster cluster) {
         var config = proxy(cluster)
-                .addToMicrometer(new MicrometerDefinitionBuilder("StandardBinders").withConfig("binderNames", List.of("JvmGcMetrics")).build())
+                .addNewMicrometer()
+                .withType("StandardBinders")
+                .withNewGenericDefinitionBaseConfig()
+                .addToConfig("binderNames", List.of("JvmGcMetrics"))
+                .endGenericDefinitionBaseConfig()
+                .endMicrometer()
                 .withNewAdminHttp()
                 .withNewEndpoints()
                 .withNewPrometheus()
@@ -77,7 +81,12 @@ public class MetricsIT {
     @Test
     public void shouldOfferPrometheusMetricsWithCommonTags(KafkaCluster cluster) {
         var config = proxy(cluster)
-                .addToMicrometer(new MicrometerDefinitionBuilder("CommonTags").withConfig("commonTags", Map.of("a", "b")).build())
+                .addNewMicrometer()
+                .withType("CommonTags")
+                .withNewGenericDefinitionBaseConfig()
+                .addToConfig("commonTags", Map.of("a", "b"))
+                .endGenericDefinitionBaseConfig()
+                .endMicrometer()
                 .withNewAdminHttp()
                 .withNewEndpoints()
                 .withNewPrometheus()

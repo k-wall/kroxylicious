@@ -65,7 +65,7 @@ public class SniRoutingClusterNetworkAddressConfigProvider implements ClusterNet
     /**
      * Creates the configuration for this provider.
      */
-    public static class SniRoutingClusterNetworkAddressConfigProviderConfig extends BaseConfig {
+    public static class SniRoutingClusterNetworkAddressConfigProviderConfig implements BaseConfig {
 
         private final HostPort bootstrapAddress;
 

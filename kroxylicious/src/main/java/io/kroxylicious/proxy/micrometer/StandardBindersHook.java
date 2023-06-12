@@ -31,7 +31,7 @@ public class StandardBindersHook implements MicrometerConfigurationHook {
     private static final Logger log = LoggerFactory.getLogger(StandardBindersHook.class);
     private final StandardBindersHookConfig config;
 
-    public static class StandardBindersHookConfig extends BaseConfig {
+    public static class StandardBindersHookConfig implements BaseConfig {
         private final List<String> binderNames;
 
         @JsonCreator

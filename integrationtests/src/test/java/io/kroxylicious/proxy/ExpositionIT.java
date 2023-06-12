@@ -31,9 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 import io.kroxylicious.net.IntegrationTestInetAddressResolverProvider;
-import io.kroxylicious.proxy.config.ClusterNetworkAddressConfigProviderDefinitionBuilder;
 import io.kroxylicious.proxy.config.ConfigurationBuilder;
-import io.kroxylicious.proxy.config.FilterDefinitionBuilder;
 import io.kroxylicious.proxy.config.VirtualClusterBuilder;
 import io.kroxylicious.proxy.service.HostPort;
 import io.kroxylicious.test.tester.KroxyliciousTester;
@@ -81,11 +79,14 @@ public class ExpositionIT {
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .endTargetCluster()
-                        .withClusterNetworkAddressConfigProvider(
-                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", PROXY_ADDRESS)
-                                        .build())
+                        .withNewClusterNetworkAddressConfigProvider()
+                        .withType("PortPerBroker")
+                        .withNewGenericDefinitionBaseConfig()
+                        .addToConfig("bootstrapAddress", PROXY_ADDRESS)
+                        .endGenericDefinitionBaseConfig()
+                        .endClusterNetworkAddressConfigProvider()
                         .build())
-                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
+                .addNewFilter().withType("ApiVersions").endFilter();
 
         var demo = builder.getVirtualClusters().get("demo");
         demo = new VirtualClusterBuilder(demo)
@@ -114,7 +115,7 @@ public class ExpositionIT {
         List<String> clusterProxyAddresses = List.of("localhost:9192", "localhost:9294");
 
         var builder = new ConfigurationBuilder()
-                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
+                .addNewFilter().withType("ApiVersions").endFilter();
 
         var base = new VirtualClusterBuilder()
                 .withNewTargetCluster()
@@ -125,9 +126,12 @@ public class ExpositionIT {
         for (int i = 0; i < clusterProxyAddresses.size(); i++) {
             var bootstrap = clusterProxyAddresses.get(i);
             var virtualCluster = new VirtualClusterBuilder(base)
-                    .withClusterNetworkAddressConfigProvider(
-                            new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", bootstrap)
-                                    .build())
+                    .withNewClusterNetworkAddressConfigProvider()
+                    .withType("PortPerBroker")
+                    .withNewGenericDefinitionBaseConfig()
+                    .addToConfig("bootstrapAddress", bootstrap)
+                    .endGenericDefinitionBaseConfig()
+                    .endClusterNetworkAddressConfigProvider()
                     .build();
             builder.addToVirtualClusters("cluster" + i, virtualCluster);
 
@@ -151,7 +155,7 @@ public class ExpositionIT {
         var virtualClusterBrokerAddressPattern = "broker-$(nodeId)" + virtualClusterCommonNamePattern;
 
         var builder = new ConfigurationBuilder()
-                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
+                .addNewFilter().withType("ApiVersions").endFilter();
 
         var base = new VirtualClusterBuilder()
                 .withNewTargetCluster()
@@ -171,10 +175,12 @@ public class ExpositionIT {
             clientTrust.add(new ClientTrust(clientTrustStore, brokerCertificateGenerator.getPassword()));
 
             var virtualCluster = new VirtualClusterBuilder(base)
-                    .withClusterNetworkAddressConfigProvider(
-                            new ClusterNetworkAddressConfigProviderDefinitionBuilder("SniRouting").withConfig("bootstrapAddress", virtualClusterFQDN + ":9192",
-                                    "brokerAddressPattern", virtualClusterBrokerAddressPattern.formatted(i))
-                                    .build())
+                    .withNewClusterNetworkAddressConfigProvider()
+                    .withType("SniRouting")
+                    .withNewGenericDefinitionBaseConfig()
+                    .addToConfig("bootstrapAddress", virtualClusterFQDN + ":9192")
+                    .endGenericDefinitionBaseConfig()
+                    .endClusterNetworkAddressConfigProvider()
                     .withKeyPassword(brokerCertificateGenerator.getPassword())
                     .withKeyStoreFile(brokerCertificateGenerator.getKeyStoreLocation())
                     .withLogNetwork(true)
@@ -206,11 +212,14 @@ public class ExpositionIT {
                         .withNewTargetCluster()
                         .withBootstrapServers(cluster.getBootstrapServers())
                         .endTargetCluster()
-                        .withClusterNetworkAddressConfigProvider(
-                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", PROXY_ADDRESS)
-                                        .build())
+                        .withNewClusterNetworkAddressConfigProvider()
+                        .withType("PortPerBroker")
+                        .withNewGenericDefinitionBaseConfig()
+                        .addToConfig("bootstrapAddress", PROXY_ADDRESS)
+                        .endGenericDefinitionBaseConfig()
+                        .endClusterNetworkAddressConfigProvider()
                         .build())
-                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
+                .addNewFilter().withType("ApiVersions").endFilter();
 
         var brokerEndpoints = Map.of(0, "localhost:" + (PROXY_ADDRESS.port() + 1), 1, "localhost:" + (PROXY_ADDRESS.port() + 2));
 
@@ -234,11 +243,14 @@ public class ExpositionIT {
                         .withNewTargetCluster()
                         .withBootstrapServers(cluster.getBootstrapServers())
                         .endTargetCluster()
-                        .withClusterNetworkAddressConfigProvider(
-                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", PROXY_ADDRESS)
-                                        .build())
+                        .withNewClusterNetworkAddressConfigProvider()
+                        .withType("PortPerBroker")
+                        .withNewGenericDefinitionBaseConfig()
+                        .addToConfig("bootstrapAddress", PROXY_ADDRESS)
+                        .endGenericDefinitionBaseConfig()
+                        .endClusterNetworkAddressConfigProvider()
                         .build())
-                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
+                .addNewFilter().withType("ApiVersions").endFilter();
 
         try (var tester = kroxyliciousTester(builder)) {
 
@@ -267,11 +279,14 @@ public class ExpositionIT {
                         .withNewTargetCluster()
                         .withBootstrapServers(cluster.getBootstrapServers())
                         .endTargetCluster()
-                        .withClusterNetworkAddressConfigProvider(
-                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", PROXY_ADDRESS)
-                                        .build())
+                        .withNewClusterNetworkAddressConfigProvider()
+                        .withType("PortPerBroker")
+                        .withNewGenericDefinitionBaseConfig()
+                        .addToConfig("bootstrapAddress", PROXY_ADDRESS)
+                        .endGenericDefinitionBaseConfig()
+                        .endClusterNetworkAddressConfigProvider()
                         .build())
-                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
+                .addNewFilter().withType("ApiVersions").endFilter();
 
         try (var tester = kroxyliciousTester(builder)) {
 

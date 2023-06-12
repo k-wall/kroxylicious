@@ -41,7 +41,7 @@ public class ProduceRequestTransformationFilter implements ProduceRequestFilter 
         }
     }
 
-    public static class ProduceRequestTransformationConfig extends BaseConfig {
+    public static class ProduceRequestTransformationConfig implements BaseConfig {
 
         private final String transformation;
 
