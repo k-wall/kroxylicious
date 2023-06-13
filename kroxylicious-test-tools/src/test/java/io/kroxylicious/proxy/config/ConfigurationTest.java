@@ -58,7 +58,7 @@ class ConfigurationTest {
                         virtualClusters:
                           demo1:
                             tls:
-                                keyStore:
+                                key:
                                   storeFile: /tmp/foo.jks
                                   storePassword:
                                     password: password
@@ -66,7 +66,7 @@ class ConfigurationTest {
                             targetCluster:
                               bootstrap_servers: kafka.example:1234
                               tls:
-                                trustStore:
+                                trust:
                                  storeFile: /tmp/foo.jks
                                  storePassword:
                                    password: password
@@ -159,19 +159,19 @@ class ConfigurationTest {
                                         .withNewTargetCluster()
                                         .withBootstrapServers("kafka.example:1234")
                                         .withNewTls()
-                                        .withNewTrustStore()
+                                        .withNewTrustStoreTrust()
                                         .withStoreFile("/tmp/client.jks")
                                         .withStoreType("JKS")
                                         .withNewInlinePasswordStore("storepassword")
-                                        .endTrustStore()
+                                        .endTrustStoreTrust()
                                         .endTls()
                                         .endTargetCluster()
                                         .withNewTls()
-                                        .withNewKeyPair()
+                                        .withNewKeyPairKey()
                                         .withCertificateFile("/tmp/cert")
                                         .withPrivateKeyFile("/tmp/key")
                                         .withNewInlinePasswordKey("keypassword")
-                                        .endKeyPair()
+                                        .endKeyPairKey()
                                         .endTls()
                                         .withClusterNetworkAddressConfigProvider(
                                                 new ClusterNetworkAddressConfigProviderDefinitionBuilder("SniRouting")
@@ -185,13 +185,13 @@ class ConfigurationTest {
                                     targetCluster:
                                       bootstrap_servers: kafka.example:1234
                                       tls:
-                                         trustStore:
+                                         trust:
                                             storeFile: /tmp/client.jks
                                             storePassword:
                                               password: storepassword
                                             storeType: JKS
                                     tls:
-                                       keyPair:
+                                       key:
                                          certificateFile: /tmp/cert
                                          privateKeyFile: /tmp/key
                                          keyPassword:

@@ -3,6 +3,6 @@
 
   paths = [
     # Test key material
-    '''kroxylicious\/src\/test\/resources\/io\/kroxylicious\/proxy\/internal\/tls\/client\/.*$''',
+    '''kroxylicious\/src\/test\/resources\/io\/kroxylicious\/proxy\/config\/tls\/.*$''',
   ]
 

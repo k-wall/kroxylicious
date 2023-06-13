@@ -79,7 +79,7 @@ class KafkaProxyTest {
                                 bootstrapAddress: localhost:9192
                                 brokerAddressPattern: broker-$(nodeId)
                             tls:
-                              keyStore:
+                              key:
                                 storeFile: /tmp/notused
                                 storeFilePassword: apassword
                         """, "The shared bind of port(s) 9192 to <any> would conflict with existing exclusive port bindings on <any>."));
@@ -132,7 +132,7 @@ class KafkaProxyTest {
                                 bootstrapAddress: cluster1:9192
                                 brokerAddressPattern:  broker-$(nodeId)-cluster1
                             tls:
-                              keyStore:
+                              key:
                                 storeFile: /tmp/notused
                                 storePassword:
                                   password: apassword
@@ -145,7 +145,7 @@ class KafkaProxyTest {
                                 bootstrapAddress: cluster2:9192
                                 brokerAddressPattern:  broker-$(nodeId)-cluster2
                             tls:
-                              keyStore:
+                              key:
                                 storeFile: /tmp/notused
                                 storePassword:
                                   password: apassword

@@ -6,6 +6,13 @@
 
 package io.kroxylicious.proxy.config.tls;
 
+import java.io.File;
+import java.util.Optional;
+
+import io.netty.handler.ssl.SslContextBuilder;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * Specifies key pair (private key/certificate) configuration..
  *
@@ -13,9 +20,16 @@ package io.kroxylicious.proxy.config.tls;
  * @param certificateFile location of a file containing the server certificate and intermediates.  privateKeyFile is required if this option is used.
  * @param keyPassword     password used to protect the key within the storeFile or privateKeyFile
  */
+@SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "Requires ability to consume file resources from arbitrary, user-specified, locations on the file-system.")
 public record KeyPair(String privateKeyFile,
                       String certificateFile,
                       PasswordProvider keyPassword
-) {
+) implements KeyProvider {
 
+    @Override
+    public SslContextBuilder forServer() {
+        return SslContextBuilder.forServer(new File(certificateFile),
+                new File(privateKeyFile),
+                Optional.ofNullable(keyPassword).map(PasswordProvider::getProvidedPassword).orElse(null));
+    }
 }

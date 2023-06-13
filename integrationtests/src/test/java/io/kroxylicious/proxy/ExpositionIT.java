@@ -90,10 +90,10 @@ public class ExpositionIT {
         var demo = builder.getVirtualClusters().get("demo");
         demo = new VirtualClusterBuilder(demo)
                 .withNewTls()
-                .withNewKeyStore()
+                .withNewKeyStoreKey()
                 .withStoreFile(brokerCertificateGenerator.getKeyStoreLocation())
                 .withNewInlinePasswordStore(brokerCertificateGenerator.getPassword())
-                .endKeyStore()
+                .endKeyStoreKey()
                 .endTls()
                 .build();
         builder.addToVirtualClusters("demo", demo);
@@ -180,10 +180,10 @@ public class ExpositionIT {
                                     "brokerAddressPattern", virtualClusterBrokerAddressPattern.formatted(i))
                                     .build())
                     .withNewTls()
-                    .withNewKeyStore()
+                    .withNewKeyStoreKey()
                     .withStoreFile(brokerCertificateGenerator.getKeyStoreLocation())
                     .withNewInlinePasswordStore(brokerCertificateGenerator.getPassword())
-                    .endKeyStore()
+                    .endKeyStoreKey()
                     .endTls()
                     .withLogNetwork(true)
                     .withLogFrames(true)

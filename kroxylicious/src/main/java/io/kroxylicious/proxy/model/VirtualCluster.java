@@ -12,8 +12,8 @@ import java.util.stream.Collectors;
 import io.netty.handler.ssl.SslContext;
 
 import io.kroxylicious.proxy.config.TargetCluster;
+import io.kroxylicious.proxy.config.tls.DefaultSslContextFactory;
 import io.kroxylicious.proxy.config.tls.Tls;
-import io.kroxylicious.proxy.internal.tls.DefaultSslContextFactory;
 import io.kroxylicious.proxy.service.ClusterNetworkAddressConfigProvider;
 import io.kroxylicious.proxy.service.HostPort;
 
