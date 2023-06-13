@@ -14,13 +14,13 @@ import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 
-public record FilePasswordSource(String passwordFile) implements PasswordSource {
+public record FilePassword(String passwordFile) implements PasswordProvider {
     @JsonCreator
-    public FilePasswordSource {
+    public FilePassword {
     }
 
     @Override
-    public String getPasswordAsCharArray() {
+    public String getProvidedPassword() {
         if (passwordFile == null) {
             return null;
         }
@@ -34,7 +34,7 @@ public record FilePasswordSource(String passwordFile) implements PasswordSource 
 
     @Override
     public String toString() {
-        return "FilePasswordSource[" +
+        return "FilePassword[" +
                 "passwordFile=" + passwordFile + ']';
     }
 

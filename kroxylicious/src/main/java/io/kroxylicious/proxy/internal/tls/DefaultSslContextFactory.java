@@ -25,7 +25,7 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
-import io.kroxylicious.proxy.config.tls.PasswordSource;
+import io.kroxylicious.proxy.config.tls.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.Tls;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -40,16 +40,16 @@ public class DefaultSslContextFactory implements SslContextFactory {
                 var keyStoreFile = new File(ks.storeFile());
                 if (ks.isPemType()) {
                     return SslContextBuilder.forServer(keyStoreFile, keyStoreFile,
-                            Optional.ofNullable(ks.keyPassword()).map(PasswordSource::getPasswordAsCharArray).map(String::new).orElse(null));
+                            Optional.ofNullable(ks.keyPassword()).map(PasswordProvider::getProvidedPassword).map(String::new).orElse(null));
                 }
                 else {
                     try (var is = new FileInputStream(keyStoreFile)) {
-                        var password = Optional.ofNullable(ks.storePassword()).map(PasswordSource::getPasswordAsCharArray).map(String::toCharArray).orElse(null);
+                        var password = Optional.ofNullable(ks.storePassword()).map(PasswordProvider::getProvidedPassword).map(String::toCharArray).orElse(null);
                         var keyStore = KeyStore.getInstance(ks.getType());
                         keyStore.load(is, password);
                         var keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
                         keyManagerFactory.init(keyStore,
-                                Optional.ofNullable(ks.keyPassword()).map(PasswordSource::getPasswordAsCharArray).map(String::toCharArray).orElse(password));
+                                Optional.ofNullable(ks.keyPassword()).map(PasswordProvider::getProvidedPassword).map(String::toCharArray).orElse(password));
                         return SslContextBuilder.forServer(keyManagerFactory);
                     }
                     catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException | UnrecoverableKeyException e) {
@@ -71,7 +71,7 @@ public class DefaultSslContextFactory implements SslContextFactory {
 
                     return SslContextBuilder.forServer(keyCertChainFile,
                             keyFile,
-                            Optional.ofNullable(kp.keyPassword()).map(PasswordSource::getPasswordAsCharArray).map(String::new).orElse(null));
+                            Optional.ofNullable(kp.keyPassword()).map(PasswordProvider::getProvidedPassword).map(String::new).orElse(null));
                 });
             }
 
@@ -99,7 +99,7 @@ public class DefaultSslContextFactory implements SslContextFactory {
                 else {
                     try (var is = new FileInputStream(trustStore)) {
 
-                        var password = Optional.ofNullable(ct.storePassword()).map(PasswordSource::getPasswordAsCharArray).map(String::toCharArray).orElse(null);
+                        var password = Optional.ofNullable(ct.storePassword()).map(PasswordProvider::getProvidedPassword).map(String::toCharArray).orElse(null);
                         var keyStore = KeyStore.getInstance(ct.getType());
                         keyStore.load(is, password);
 

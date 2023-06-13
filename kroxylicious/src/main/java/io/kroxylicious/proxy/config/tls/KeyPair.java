@@ -15,7 +15,7 @@ package io.kroxylicious.proxy.config.tls;
  */
 public record KeyPair(String privateKeyFile,
                       String certificateFile,
-                      PasswordSource keyPassword
+                      PasswordProvider keyPassword
 ) {
 
 }

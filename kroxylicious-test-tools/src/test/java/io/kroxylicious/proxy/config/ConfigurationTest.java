@@ -162,7 +162,7 @@ class ConfigurationTest {
                                         .withNewTrustStore()
                                         .withStoreFile("/tmp/client.jks")
                                         .withStoreType("JKS")
-                                        .withNewStringPasswordSourceStore("storepassword")
+                                        .withNewInlinePasswordStore("storepassword")
                                         .endTrustStore()
                                         .endTls()
                                         .endTargetCluster()
@@ -170,7 +170,7 @@ class ConfigurationTest {
                                         .withNewKeyPair()
                                         .withCertificateFile("/tmp/cert")
                                         .withPrivateKeyFile("/tmp/key")
-                                        .withNewStringPasswordSourceKey("keypassword")
+                                        .withNewInlinePasswordKey("keypassword")
                                         .endKeyPair()
                                         .endTls()
                                         .withClusterNetworkAddressConfigProvider(

@@ -10,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION)
-@JsonSubTypes({ @JsonSubTypes.Type(StringPasswordSource.class), @JsonSubTypes.Type(FilePasswordSource.class) })
-public interface PasswordSource {
-    String getPasswordAsCharArray();
+@JsonSubTypes({ @JsonSubTypes.Type(InlinePassword.class), @JsonSubTypes.Type(FilePassword.class) })
+public interface PasswordProvider {
+    String getProvidedPassword();
 }

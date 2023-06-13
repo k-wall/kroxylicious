@@ -92,7 +92,7 @@ public class ExpositionIT {
                 .withNewTls()
                 .withNewKeyStore()
                 .withStoreFile(brokerCertificateGenerator.getKeyStoreLocation())
-                .withNewStringPasswordSourceStore(brokerCertificateGenerator.getPassword())
+                .withNewInlinePasswordStore(brokerCertificateGenerator.getPassword())
                 .endKeyStore()
                 .endTls()
                 .build();
@@ -182,7 +182,7 @@ public class ExpositionIT {
                     .withNewTls()
                     .withNewKeyStore()
                     .withStoreFile(brokerCertificateGenerator.getKeyStoreLocation())
-                    .withNewStringPasswordSourceStore(brokerCertificateGenerator.getPassword())
+                    .withNewInlinePasswordStore(brokerCertificateGenerator.getPassword())
                     .endKeyStore()
                     .endTls()
                     .withLogNetwork(true)

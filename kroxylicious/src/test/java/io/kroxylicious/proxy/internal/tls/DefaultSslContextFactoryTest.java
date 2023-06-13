@@ -20,11 +20,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import io.kroxylicious.proxy.config.tls.FilePasswordSource;
+import io.kroxylicious.proxy.config.tls.FilePassword;
+import io.kroxylicious.proxy.config.tls.InlinePassword;
 import io.kroxylicious.proxy.config.tls.KeyPair;
 import io.kroxylicious.proxy.config.tls.KeyStore;
-import io.kroxylicious.proxy.config.tls.PasswordSource;
-import io.kroxylicious.proxy.config.tls.StringPasswordSource;
+import io.kroxylicious.proxy.config.tls.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.Tls;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,11 +43,11 @@ class DefaultSslContextFactoryTest {
     private static final String JKS = "JKS";
     private static final String PKCS_12 = "PKCS12";
     private static final String PEM = KeyStore.PEM;
-    private static final PasswordSource STOREPASS = new StringPasswordSource("storepass");
-    private static final PasswordSource KEYPASS = new StringPasswordSource("keypass");
-    public static final PasswordSource BADPASS = new StringPasswordSource("badpass");
-    public static final PasswordSource KEYSTORE_FILE_PASSWORD_SOURCE = new FilePasswordSource(getFile("storepass.password"));
-    public static final PasswordSource KEYPASS_FILE_PASSWORD_SOURCE = new FilePasswordSource(getFile("keypass.password"));
+    private static final PasswordProvider STOREPASS = new InlinePassword("storepass");
+    private static final PasswordProvider KEYPASS = new InlinePassword("keypass");
+    public static final PasswordProvider BADPASS = new InlinePassword("badpass");
+    public static final PasswordProvider KEYSTORE_FILE_PASSWORD_SOURCE = new FilePassword(getFile("storepass.password"));
+    public static final PasswordProvider KEYPASS_FILE_PASSWORD_SOURCE = new FilePassword(getFile("keypass.password"));
     private static final String NOT_EXIST = "/does/not/exist";
     private final DefaultSslContextFactory factory = new DefaultSslContextFactory();
 
@@ -67,7 +67,7 @@ class DefaultSslContextFactoryTest {
     @MethodSource()
     public void serverWithKeyStore(String name,
                                    String storeType,
-                                   String storeFile, PasswordSource storePassword, PasswordSource keyPassword) {
+                                   String storeFile, PasswordProvider storePassword, PasswordProvider keyPassword) {
         checkPlatformSupportForKeyType(storeType);
 
         var keyStore = new KeyStore(getFile(storeFile), storePassword, keyPassword, storeType);
@@ -128,7 +128,7 @@ class DefaultSslContextFactoryTest {
 
     @Test
     public void serverKeyPairKeyProtectedWithPassword() {
-        var keyPair = new KeyPair(getFile("server_encrypted.key"), getFile("server.crt"), new StringPasswordSource("keypass"));
+        var keyPair = new KeyPair(getFile("server_encrypted.key"), getFile("server.crt"), new InlinePassword("keypass"));
 
         var tls = new Tls(Optional.empty(),
                 Optional.of(keyPair),
@@ -181,7 +181,7 @@ class DefaultSslContextFactoryTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource()
-    public void clientWithTrustStore(String name, String storeType, String storeFile, PasswordSource storePassword) {
+    public void clientWithTrustStore(String name, String storeType, String storeFile, PasswordProvider storePassword) {
         checkPlatformSupportForKeyType(storeType);
 
         var trustStore = new KeyStore(getFile(storeFile),

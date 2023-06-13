@@ -19,8 +19,8 @@ import java.util.Objects;
  *                         and PEM (for X-509 certificates express in PEM format).
  */
 public record KeyStore(String storeFile,
-                       PasswordSource storePassword,
-                       PasswordSource keyPassword,
+                       PasswordProvider storePassword,
+                       PasswordProvider keyPassword,
                        String storeType) {
 
     public static final String PEM = "PEM";

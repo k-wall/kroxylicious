@@ -66,7 +66,7 @@ public class TlsIT {
                         .withNewTls()
                         .withNewTrustStore()
                         .withStoreFile(brokerTruststore)
-                        .withNewStringPasswordSourceStore(brokerTruststorePassword)
+                        .withNewInlinePasswordStore(brokerTruststorePassword)
                         .endTrustStore()
                         .endTls()
                         .endTargetCluster()
