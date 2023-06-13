@@ -11,6 +11,7 @@ import java.util.Optional;
 
 import javax.net.ssl.SSLException;
 
+import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 
@@ -24,7 +25,17 @@ public class DefaultSslContextFactory implements SslContextFactory {
     @Override
     public SslContext buildServerSslContext(Tls tls) {
         try {
-            return Optional.of(tls.key()).map(KeyProvider::forServer).orElseThrow().build();
+            if (tls.key() == null) {
+                throw new IllegalStateException("Server sslContext is required but no key provider present");
+            }
+            var builder = tls.key().forServer();
+            if (tls.trust() != null) {
+                tls.trust().apply(builder);
+            }
+            // fix me
+            builder.clientAuth(ClientAuth.REQUIRE);
+
+            return builder.build();
         }
         catch (IOException e) {
             throw new RuntimeException(e);

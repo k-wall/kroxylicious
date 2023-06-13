@@ -58,17 +58,32 @@ public class TlsIT {
             .build();
     private static final String TOPIC = "my-test-topic";
     @TempDir
-    private Path certsDirectory;
-    private KeytoolCertificateGenerator downstreamCertificateGenerator;
+    private Path downstreamCertsDirectory;
+    private KeytoolCertificateGenerator downstreamBrokerCertificateGenerator;
     private Path clientTrustStore;
+
+    @TempDir
+    private Path clientCertsDirectory;
+    private KeytoolCertificateGenerator clientCertificateGenerator;
+    private Path kroxyliciousTrustStore;
 
     @BeforeEach
     public void beforeEach() throws Exception {
-        this.downstreamCertificateGenerator = new KeytoolCertificateGenerator();
-        this.downstreamCertificateGenerator.generateSelfSignedCertificateEntry("test@redhat.com", "localhost", "KI", "RedHat", null, null, "US");
-        this.clientTrustStore = certsDirectory.resolve("kafka.truststore.jks");
-        this.downstreamCertificateGenerator.generateTrustStore(this.downstreamCertificateGenerator.getCertFilePath(), "client",
+        // Key pair used for Kroxylicious
+        this.downstreamBrokerCertificateGenerator = new KeytoolCertificateGenerator();
+        this.downstreamBrokerCertificateGenerator.generateSelfSignedCertificateEntry("demo@virtualcluster.kroxylicious.io", "localhost", "KI", "RedHat", null, null, "US");
+        this.clientTrustStore = downstreamCertsDirectory.resolve("kafka.truststore.jks");
+        this.downstreamBrokerCertificateGenerator.generateTrustStore(this.downstreamBrokerCertificateGenerator.getCertFilePath(), "client",
                 clientTrustStore.toAbsolutePath().toString());
+
+
+        // Key pair used for Client for the Mutually Authenticated Test
+        this.clientCertificateGenerator = new KeytoolCertificateGenerator();
+        this.clientCertificateGenerator.generateSelfSignedCertificateEntry("client@virtualcluster.kroxylicious.io", "localhost", "KI", "RedHat", null, null, "US");
+        this.kroxyliciousTrustStore = clientCertsDirectory.resolve("kafka.truststore.jks");
+        this.clientCertificateGenerator.generateTrustStore(this.clientCertificateGenerator.getCertFilePath(), "client",
+                kroxyliciousTrustStore.toAbsolutePath().toString());
+
     }
 
     @Test
@@ -191,8 +206,8 @@ public class TlsIT {
                         .endTargetCluster()
                         .withNewTls()
                         .withNewKeyStoreKey()
-                        .withStoreFile(downstreamCertificateGenerator.getKeyStoreLocation())
-                        .withNewInlinePasswordStore(downstreamCertificateGenerator.getPassword())
+                        .withStoreFile(downstreamBrokerCertificateGenerator.getKeyStoreLocation())
+                        .withNewInlinePasswordStore(downstreamBrokerCertificateGenerator.getPassword())
                         .endKeyStoreKey()
                         .endTls()
                         .withClusterNetworkAddressConfigProvider(
@@ -204,9 +219,104 @@ public class TlsIT {
                 var admin = tester.admin("demo",
                         Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
-                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword()))) {
+                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamBrokerCertificateGenerator.getPassword()))) {
             // do some work to ensure connection is opened
             createTopic(admin, TOPIC, 1);
+        }
+    }
+
+    @Test
+    public void downstreamMutuallyAuthenticatedTls(@Tls KafkaCluster cluster) {
+        var bootstrapServers = cluster.getBootstrapServers();
+        var brokerTruststore = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        assertThat(brokerTruststore).isNotEmpty();
+        assertThat(brokerTruststorePassword).isNotEmpty();
+
+        var builder = new ConfigurationBuilder()
+                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                        .withNewTargetCluster()
+                        .withBootstrapServers(bootstrapServers)
+                        .withNewTls()
+                        .withNewTrustStoreTrust()
+                        .withStoreFile(brokerTruststore)
+                        .withNewInlinePasswordStore(brokerTruststorePassword)
+
+                        .endTrustStoreTrust()
+                        .endTls()
+                        .endTargetCluster()
+
+                        .withNewTls()
+                        .withNewTrustStoreTrust()
+                        .withStoreFile(kroxyliciousTrustStore.toAbsolutePath().toString())
+                        .withNewInlinePasswordStore(clientCertificateGenerator.getPassword())
+                        .endTrustStoreTrust()
+                        .withNewKeyStoreKey()
+                        .withStoreFile(downstreamBrokerCertificateGenerator.getKeyStoreLocation())
+                        .withNewInlinePasswordStore(downstreamBrokerCertificateGenerator.getPassword())
+                        .endKeyStoreKey()
+                        .endTls()
+                        .withClusterNetworkAddressConfigProvider(CONFIG_PROVIDER_DEFINITION)
+                        .build())
+                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
+
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin("demo",
+                        Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
+                                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
+                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamBrokerCertificateGenerator.getPassword(),
+                                SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, clientCertificateGenerator.getKeyStoreLocation(),
+                                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, clientCertificateGenerator.getPassword())
+                                )) {
+            // do some work to ensure connection is opened
+            createTopic(admin, TOPIC, 1);
+
+        }
+    }
+
+    @Test
+    public void downstreamMutuallyAuthenticatedTlsClientDoesNotPresentCertificate(@Tls KafkaCluster cluster) {
+        var bootstrapServers = cluster.getBootstrapServers();
+        var brokerTruststore = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        assertThat(brokerTruststore).isNotEmpty();
+        assertThat(brokerTruststorePassword).isNotEmpty();
+
+        var builder = new ConfigurationBuilder()
+                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                        .withNewTargetCluster()
+                        .withBootstrapServers(bootstrapServers)
+                        .withNewTls()
+                        .withNewTrustStoreTrust()
+                        .withStoreFile(brokerTruststore)
+                        .withNewInlinePasswordStore(brokerTruststorePassword)
+
+                        .endTrustStoreTrust()
+                        .endTls()
+                        .endTargetCluster()
+
+                        .withNewTls()
+                        .withNewTrustStoreTrust()
+                        .withStoreFile(kroxyliciousTrustStore.toAbsolutePath().toString())
+                        .withNewInlinePasswordStore(clientCertificateGenerator.getPassword())
+                        .endTrustStoreTrust()
+                        .withNewKeyStoreKey()
+                        .withStoreFile(downstreamBrokerCertificateGenerator.getKeyStoreLocation())
+                        .withNewInlinePasswordStore(downstreamBrokerCertificateGenerator.getPassword())
+                        .endKeyStoreKey()
+                        .endTls()
+                        .withClusterNetworkAddressConfigProvider(CONFIG_PROVIDER_DEFINITION)
+                        .build())
+                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
+
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin("demo",
+                        Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
+                                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
+                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamBrokerCertificateGenerator.getPassword()))) {
+            // do some work to ensure connection is opened
+            createTopic(admin, TOPIC, 1);
+
         }
     }
 
