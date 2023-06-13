@@ -33,7 +33,7 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
                           Optional<Tls> tls,
                           boolean logNetwork, boolean logFrames) {
         this.tls = tls;
-        if (clusterNetworkAddressConfigProvider.requiresTls() && (tls.isEmpty() || !tls.get().definesServerCertificate())) {
+        if (clusterNetworkAddressConfigProvider.requiresTls() && (tls.isEmpty() || !tls.get().definesKey())) {
             throw new IllegalStateException("Cluster endpoint provider requires server TLS, but this virtual cluster does not define it.");
         }
         var conflicts = clusterNetworkAddressConfigProvider.getExclusivePorts().stream().filter(p -> clusterNetworkAddressConfigProvider.getSharedPorts().contains(p))

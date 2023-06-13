@@ -12,6 +12,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.PKIXParameters;
@@ -19,23 +20,29 @@ import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.SslConfigs;
-import org.jetbrains.annotations.NotNull;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 
+import io.kroxylicious.proxy.config.ClusterNetworkAddressConfigProviderDefinition;
 import io.kroxylicious.proxy.config.ClusterNetworkAddressConfigProviderDefinitionBuilder;
 import io.kroxylicious.proxy.config.ConfigurationBuilder;
 import io.kroxylicious.proxy.config.FilterDefinitionBuilder;
 import io.kroxylicious.proxy.config.VirtualClusterBuilder;
 import io.kroxylicious.proxy.service.HostPort;
 import io.kroxylicious.testing.kafka.api.KafkaCluster;
+import io.kroxylicious.testing.kafka.common.KeytoolCertificateGenerator;
 import io.kroxylicious.testing.kafka.common.Tls;
 import io.kroxylicious.testing.kafka.junit5ext.KafkaClusterExtension;
 
@@ -44,12 +51,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(KafkaClusterExtension.class)
 public class TlsIT {
-
     private static final HostPort PROXY_ADDRESS = HostPort.parse("localhost:9192");
+    private static final ClusterNetworkAddressConfigProviderDefinition CONFIG_PROVIDER_DEFINITION = new ClusterNetworkAddressConfigProviderDefinitionBuilder(
+            "PortPerBroker").withConfig(
+                    "bootstrapAddress", PROXY_ADDRESS)
+            .build();
     private static final String TOPIC = "my-test-topic";
+    @TempDir
+    private Path certsDirectory;
+    private KeytoolCertificateGenerator downstreamCertificateGenerator;
+    private Path clientTrustStore;
+
+    @BeforeEach
+    public void beforeEach() throws Exception {
+        this.downstreamCertificateGenerator = new KeytoolCertificateGenerator();
+        this.downstreamCertificateGenerator.generateSelfSignedCertificateEntry("test@redhat.com", "localhost", "KI", "RedHat", null, null, "US");
+        this.clientTrustStore = certsDirectory.resolve("kafka.truststore.jks");
+        this.downstreamCertificateGenerator.generateTrustStore(this.downstreamCertificateGenerator.getCertFilePath(), "client",
+                clientTrustStore.toAbsolutePath().toString());
+    }
 
     @Test
-    public void upstreamTlsWithTrustStore(@Tls KafkaCluster cluster) {
+    public void upstreamUsesTlsSpecifiedTrustStore(@Tls KafkaCluster cluster) {
         // TODO test the ability to configure kroxy with PKCS12 and PEM material.
         // Needs https://github.com/kroxylicious/kroxylicious-junit5-extension/issues/120
 
@@ -71,8 +94,7 @@ public class TlsIT {
                         .endTls()
                         .endTargetCluster()
                         .withClusterNetworkAddressConfigProvider(
-                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", PROXY_ADDRESS)
-                                        .build())
+                                CONFIG_PROVIDER_DEFINITION)
                         .build())
                 .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
 
@@ -83,7 +105,7 @@ public class TlsIT {
     }
 
     @Test
-    public void upstreamTlsWithPemTrust(@Tls KafkaCluster cluster) throws Exception {
+    public void upstreamUsesTlsSpecifiedWithPems(@Tls KafkaCluster cluster) throws Exception {
         // TODO test the ability to configure kroxy with PKCS12 and PEM material.
         // Needs https://github.com/kroxylicious/kroxylicious-junit5-extension/issues/120
 
@@ -116,9 +138,7 @@ public class TlsIT {
                         .endTrustStoreTrust()
                         .endTls()
                         .endTargetCluster()
-                        .withClusterNetworkAddressConfigProvider(
-                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", PROXY_ADDRESS)
-                                        .build())
+                        .withClusterNetworkAddressConfigProvider(CONFIG_PROVIDER_DEFINITION)
                         .build())
                 .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
 
@@ -129,7 +149,7 @@ public class TlsIT {
     }
 
     @Test
-    public void insecureTls(@Tls KafkaCluster cluster) throws Exception {
+    public void upstreamUsesTlsInsecure(@Tls KafkaCluster cluster) throws Exception {
         var bootstrapServers = cluster.getBootstrapServers();
 
         var builder = new ConfigurationBuilder()
@@ -137,16 +157,54 @@ public class TlsIT {
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .withNewTls()
-                        .withInsecureTls(true)
+                        .withNewInsecureTlsTrust(true)
                         .endTls()
                         .endTargetCluster()
-                        .withClusterNetworkAddressConfigProvider(
-                                new ClusterNetworkAddressConfigProviderDefinitionBuilder("PortPerBroker").withConfig("bootstrapAddress", PROXY_ADDRESS)
-                                        .build())
+                        .withClusterNetworkAddressConfigProvider(CONFIG_PROVIDER_DEFINITION)
                         .build())
                 .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
 
         try (var tester = kroxyliciousTester(builder); var admin = tester.admin("demo")) {
+            // do some work to ensure connection is opened
+            createTopic(admin, TOPIC, 1);
+        }
+    }
+
+    @Test
+    public void downstreamAndUpstreamTls(@Tls KafkaCluster cluster) {
+        var bootstrapServers = cluster.getBootstrapServers();
+        var brokerTruststore = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        assertThat(brokerTruststore).isNotEmpty();
+        assertThat(brokerTruststorePassword).isNotEmpty();
+
+        var builder = new ConfigurationBuilder()
+                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                        .withNewTargetCluster()
+                        .withBootstrapServers(bootstrapServers)
+                        .withNewTls()
+                        .withNewTrustStoreTrust()
+                        .withStoreFile(brokerTruststore)
+                        .withNewInlinePasswordStore(brokerTruststorePassword)
+                        .endTrustStoreTrust()
+                        .endTls()
+                        .endTargetCluster()
+                        .withNewTls()
+                        .withNewKeyStoreKey()
+                        .withStoreFile(downstreamCertificateGenerator.getKeyStoreLocation())
+                        .withNewInlinePasswordStore(downstreamCertificateGenerator.getPassword())
+                        .endKeyStoreKey()
+                        .endTls()
+                        .withClusterNetworkAddressConfigProvider(
+                                CONFIG_PROVIDER_DEFINITION)
+                        .build())
+                .addToFilters(new FilterDefinitionBuilder("ApiVersions").build());
+
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin("demo",
+                        Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SSL.name,
+                                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
+                                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword()))) {
             // do some work to ensure connection is opened
             createTopic(admin, TOPIC, 1);
         }
@@ -164,7 +222,6 @@ public class TlsIT {
         }
     }
 
-    @NotNull
     private File writePemToTemporaryFile(List<X509Certificate> certificates) throws IOException {
         var file = File.createTempFile("trust", "pem");
         var mimeLineEnding = new byte[]{ '\r', '\n' };

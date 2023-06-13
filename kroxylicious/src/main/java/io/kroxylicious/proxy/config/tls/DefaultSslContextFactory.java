@@ -13,7 +13,6 @@ import javax.net.ssl.SSLException;
 
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
 import io.kroxylicious.proxy.internal.tls.SslContextFactory;
 
@@ -37,15 +36,7 @@ public class DefaultSslContextFactory implements SslContextFactory {
 
         try {
             var sslContextBuilder = SslContextBuilder.forClient();
-
             Optional.ofNullable(clientTls.trust()).ifPresent(tp -> tp.apply(sslContextBuilder));
-
-            Optional.ofNullable(clientTls.insecureTls()).ifPresent(insecure -> {
-                if (insecure) {
-                    sslContextBuilder.trustManager(InsecureTrustManagerFactory.INSTANCE);
-                }
-            });
-
             return sslContextBuilder.build();
         }
         catch (SSLException ex) {

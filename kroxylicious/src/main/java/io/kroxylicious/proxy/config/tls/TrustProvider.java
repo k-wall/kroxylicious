@@ -12,7 +12,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import io.netty.handler.ssl.SslContextBuilder;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.DEDUCTION)
-@JsonSubTypes({ @JsonSubTypes.Type(TrustStore.class) })
+@JsonSubTypes({ @JsonSubTypes.Type(TrustStore.class), @JsonSubTypes.Type(InsecureTls.class) })
 public interface TrustProvider {
 
     void apply(SslContextBuilder builder);

@@ -7,17 +7,16 @@
 package io.kroxylicious.proxy.config.tls;
 
 /**
- * Provides TLS configuration for a peer.
+ * Provides TLS configuration for this peer.
  *
- * @param key         specifies a key provider used to identify this peer can identify itself to the other party.
- * @param trust       specifies a source of trust.  If absent, platform trust is used.
- * @param insecureTls if set true, TLS verification will be disabled.  Not recommended for production use.
+ * @param key   specifies a key provider that provides the certificate/key used to identify this peer.
+ * @param trust specifies a trust provider used by this peer to determine whether to trust the peer.
  */
 public record Tls(KeyProvider key,
-                  TrustProvider trust,
-                  Boolean insecureTls) {
+                  TrustProvider trust
+) {
 
-    public boolean definesServerCertificate() {
+    public boolean definesKey() {
         return key != null;
     }
 }
