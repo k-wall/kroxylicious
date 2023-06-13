@@ -30,6 +30,6 @@ public record KeyStore(String storeFile,
     }
 
     public boolean isPemType() {
-        return Objects.equals(PEM, getType());
+        return Objects.equals(getType(), PEM);
     }
 }
