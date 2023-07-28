@@ -8,6 +8,7 @@ package io.kroxylicious.proxy.filter;
 
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,6 +24,16 @@ class FilterResultBuilderTest {
         RequestFilterResult built = builder.build();
         assertThat(built.message()).isEqualTo(request);
     }
+
+    @Test
+    public void requestFilterResult2() {
+        var request = new FetchRequestData();
+        var builder = FilterResultBuilder.<FetchRequestData>requestFilterResultBuilder();
+        builder.withMessage(request);
+        RequestFilterResult built = builder.build();
+        assertThat(built.message()).isEqualTo(request);
+    }
+
 
     @Test
     public void requestFilterResultRejectResponse() {

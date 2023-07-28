@@ -184,7 +184,7 @@ public class InvokerDispatchBenchmark {
         }
 
         @Override
-        public RequestFilterResultBuilder requestFilterResultBuilder() {
+        public RequestFilterResultBuilder<ApiMessage> requestFilterResultBuilder() {
             return null;
         }
 

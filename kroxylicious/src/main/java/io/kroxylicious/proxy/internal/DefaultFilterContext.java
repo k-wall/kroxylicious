@@ -222,7 +222,7 @@ class DefaultFilterContext implements KrpcFilterContext {
     }
 
     @Override
-    public RequestFilterResultBuilder requestFilterResultBuilder() {
+    public RequestFilterResultBuilder<ApiMessage> requestFilterResultBuilder() {
         return FilterResultBuilder.requestFilterResultBuilder();
     }
 

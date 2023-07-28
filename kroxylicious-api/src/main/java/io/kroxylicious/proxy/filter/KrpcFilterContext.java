@@ -99,7 +99,7 @@ public interface KrpcFilterContext {
 
     ResponseFilterResultBuilder responseFilterResultBuilder();
 
-    RequestFilterResultBuilder requestFilterResultBuilder();
+    RequestFilterResultBuilder<ApiMessage> requestFilterResultBuilder();
 
     CompletionStage<ResponseFilterResult> completedForwardResponse(ResponseHeaderData header, ApiMessage response);
 

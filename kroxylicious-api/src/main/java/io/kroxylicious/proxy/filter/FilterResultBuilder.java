@@ -51,11 +51,11 @@ public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M,
         return new ResponseFilterResultBuilder();
     }
 
-    public static RequestFilterResultBuilder requestFilterResultBuilder() {
-        return new RequestFilterResultBuilder();
+    public static <M extends ApiMessage> RequestFilterResultBuilder<M> requestFilterResultBuilder() {
+        return new RequestFilterResultBuilder<>();
     }
 
-    public static class RequestFilterResultBuilder extends FilterResultBuilder<RequestFilterResultBuilder, RequestFilterResult, ApiMessage, RequestHeaderData> {
+    public static class RequestFilterResultBuilder<M extends ApiMessage> extends FilterResultBuilder<RequestFilterResultBuilder<M>, RequestFilterResult, M, RequestHeaderData> {
 
         private ShortCircuitResponseFilterResultBuilder shortCircuitResponseBuilder;
 
@@ -67,7 +67,7 @@ public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M,
         }
 
         @Override
-        public RequestFilterResultBuilder withMessage(ApiMessage message) {
+        public RequestFilterResultBuilder<M> withMessage(M message) {
             if (message != null && !message.getClass().getName().endsWith("RequestData")) {
                 throw new IllegalStateException();
             }
@@ -136,15 +136,15 @@ public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M,
         }
     }
 
-    public static class ShortCircuitResponseFilterResultBuilder extends ResponseFilterResultBuilder {
+    public static class ShortCircuitResponseFilterResultBuilder<M extends ApiMessage> extends ResponseFilterResultBuilder {
 
-        private final RequestFilterResultBuilder requestFilterResultBuilder;
+        private final RequestFilterResultBuilder<M> requestFilterResultBuilder;
 
-        private ShortCircuitResponseFilterResultBuilder(RequestFilterResultBuilder requestFilterResultBuilder) {
+        private ShortCircuitResponseFilterResultBuilder(RequestFilterResultBuilder<M> requestFilterResultBuilder) {
             this.requestFilterResultBuilder = requestFilterResultBuilder;
         }
 
-        public RequestFilterResultBuilder end() {
+        public RequestFilterResultBuilder<M> end() {
             return requestFilterResultBuilder;
         }
     }
