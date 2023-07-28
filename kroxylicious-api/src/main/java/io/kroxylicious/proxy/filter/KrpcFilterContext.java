@@ -12,6 +12,9 @@ import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
+import io.kroxylicious.proxy.filter.FilterResultBuilder.RequestFilterResultBuilder;
+import io.kroxylicious.proxy.filter.FilterResultBuilder.ResponseFilterResultBuilder;
+
 /**
  * A context to allow filters to interact with other filters and the pipeline.
  */
@@ -94,9 +97,9 @@ public interface KrpcFilterContext {
         return completedForwardResponse(null, response);
     }
 
-    FilterResultBuilder<ResponseFilterResult, ResponseHeaderData> responseFilterResultBuilder();
+    ResponseFilterResultBuilder responseFilterResultBuilder();
 
-    FilterResultBuilder<RequestFilterResult, RequestHeaderData> requestFilterResultBuilder();
+    RequestFilterResultBuilder requestFilterResultBuilder();
 
     CompletionStage<ResponseFilterResult> completedForwardResponse(ResponseHeaderData header, ApiMessage response);
 

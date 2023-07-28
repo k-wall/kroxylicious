@@ -24,6 +24,8 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 
 import io.kroxylicious.proxy.filter.FilterResultBuilder;
+import io.kroxylicious.proxy.filter.FilterResultBuilder.RequestFilterResultBuilder;
+import io.kroxylicious.proxy.filter.FilterResultBuilder.ResponseFilterResultBuilder;
 import io.kroxylicious.proxy.filter.KrpcFilter;
 import io.kroxylicious.proxy.filter.KrpcFilterContext;
 import io.kroxylicious.proxy.filter.RequestFilterResult;
@@ -215,12 +217,12 @@ class DefaultFilterContext implements KrpcFilterContext {
     }
 
     @Override
-    public FilterResultBuilder<ResponseFilterResult, ResponseHeaderData> responseFilterResultBuilder() {
+    public ResponseFilterResultBuilder responseFilterResultBuilder() {
         return FilterResultBuilder.responseFilterResultBuilder();
     }
 
     @Override
-    public FilterResultBuilder<RequestFilterResult, RequestHeaderData> requestFilterResultBuilder() {
+    public RequestFilterResultBuilder requestFilterResultBuilder() {
         return FilterResultBuilder.requestFilterResultBuilder();
     }
 

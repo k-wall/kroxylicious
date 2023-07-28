@@ -10,42 +10,42 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.ApiMessage;
 
-public abstract class FilterResultBuilder<M, H> {
-    private ApiMessage message;
+public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M, H>, R extends FilterResult, M, H> {
     private H header;
+    private M message;
     private boolean closeConnection;
 
     private FilterResultBuilder() {
     }
 
-    public FilterResultBuilder<M, H> withHeader(H header) {
+    public B withHeader(H header) {
         this.header = header;
-        return this;
+        return (B) this;
     }
 
     H header() {
         return header;
     }
 
-    public FilterResultBuilder<M, H> withMessage(ApiMessage message) {
+    public B withMessage(M message) {
         this.message = message;
-        return this;
+        return (B) this;
     }
 
-    ApiMessage message() {
+    M message() {
         return message;
     }
 
-    public FilterResultBuilder<M, H> withCloseConnection(boolean closeConnection) {
+    public B withCloseConnection(boolean closeConnection) {
         this.closeConnection = closeConnection;
-        return this;
+        return (B) this;
     }
 
     boolean closeConnection() {
         return closeConnection;
     }
 
-    public abstract M build();
+    public abstract R build();
 
     public static ResponseFilterResultBuilder responseFilterResultBuilder() {
         return new ResponseFilterResultBuilder();
@@ -55,7 +55,7 @@ public abstract class FilterResultBuilder<M, H> {
         return new RequestFilterResultBuilder();
     }
 
-    public static class RequestFilterResultBuilder extends FilterResultBuilder<RequestFilterResult, RequestHeaderData> {
+    public static class RequestFilterResultBuilder extends FilterResultBuilder<RequestFilterResultBuilder, RequestFilterResult, ApiMessage, RequestHeaderData> {
 
         private ShortCircuitResponseFilterResultBuilder shortCircuitResponseBuilder;
 
@@ -64,6 +64,14 @@ public abstract class FilterResultBuilder<M, H> {
                 shortCircuitResponseBuilder = new ShortCircuitResponseFilterResultBuilder(this);
             }
             return shortCircuitResponseBuilder;
+        }
+
+        @Override
+        public RequestFilterResultBuilder withMessage(ApiMessage message) {
+            if (message != null && !message.getClass().getName().endsWith("RequestData")) {
+                throw new IllegalStateException();
+            }
+            return super.withMessage(message);
         }
 
         @Override
@@ -105,7 +113,7 @@ public abstract class FilterResultBuilder<M, H> {
         }
     }
 
-    public static class ResponseFilterResultBuilder extends FilterResultBuilder<ResponseFilterResult, ResponseHeaderData> {
+    public static class ResponseFilterResultBuilder extends FilterResultBuilder<ResponseFilterResultBuilder, ResponseFilterResult, ApiMessage, ResponseHeaderData> {
         @Override
         public ResponseFilterResult build() {
             var builderThis = this;

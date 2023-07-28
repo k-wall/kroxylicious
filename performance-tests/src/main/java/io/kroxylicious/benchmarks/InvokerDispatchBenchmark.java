@@ -36,7 +36,8 @@ import io.kroxylicious.filters.FourInterfaceFilter3;
 import io.kroxylicious.proxy.filter.ArrayFilterInvoker;
 import io.kroxylicious.proxy.filter.FilterInvoker;
 import io.kroxylicious.proxy.filter.FilterInvokers;
-import io.kroxylicious.proxy.filter.FilterResultBuilder;
+import io.kroxylicious.proxy.filter.FilterResultBuilder.RequestFilterResultBuilder;
+import io.kroxylicious.proxy.filter.FilterResultBuilder.ResponseFilterResultBuilder;
 import io.kroxylicious.proxy.filter.KrpcFilter;
 import io.kroxylicious.proxy.filter.KrpcFilterContext;
 import io.kroxylicious.proxy.filter.RequestFilterResult;
@@ -178,12 +179,12 @@ public class InvokerDispatchBenchmark {
         }
 
         @Override
-        public FilterResultBuilder<ResponseFilterResult, ResponseHeaderData> responseFilterResultBuilder() {
+        public ResponseFilterResultBuilder responseFilterResultBuilder() {
             return null;
         }
 
         @Override
-        public FilterResultBuilder<RequestFilterResult, RequestHeaderData> requestFilterResultBuilder() {
+        public RequestFilterResultBuilder requestFilterResultBuilder() {
             return null;
         }
 
