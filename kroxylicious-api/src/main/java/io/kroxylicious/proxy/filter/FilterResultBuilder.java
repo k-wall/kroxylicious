@@ -47,55 +47,98 @@ public abstract class FilterResultBuilder<M, H> {
 
     public abstract M build();
 
-    public static FilterResultBuilder<ResponseFilterResult, ResponseHeaderData> responseFilterResultBuilder() {
-        return new FilterResultBuilder<>() {
-            @Override
-            public ResponseFilterResult build() {
-                var builderThis = this;
-                return new ResponseFilterResult() {
-                    @Override
-                    public ResponseHeaderData header() {
-                        return builderThis.header();
-                    }
-
-                    @Override
-                    public ApiMessage message() {
-                        return builderThis.message();
-                    }
-
-                    @Override
-                    public boolean closeConnection() {
-                        return builderThis.closeConnection();
-                    }
-                };
-            }
-        };
+    public static ResponseFilterResultBuilder responseFilterResultBuilder() {
+        return new ResponseFilterResultBuilder();
     }
 
-    public static FilterResultBuilder<RequestFilterResult, RequestHeaderData> requestFilterResultBuilder() {
-        return new FilterResultBuilder<>() {
-            @Override
-            public RequestFilterResult build() {
+    public static RequestFilterResultBuilder requestFilterResultBuilder() {
+        return new RequestFilterResultBuilder();
+    }
 
-                var builder = this;
-                return new RequestFilterResult() {
-                    @Override
-                    public RequestHeaderData header() {
-                        return builder.header();
-                    }
+    public static class RequestFilterResultBuilder extends FilterResultBuilder<RequestFilterResult, RequestHeaderData> {
 
-                    @Override
-                    public ApiMessage message() {
-                        return builder.message();
-                    }
+        private ShortCircuitResponseFilterResultBuilder shortCircuitResponseBuilder;
 
-                    @Override
-                    public boolean closeConnection() {
-                        return builder.closeConnection();
-                    }
-                };
+        public ShortCircuitResponseFilterResultBuilder withShortCircuitResponse() {
+            if (shortCircuitResponseBuilder == null) {
+                shortCircuitResponseBuilder = new ShortCircuitResponseFilterResultBuilder(this);
             }
-        };
+            return shortCircuitResponseBuilder;
+        }
+
+        @Override
+        public RequestFilterResult build() {
+
+            // TODO: API really needs to prevent a user configuring a forward request and a short-circuit response.
+            var builder = this;
+            var shortCircuitResponse = shortCircuitResponseBuilder == null ? null : shortCircuitResponseBuilder.build();
+
+            return new RequestFilterResult() {
+                @Override
+                public RequestHeaderData header() {
+                    if (shortCircuitResponse != null) {
+                        throw new IllegalStateException();
+                    }
+                    return builder.header();
+                }
+
+                @Override
+                public ApiMessage message() {
+                    if (shortCircuitResponse != null) {
+                        throw new IllegalStateException();
+                    }
+                    return builder.message();
+                }
+
+                @Override
+                public boolean closeConnection() {
+                    if (shortCircuitResponse != null) {
+                        throw new IllegalStateException();
+                    }
+                    return builder.closeConnection();
+                }
+
+                public ResponseFilterResult shortCircuitResponse() {
+                    return shortCircuitResponse;
+                }
+            };
+        }
+    }
+
+    public static class ResponseFilterResultBuilder extends FilterResultBuilder<ResponseFilterResult, ResponseHeaderData> {
+        @Override
+        public ResponseFilterResult build() {
+            var builderThis = this;
+            return new ResponseFilterResult() {
+                @Override
+                public ResponseHeaderData header() {
+                    return builderThis.header();
+                }
+
+                @Override
+                public ApiMessage message() {
+                    return builderThis.message();
+                }
+
+                @Override
+                public boolean closeConnection() {
+                    return builderThis.closeConnection();
+                }
+            };
+        }
+    }
+
+    public static class ShortCircuitResponseFilterResultBuilder extends ResponseFilterResultBuilder {
+
+        private final RequestFilterResultBuilder requestFilterResultBuilder;
+
+        private ShortCircuitResponseFilterResultBuilder(RequestFilterResultBuilder requestFilterResultBuilder) {
+            this.requestFilterResultBuilder = requestFilterResultBuilder;
+        }
+
+        public RequestFilterResultBuilder end() {
+            return requestFilterResultBuilder;
+        }
     }
 
 }
