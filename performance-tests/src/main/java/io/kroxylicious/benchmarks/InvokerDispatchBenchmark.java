@@ -86,7 +86,7 @@ public class InvokerDispatchBenchmark {
         String invoker;
 
         private RequestHeaderData requestHeaders;
-        private KrpcFilterContext filterContext;
+        private KrpcFilterContext<ApiMessage, ApiMessage> filterContext;
         private Map.Entry<ApiKeys, ApiMessage>[] apiMessages;
 
         @SuppressWarnings("unchecked")
@@ -145,7 +145,7 @@ public class InvokerDispatchBenchmark {
     }
 
     private static void invokeHandleRequest(FilterInvoker[] filters, Map.Entry<ApiKeys, ApiMessage>[] apiMessages, RequestHeaderData requestHeaders,
-                                            KrpcFilterContext filterContext) {
+                                            KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
         for (Map.Entry<ApiKeys, ApiMessage> entry : apiMessages) {
             final ApiKeys apiKey = entry.getKey();
             final short apiVersion = apiKey.latestVersion();
@@ -157,7 +157,7 @@ public class InvokerDispatchBenchmark {
         }
     }
 
-    private static class StubFilterContext implements KrpcFilterContext {
+    private static class StubFilterContext implements KrpcFilterContext<ApiMessage, ApiMessage> {
         @Override
         public String channelDescriptor() {
             return null;
@@ -189,12 +189,17 @@ public class InvokerDispatchBenchmark {
         }
 
         @Override
-        public CompletionStage<RequestFilterResult> completedForwardRequest(RequestHeaderData header, ApiMessage request) {
+        public CompletionStage<RequestFilterResult<ApiMessage>> completedForwardRequest(RequestHeaderData header, ApiMessage request) {
             return null;
         }
 
         @Override
-        public CompletionStage<ResponseFilterResult> completedForwardResponse(ResponseHeaderData header, ApiMessage response) {
+        public CompletionStage<ResponseFilterResult<ApiMessage>> completedForwardResponse(ResponseHeaderData header, ApiMessage response) {
+            return null;
+        }
+
+        @Override
+        public CompletionStage<RequestFilterResult<ApiMessage>> completedShortCircuitResponse(ResponseHeaderData responseHeaderData, ApiMessage response) {
             return null;
         }
     }

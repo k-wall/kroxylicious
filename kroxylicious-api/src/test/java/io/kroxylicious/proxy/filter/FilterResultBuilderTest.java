@@ -21,19 +21,18 @@ class FilterResultBuilderTest {
         var request = new FetchRequestData();
         var builder = FilterResultBuilder.requestFilterResultBuilder();
         builder.withMessage(request);
-        RequestFilterResult built = builder.build();
+        RequestFilterResult<ApiMessage> built = builder.build();
         assertThat(built.message()).isEqualTo(request);
     }
 
     @Test
-    public void requestFilterResult2() {
+    public void requestFilterResultTypeSafe() {
         var request = new FetchRequestData();
-        var builder = FilterResultBuilder.<FetchRequestData>requestFilterResultBuilder();
+        var builder = FilterResultBuilder.<FetchRequestData> requestFilterResultBuilder();
         builder.withMessage(request);
-        RequestFilterResult built = builder.build();
+        RequestFilterResult<FetchRequestData> built = builder.build();
         assertThat(built.message()).isEqualTo(request);
     }
-
 
     @Test
     public void requestFilterResultRejectResponse() {

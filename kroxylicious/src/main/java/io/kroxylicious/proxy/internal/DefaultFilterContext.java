@@ -39,7 +39,7 @@ import io.kroxylicious.proxy.internal.util.ByteBufOutputStream;
 /**
  * Implementation of {@link KrpcFilterContext}.
  */
-class DefaultFilterContext implements KrpcFilterContext {
+class DefaultFilterContext implements KrpcFilterContext<ApiMessage, ApiMessage> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultFilterContext.class);
 
@@ -119,7 +119,7 @@ class DefaultFilterContext implements KrpcFilterContext {
     }
 
     @Override
-    public CompletionStage<RequestFilterResult> completedForwardRequest(RequestHeaderData header, ApiMessage request) {
+    public CompletionStage<RequestFilterResult<ApiMessage>> completedForwardRequest(RequestHeaderData header, ApiMessage request) {
         return CompletableFuture.completedStage(requestFilterResultBuilder().withMessage(request).withHeader(header).build());
     }
 
@@ -217,7 +217,7 @@ class DefaultFilterContext implements KrpcFilterContext {
     }
 
     @Override
-    public ResponseFilterResultBuilder responseFilterResultBuilder() {
+    public ResponseFilterResultBuilder<ApiMessage> responseFilterResultBuilder() {
         return FilterResultBuilder.responseFilterResultBuilder();
     }
 
@@ -227,8 +227,17 @@ class DefaultFilterContext implements KrpcFilterContext {
     }
 
     @Override
-    public CompletionStage<ResponseFilterResult> completedForwardResponse(ResponseHeaderData header, ApiMessage response) {
+    public CompletionStage<ResponseFilterResult<ApiMessage>> completedForwardResponse(ResponseHeaderData header, ApiMessage response) {
         return CompletableFuture.completedStage(responseFilterResultBuilder().withHeader(header).withMessage(response).build());
+    }
+
+    @Override
+    public CompletionStage<RequestFilterResult<ApiMessage>> completedShortCircuitResponse(ResponseHeaderData responseHeaderData, ApiMessage response) {
+        FilterResultBuilder.ShortCircuitResponseFilterResultBuilder shortCircuitResponseFilterResultBuilder = requestFilterResultBuilder()
+                .withShortCircuitResponse();
+        shortCircuitResponseFilterResultBuilder.withMessage(response).withHeader(responseHeaderData);
+        return CompletableFuture.completedStage(shortCircuitResponseFilterResultBuilder.end().build());
+
     }
 
     protected void closeConnection() {

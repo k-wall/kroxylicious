@@ -17,10 +17,9 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.kroxylicious.proxy.filter.FilterResult;
 import io.kroxylicious.proxy.filter.KrpcFilterContext;
 import io.kroxylicious.proxy.filter.RequestFilter;
-import io.kroxylicious.proxy.filter.ResponseFilterResult;
+import io.kroxylicious.proxy.filter.RequestFilterResult;
 
 /**
  * An internal filter that causes the system to eagerly learn the cluster's topology by spontaneously emitting
@@ -46,7 +45,8 @@ public class EagerMetadataLearner implements RequestFilter {
     }
 
     @Override
-    public CompletionStage<? extends FilterResult> onRequest(ApiKeys apiKey, RequestHeaderData header, ApiMessage body, KrpcFilterContext filterContext) {
+    public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey, RequestHeaderData header, ApiMessage body,
+                                                                      KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
         if (KAFKA_PRELUDE.contains(apiKey)) {
             return filterContext.completedForwardRequest(header, body);
         }
@@ -57,19 +57,20 @@ public class EagerMetadataLearner implements RequestFilter {
             boolean useClientRequest = apiKey.equals(ApiKeys.METADATA) && apiVersion == header.requestApiVersion();
             var request = useClientRequest ? (MetadataRequestData) body : new MetadataRequestData();
 
-            var future = new CompletableFuture<ResponseFilterResult>();
+            var future = new CompletableFuture<RequestFilterResult<ApiMessage>>();
             var unused = filterContext.<MetadataResponseData> sendRequest(apiVersion, request)
                     .thenAccept(metadataResponseData -> {
                         // closing the connection is important. This client connection is connected to bootstrap (it could
                         // be any broker or maybe not something else). we must close the connection to force the client to
                         // connect again.
-                        var builder = filterContext.responseFilterResultBuilder().withCloseConnection(true);
+                        var shortCircuitResponseFilterResultBuilder = filterContext.requestFilterResultBuilder()
+                                .withShortCircuitResponse();
                         if (useClientRequest) {
                             // The client's requested matched our out-of-band request, so we may as well return the
                             // response.
-                            builder.withMessage(metadataResponseData);
+                            shortCircuitResponseFilterResultBuilder.withMessage(metadataResponseData);
                         }
-                        future.complete(builder.build());
+                        future.complete(shortCircuitResponseFilterResultBuilder.end().build());
                         LOGGER.info("Closing upstream bootstrap connection {} now that endpoint reconciliation is complete.", filterContext.channelDescriptor());
                     });
             return future;

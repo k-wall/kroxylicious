@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
+import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -74,8 +75,8 @@ public class ApiVersionsFilter implements ApiVersionsResponseFilter {
     }
 
     @Override
-    public CompletionStage<ResponseFilterResult> onApiVersionsResponse(short apiVersion, ResponseHeaderData header, ApiVersionsResponseData data,
-                                                                       KrpcFilterContext context) {
+    public CompletionStage<ResponseFilterResult<ApiVersionsResponseData>> onApiVersionsResponse(short apiVersion, ResponseHeaderData header, ApiVersionsResponseData data,
+                                                                                                KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
         intersectApiVersions(context.channelDescriptor(), data);
         return context.completedForwardResponse(header, data);
     }

@@ -8,6 +8,7 @@ package io.kroxylicious.filters;
 
 import java.util.concurrent.CompletionStage;
 
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 
@@ -18,8 +19,8 @@ import io.kroxylicious.proxy.filter.ResponseFilterResult;
 public class OneInterfaceFilter implements ProduceResponseFilter {
 
     @Override
-    public CompletionStage<ResponseFilterResult> onProduceResponse(short apiVersion, ResponseHeaderData header, ProduceResponseData response,
-                                                                   KrpcFilterContext context) {
+    public CompletionStage<ResponseFilterResult<ProduceResponseData>> onProduceResponse(short apiVersion, ResponseHeaderData header, ProduceResponseData response,
+                                                                                        KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
         return null;
     }
 }

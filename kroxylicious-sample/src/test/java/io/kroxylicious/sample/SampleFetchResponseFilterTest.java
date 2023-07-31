@@ -13,9 +13,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ResponseHeaderData;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -45,7 +45,7 @@ class SampleFetchResponseFilterTest {
     private static final String CONFIG_FIND_VALUE = "from";
     private static final String CONFIG_REPLACE_VALUE = "to";
 
-    private KrpcFilterContext context;
+    private KrpcFilterContext<FetchRequestData, FetchResponseData> context;
 
     private SampleFetchResponseFilter filter;
     private ResponseHeaderData headerData;
@@ -95,7 +95,7 @@ class SampleFetchResponseFilterTest {
     private void setupContextMock() {
         context = mock(KrpcFilterContext.class);
 
-        var apiMessageCaptor = ArgumentCaptor.forClass(ApiMessage.class);
+        var apiMessageCaptor = ArgumentCaptor.forClass(FetchResponseData.class);
         var responseHeaderDataCaptor = ArgumentCaptor.forClass(ResponseHeaderData.class);
 
         when(context.completedForwardResponse(responseHeaderDataCaptor.capture(), apiMessageCaptor.capture()))

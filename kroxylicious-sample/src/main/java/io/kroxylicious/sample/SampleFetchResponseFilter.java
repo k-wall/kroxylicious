@@ -8,6 +8,7 @@ package io.kroxylicious.sample;
 
 import java.util.concurrent.CompletionStage;
 
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 
@@ -59,7 +60,8 @@ public class SampleFetchResponseFilter implements FetchResponseFilter {
      * @return
      */
     @Override
-    public CompletionStage<ResponseFilterResult> onFetchResponse(short apiVersion, ResponseHeaderData header, FetchResponseData response, KrpcFilterContext context) {
+    public CompletionStage<ResponseFilterResult<FetchResponseData>> onFetchResponse(short apiVersion, ResponseHeaderData header, FetchResponseData response,
+                                                                                    KrpcFilterContext<FetchRequestData, FetchResponseData> context) {
         this.timer.record(() -> applyTransformation(response, context)); // We're timing this to report how long it takes through Micrometer
         return context.completedForwardResponse(header, response);
     }
@@ -69,7 +71,7 @@ public class SampleFetchResponseFilter implements FetchResponseFilter {
      * @param response the response to be transformed
      * @param context the context
      */
-    private void applyTransformation(FetchResponseData response, KrpcFilterContext context) {
+    private void applyTransformation(FetchResponseData response, KrpcFilterContext<FetchRequestData, FetchResponseData> context) {
         response.responses().forEach(responseData -> {
             for (FetchResponseData.PartitionData partitionData : responseData.partitions()) {
                 SampleFilterTransformer.transform(partitionData, context, this.config);

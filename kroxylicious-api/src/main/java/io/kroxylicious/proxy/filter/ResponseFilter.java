@@ -23,7 +23,7 @@ public interface ResponseFilter extends KrpcFilter {
 
     /**
      * Does this filter implementation want to handle a response. If so, the
-     * {@link #onResponse(ApiKeys, ResponseHeaderData, ApiMessage, KrpcFilterContext)} method
+     * {@link #onResponse(ApiKeys, ResponseHeaderData, ApiMessage, KrpcFilterContext<ApiMessage, ApiMessage>)} method
      * will be eligible to be called with the deserialized response data (if the
      * message reaches this filter in the filter chain).
      *
@@ -42,8 +42,8 @@ public interface ResponseFilter extends KrpcFilter {
      * @param body body of the response
      * @param filterContext context containing methods to continue the filter chain and other contextual data
      */
-    CompletionStage<ResponseFilterResult> onResponse(ApiKeys apiKey,
-                                                     ResponseHeaderData header,
-                                                     ApiMessage body,
-                                                     KrpcFilterContext filterContext);
+    CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey,
+                                                                 ResponseHeaderData header,
+                                                                 ApiMessage body,
+                                                                 KrpcFilterContext<ApiMessage, ApiMessage> filterContext);
 }

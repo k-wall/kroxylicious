@@ -24,8 +24,8 @@ import org.junit.jupiter.api.Test;
 
 import io.kroxylicious.proxy.filter.ApiVersionsRequestFilter;
 import io.kroxylicious.proxy.filter.ApiVersionsResponseFilter;
-import io.kroxylicious.proxy.filter.FilterResult;
 import io.kroxylicious.proxy.filter.KrpcFilterContext;
+import io.kroxylicious.proxy.filter.RequestFilterResult;
 import io.kroxylicious.proxy.filter.ResponseFilterResult;
 import io.kroxylicious.proxy.frame.DecodedRequestFrame;
 import io.kroxylicious.proxy.frame.DecodedResponseFrame;
@@ -61,8 +61,9 @@ public class FilterHandlerTest extends FilterHarness {
             }
 
             @Override
-            public CompletionStage<FilterResult> onApiVersionsRequest(short apiVersion, RequestHeaderData header, ApiVersionsRequestData request,
-                                                                      KrpcFilterContext context) {
+            public CompletionStage<RequestFilterResult<ApiVersionsRequestData>> onApiVersionsRequest(short apiVersion, RequestHeaderData header,
+                                                                                                     ApiVersionsRequestData request,
+                                                                                                     KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
                 fail("Should not be called");
                 return null;
             }
@@ -133,8 +134,9 @@ public class FilterHandlerTest extends FilterHarness {
             }
 
             @Override
-            public CompletionStage<ResponseFilterResult> onApiVersionsResponse(short apiVersion, ResponseHeaderData header, ApiVersionsResponseData response,
-                                                                               KrpcFilterContext context) {
+            public CompletionStage<ResponseFilterResult<ApiVersionsResponseData>> onApiVersionsResponse(short apiVersion, ResponseHeaderData header,
+                                                                                                        ApiVersionsResponseData response,
+                                                                                                        KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
                 fail("Should not be called");
                 return null;
             }

@@ -18,10 +18,10 @@ import org.openjdk.jmh.infra.Blackhole;
 
 import io.kroxylicious.proxy.filter.FetchRequestFilter;
 import io.kroxylicious.proxy.filter.FetchResponseFilter;
-import io.kroxylicious.proxy.filter.FilterResult;
 import io.kroxylicious.proxy.filter.KrpcFilterContext;
 import io.kroxylicious.proxy.filter.ProduceRequestFilter;
 import io.kroxylicious.proxy.filter.ProduceResponseFilter;
+import io.kroxylicious.proxy.filter.RequestFilterResult;
 import io.kroxylicious.proxy.filter.ResponseFilterResult;
 
 import static io.kroxylicious.benchmarks.InvokerDispatchBenchmark.CONSUME_TOKENS;
@@ -29,26 +29,29 @@ import static io.kroxylicious.benchmarks.InvokerDispatchBenchmark.CONSUME_TOKENS
 public class FourInterfaceFilter3 implements ProduceResponseFilter, ProduceRequestFilter, FetchRequestFilter, FetchResponseFilter {
 
     @Override
-    public CompletionStage<FilterResult> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request, KrpcFilterContext context) {
+    public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request,
+                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
         Blackhole.consumeCPU(CONSUME_TOKENS);
         return null;
     }
 
     @Override
-    public CompletionStage<ResponseFilterResult> onProduceResponse(short apiVersion, ResponseHeaderData header, ProduceResponseData response,
-                                                                   KrpcFilterContext context) {
+    public CompletionStage<ResponseFilterResult<ProduceResponseData>> onProduceResponse(short apiVersion, ResponseHeaderData header, ProduceResponseData response,
+                                                                                        KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
         Blackhole.consumeCPU(CONSUME_TOKENS);
         return null;
     }
 
     @Override
-    public CompletionStage<FilterResult> onFetchRequest(short apiVersion, RequestHeaderData header, FetchRequestData request, KrpcFilterContext context) {
+    public CompletionStage<RequestFilterResult<FetchRequestData>> onFetchRequest(short apiVersion, RequestHeaderData header, FetchRequestData request,
+                                                                                 KrpcFilterContext<FetchRequestData, FetchResponseData> context) {
         Blackhole.consumeCPU(CONSUME_TOKENS);
         return null;
     }
 
     @Override
-    public CompletionStage<ResponseFilterResult> onFetchResponse(short apiVersion, ResponseHeaderData header, FetchResponseData response, KrpcFilterContext context) {
+    public CompletionStage<ResponseFilterResult<FetchResponseData>> onFetchResponse(short apiVersion, ResponseHeaderData header, FetchResponseData response,
+                                                                                    KrpcFilterContext<FetchRequestData, FetchResponseData> context) {
         Blackhole.consumeCPU(CONSUME_TOKENS);
         return null;
     }

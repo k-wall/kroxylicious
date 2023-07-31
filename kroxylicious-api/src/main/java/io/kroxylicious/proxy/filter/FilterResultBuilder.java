@@ -10,7 +10,7 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.ApiMessage;
 
-public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M, H>, R extends FilterResult, M, H> {
+public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M, H>, R extends FilterResult<M, H>, M extends ApiMessage, H extends ApiMessage> {
     private H header;
     private M message;
     private boolean closeConnection;
@@ -55,7 +55,8 @@ public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M,
         return new RequestFilterResultBuilder<>();
     }
 
-    public static class RequestFilterResultBuilder<M extends ApiMessage> extends FilterResultBuilder<RequestFilterResultBuilder<M>, RequestFilterResult, M, RequestHeaderData> {
+    public static class RequestFilterResultBuilder<M extends ApiMessage>
+            extends FilterResultBuilder<RequestFilterResultBuilder<M>, RequestFilterResult<M>, M, RequestHeaderData> {
 
         private ShortCircuitResponseFilterResultBuilder shortCircuitResponseBuilder;
 
@@ -75,13 +76,13 @@ public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M,
         }
 
         @Override
-        public RequestFilterResult build() {
+        public RequestFilterResult<M> build() {
 
             // TODO: API really needs to prevent a user configuring a forward request and a short-circuit response.
             var builder = this;
             var shortCircuitResponse = shortCircuitResponseBuilder == null ? null : shortCircuitResponseBuilder.build();
 
-            return new RequestFilterResult() {
+            return new RequestFilterResult<M>() {
                 @Override
                 public RequestHeaderData header() {
                     if (shortCircuitResponse != null) {
@@ -91,7 +92,7 @@ public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M,
                 }
 
                 @Override
-                public ApiMessage message() {
+                public M message() {
                     if (shortCircuitResponse != null) {
                         throw new IllegalStateException();
                     }
@@ -106,25 +107,27 @@ public abstract class FilterResultBuilder<B extends FilterResultBuilder<B, R, M,
                     return builder.closeConnection();
                 }
 
-                public ResponseFilterResult shortCircuitResponse() {
+                @Override
+                public ResponseFilterResult<ApiMessage> shortCircuitResponse() {
                     return shortCircuitResponse;
                 }
             };
         }
     }
 
-    public static class ResponseFilterResultBuilder extends FilterResultBuilder<ResponseFilterResultBuilder, ResponseFilterResult, ApiMessage, ResponseHeaderData> {
+    public static class ResponseFilterResultBuilder<M extends ApiMessage>
+            extends FilterResultBuilder<ResponseFilterResultBuilder<M>, ResponseFilterResult<M>, M, ResponseHeaderData> {
         @Override
-        public ResponseFilterResult build() {
+        public ResponseFilterResult<M> build() {
             var builderThis = this;
-            return new ResponseFilterResult() {
+            return new ResponseFilterResult<M>() {
                 @Override
                 public ResponseHeaderData header() {
                     return builderThis.header();
                 }
 
                 @Override
-                public ApiMessage message() {
+                public M message() {
                     return builderThis.message();
                 }
 

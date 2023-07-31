@@ -21,7 +21,6 @@ import io.netty.channel.ChannelPromise;
 import io.kroxylicious.proxy.filter.FilterAndInvoker;
 import io.kroxylicious.proxy.filter.FilterInvoker;
 import io.kroxylicious.proxy.filter.KrpcFilter;
-import io.kroxylicious.proxy.filter.RequestFilterResult;
 import io.kroxylicious.proxy.filter.ResponseFilterResult;
 import io.kroxylicious.proxy.frame.DecodedRequestFrame;
 import io.kroxylicious.proxy.frame.DecodedResponseFrame;
@@ -71,19 +70,24 @@ public class FilterHandler extends ChannelDuplexHandler {
                     return;
                 }
 
-                if (filterResult instanceof RequestFilterResult rfr) {
-                    var header = rfr.header() == null ? decodedFrame.header() : rfr.header();
-                    filterContext.forwardRequest(header, rfr.message());
-                }
-                else if (filterResult instanceof ResponseFilterResult rfr) {
-                    // this is the short circuit path
-                    if (rfr.message() != null) {
-                        var header = rfr.header() == null ? new ResponseHeaderData().setCorrelationId(decodedFrame.correlationId()) : rfr.header();
-                        filterContext.forwardResponse(header, rfr.message());
+                ResponseFilterResult<ApiMessage> response = filterResult.shortCircuitResponse();
+                if (response == null) {
+
+                    var header = filterResult.header() == null ? decodedFrame.header() : filterResult.header();
+                    filterContext.forwardRequest(header, filterResult.message());
+                    if (filterResult.closeConnection()) {
+                        filterContext.closeConnection();
                     }
                 }
-                if (filterResult.closeConnection()) {
-                    filterContext.closeConnection();
+                else {
+                    // this is the short circuit path
+                    if (response.message() != null) {
+                        var header = response.header() == null ? new ResponseHeaderData().setCorrelationId(decodedFrame.correlationId()) : response.header();
+                        filterContext.forwardResponse(header, response.message());
+                    }
+                    if (filterResult.closeConnection()) {
+                        filterContext.closeConnection();
+                    }
                 }
 
             });

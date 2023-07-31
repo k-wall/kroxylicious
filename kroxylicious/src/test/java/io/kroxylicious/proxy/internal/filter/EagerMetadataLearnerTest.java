@@ -36,7 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.kroxylicious.proxy.filter.FilterResultBuilder;
 import io.kroxylicious.proxy.filter.KrpcFilterContext;
-import io.kroxylicious.proxy.filter.ResponseFilterResult;
+import io.kroxylicious.proxy.filter.RequestFilterResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyShort;
@@ -49,7 +49,7 @@ import static org.mockito.Mockito.when;
 class EagerMetadataLearnerTest {
 
     @Mock
-    KrpcFilterContext context;
+    KrpcFilterContext<ApiMessage, ApiMessage> context;
     private EagerMetadataLearner learner;
 
     @BeforeEach
@@ -87,16 +87,16 @@ class EagerMetadataLearnerTest {
         var metadataResponse = new MetadataResponseData();
         metadataResponse.brokers().add(new MetadataResponseData.MetadataResponseBroker().setNodeId(1).setHost("localhost").setPort(1234));
 
-        when(context.responseFilterResultBuilder()).thenReturn(FilterResultBuilder.responseFilterResultBuilder());
+        when(context.requestFilterResultBuilder()).thenReturn(FilterResultBuilder.requestFilterResultBuilder());
         when(context.sendRequest(anyShort(), isA(MetadataRequestData.class))).thenReturn(CompletableFuture.completedStage(metadataResponse));
         var stage = learner.onRequest(apiKey, header, request, context);
         assertThat(stage).isCompleted();
-        var result = ((ResponseFilterResult) stage.toCompletableFuture().get());
+        var result = ((RequestFilterResult<ApiMessage>) stage.toCompletableFuture().get());
 
         if (apiKey == ApiKeys.METADATA) {
             // if caller's request is a metadata request, then the filter must forward it with fidelity
             verify(context).sendRequest(eq(header.requestApiVersion()), eq(request));
-            assertThat(result.message()).isEqualTo(metadataResponse);
+            assertThat(result.shortCircuitResponse().message()).isEqualTo(metadataResponse);
         }
         else {
             verify(context).sendRequest(anyShort(), isA(MetadataRequestData.class));

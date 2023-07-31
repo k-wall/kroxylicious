@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 
 import org.apache.kafka.common.message.ApiVersionsRequestData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -21,8 +22,8 @@ import io.netty.buffer.Unpooled;
 
 import io.kroxylicious.proxy.filter.ApiVersionsRequestFilter;
 import io.kroxylicious.proxy.filter.FilterAndInvoker;
-import io.kroxylicious.proxy.filter.FilterResult;
 import io.kroxylicious.proxy.filter.KrpcFilterContext;
+import io.kroxylicious.proxy.filter.RequestFilterResult;
 import io.kroxylicious.proxy.frame.DecodedRequestFrame;
 import io.kroxylicious.proxy.frame.OpaqueRequestFrame;
 
@@ -66,9 +67,9 @@ public class RequestDecoderTest extends AbstractCodecTest {
                                     }
 
                                     @Override
-                                    public CompletionStage<? extends FilterResult> onApiVersionsRequest(short apiVersion, RequestHeaderData header,
-                                                                                                        ApiVersionsRequestData request,
-                                                                                                        KrpcFilterContext context) {
+                                    public CompletionStage<RequestFilterResult<ApiVersionsRequestData>> onApiVersionsRequest(short apiVersion, RequestHeaderData header,
+                                                                                                                             ApiVersionsRequestData request,
+                                                                                                                             KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
                                         return context.completedForwardRequest(header, request);
                                     }
                                 }))),

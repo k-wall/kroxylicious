@@ -454,11 +454,11 @@ public class ArrayFilterInvoker implements FilterInvoker {
      * @return
      */
     @Override
-    public CompletionStage<? extends FilterResult> onRequest(ApiKeys apiKey,
-                                                             short apiVersion,
-                                                             RequestHeaderData header,
-                                                             ApiMessage body,
-                                                             KrpcFilterContext filterContext) {
+    public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey,
+                                                                      short apiVersion,
+                                                                      RequestHeaderData header,
+                                                                      ApiMessage body,
+                                                                      KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
         FilterInvoker invoker = requestInvokers[apiKey.id];
         return invoker.onRequest(apiKey, apiVersion, header, body, filterContext);
     }
@@ -474,11 +474,11 @@ public class ArrayFilterInvoker implements FilterInvoker {
      * @return
      */
     @Override
-    public CompletionStage<ResponseFilterResult> onResponse(ApiKeys apiKey,
-                                                            short apiVersion,
-                                                            ResponseHeaderData header,
-                                                            ApiMessage body,
-                                                            KrpcFilterContext filterContext) {
+    public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey,
+                                                                        short apiVersion,
+                                                                        ResponseHeaderData header,
+                                                                        ApiMessage body,
+                                                                        KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
         FilterInvoker invoker = responseInvokers[apiKey.id];
         return invoker.onResponse(apiKey, apiVersion, header, body, filterContext);
     }

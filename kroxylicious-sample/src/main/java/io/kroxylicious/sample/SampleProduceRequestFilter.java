@@ -10,14 +10,15 @@ import java.util.concurrent.CompletionStage;
 
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceRequestData.PartitionProduceData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.RequestHeaderData;
 
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
 
-import io.kroxylicious.proxy.filter.FilterResult;
 import io.kroxylicious.proxy.filter.KrpcFilterContext;
 import io.kroxylicious.proxy.filter.ProduceRequestFilter;
+import io.kroxylicious.proxy.filter.RequestFilterResult;
 import io.kroxylicious.sample.config.SampleFilterConfig;
 import io.kroxylicious.sample.util.SampleFilterTransformer;
 
@@ -60,7 +61,8 @@ public class SampleProduceRequestFilter implements ProduceRequestFilter {
      * @return
      */
     @Override
-    public CompletionStage<? extends FilterResult> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request, KrpcFilterContext context) {
+    public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request,
+                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
         this.timer.record(() -> applyTransformation(request, context)); // We're timing this to report how long it takes through Micrometer
 
         return context.completedForwardRequest(header, request);
@@ -71,7 +73,7 @@ public class SampleProduceRequestFilter implements ProduceRequestFilter {
      * @param request the request to be transformed
      * @param context the context
      */
-    private void applyTransformation(ProduceRequestData request, KrpcFilterContext context) {
+    private void applyTransformation(ProduceRequestData request, KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
         request.topicData().forEach(topicData -> {
             for (PartitionProduceData partitionData : topicData.partitionData()) {
                 SampleFilterTransformer.transform(partitionData, context, this.config);

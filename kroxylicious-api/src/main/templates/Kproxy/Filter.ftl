@@ -6,10 +6,12 @@
 
 -->
 <#assign
+  base=messageSpec.name?replace("Request|Response", "", "r")
   dataClass="${messageSpec.name}Data"
   filterClass="${messageSpec.name}Filter"
   msgType=messageSpec.type?lower_case
 />
+<#assign filterReturnType>CompletionStage<<#if messageSpec.type?lower_case == 'response'>ResponseFilterResult<#else>RequestFilterResult</#if><${dataClass}>></#assign>
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
@@ -30,7 +32,8 @@ package io.kroxylicious.proxy.filter;
 
 import java.util.concurrent.CompletionStage;
 
-import org.apache.kafka.common.message.${messageSpec.name}Data;
+import org.apache.kafka.common.message.${base}RequestData;
+import org.apache.kafka.common.message.${base}ResponseData;
 <#if messageSpec.type?lower_case == 'response'>
 import org.apache.kafka.common.message.ResponseHeaderData;
 <#else>
@@ -68,6 +71,6 @@ public interface ${filterClass} extends KrpcFilter {
      * @return CompletionStage that will yield a <#if messageSpec.type?lower_case == 'response'>{@link ResponseFilterResult}<#else>{@link FilterResult}</#if>
      *         containing the ${messageSpec.type?lower_case} to be forwarded.
      */
-    CompletionStage<<#if messageSpec.type?lower_case == 'response'>ResponseFilterResult<#else>? extends FilterResult</#if>> on${messageSpec.name}(short apiVersion, <#if messageSpec.type?lower_case == 'response'>ResponseHeaderData<#else>RequestHeaderData</#if> header, ${dataClass} ${msgType}, KrpcFilterContext context);
+    ${filterReturnType} on${messageSpec.name}(short apiVersion, <#if messageSpec.type?lower_case == 'response'>ResponseHeaderData<#else>RequestHeaderData</#if> header, ${dataClass} ${msgType}, KrpcFilterContext<${base}RequestData, ${base}ResponseData> context);
 
 }

@@ -18,7 +18,7 @@ import io.kroxylicious.proxy.filter.FilterResultBuilder.ResponseFilterResultBuil
 /**
  * A context to allow filters to interact with other filters and the pipeline.
  */
-public interface KrpcFilterContext {
+public interface KrpcFilterContext<RQD extends ApiMessage, RSD extends ApiMessage> {
     /**
      * A description of this channel.
      * @return A description of this channel (typically used for logging).
@@ -48,11 +48,11 @@ public interface KrpcFilterContext {
     // */
     // void forwardRequest(RequestHeaderData header, ApiMessage request);
 
-    default CompletionStage<RequestFilterResult> completedForwardRequest(ApiMessage request) {
+    default CompletionStage<RequestFilterResult<RQD>> completedForwardRequest(RQD request) {
         return completedForwardRequest(null, request);
     }
 
-    CompletionStage<RequestFilterResult> completedForwardRequest(RequestHeaderData header, ApiMessage request);
+    CompletionStage<RequestFilterResult<RQD>> completedForwardRequest(RequestHeaderData header, RQD request);
 
     /**
      * Send a message from a filter towards the broker, invoking upstream filters
@@ -93,15 +93,21 @@ public interface KrpcFilterContext {
     // */
     // void forwardResponse(ApiMessage response);
 
-    default CompletionStage<ResponseFilterResult> completedForwardResponse(ApiMessage response) {
+    default CompletionStage<ResponseFilterResult<RSD>> completedForwardResponse(RSD response) {
         return completedForwardResponse(null, response);
     }
 
-    ResponseFilterResultBuilder responseFilterResultBuilder();
+    ResponseFilterResultBuilder<RSD> responseFilterResultBuilder();
 
-    RequestFilterResultBuilder<ApiMessage> requestFilterResultBuilder();
+    RequestFilterResultBuilder<RQD> requestFilterResultBuilder();
 
-    CompletionStage<ResponseFilterResult> completedForwardResponse(ResponseHeaderData header, ApiMessage response);
+    CompletionStage<ResponseFilterResult<RSD>> completedForwardResponse(ResponseHeaderData header, RSD response);
+
+    CompletionStage<RequestFilterResult<RQD>> completedShortCircuitResponse(ResponseHeaderData responseHeaderData, RSD response);
+
+    default CompletionStage<RequestFilterResult<RQD>> completedShortCircuitResponse(RSD response) {
+        return completedShortCircuitResponse(null, response);
+    };
 
     // /**
     // * Allows a filter to decide to close the connection. The client will be disconnected. The client is free

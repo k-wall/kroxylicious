@@ -27,7 +27,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
  * <ol>
  *     <li>That each instance of the FilterInvoker is associated with a single channel</li>
  *     <li>That {@link #shouldHandleRequest(ApiKeys, short)} and
- *     {@link #onRequest(ApiKeys, short, RequestHeaderData, ApiMessage, KrpcFilterContext)} (or {@code on*Request} as appropriate)
+ *     {@link #onRequest(ApiKeys, short, RequestHeaderData, ApiMessage, KrpcFilterContext<ApiMessage, ApiMessage>)} (or {@code on*Request} as appropriate)
  *     will always be invoked on the same thread.</li>
  *     <li>That filters are applied in the order they were configured.</li>
  * </ol>
@@ -45,7 +45,7 @@ public interface FilterInvoker {
     /**
      * Should this Invoker handle a request with a given api key and api version.
      * Returning true implies that this request will be deserialized and
-     * {@link #onRequest(ApiKeys, short, RequestHeaderData, ApiMessage, KrpcFilterContext)}
+     * {@link #onRequest(ApiKeys, short, RequestHeaderData, ApiMessage, KrpcFilterContext<ApiMessage, ApiMessage>)}
      * is eligible to be called with the deserialized data (if the message flows to that filter).
      *
      * @param apiKey the key of the message
@@ -59,7 +59,7 @@ public interface FilterInvoker {
     /**
      * Should this Invoker handle a response with a given api key and api version.
      * Returning true implies that this response will be deserialized and
-     * {@link #onResponse(ApiKeys, short, ResponseHeaderData, ApiMessage, KrpcFilterContext)}
+     * {@link #onResponse(ApiKeys, short, ResponseHeaderData, ApiMessage, KrpcFilterContext<ApiMessage, ApiMessage>)}
      * is eligible to be called with the deserialized data (if the message flows to that filter).
      *
      * @param apiKey the key of the message
@@ -85,8 +85,8 @@ public interface FilterInvoker {
      * @param filterContext contains methods to continue the filter chain and other contextual data
      * @return
      */
-    default CompletionStage<? extends FilterResult> onRequest(ApiKeys apiKey, short apiVersion, RequestHeaderData header, ApiMessage body,
-                                                              KrpcFilterContext filterContext) {
+    default CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey, short apiVersion, RequestHeaderData header, ApiMessage body,
+                                                                       KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
         return filterContext.completedForwardRequest(header, body);
     }
 
@@ -105,8 +105,8 @@ public interface FilterInvoker {
      * @param filterContext contains methods to continue the filter chain and other contextual data
      * @return
      */
-    default CompletionStage<ResponseFilterResult> onResponse(ApiKeys apiKey, short apiVersion, ResponseHeaderData header, ApiMessage body,
-                                                             KrpcFilterContext filterContext) {
+    default CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey, short apiVersion, ResponseHeaderData header, ApiMessage body,
+                                                                         KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
         return filterContext.completedForwardResponse(header, body);
     }
 

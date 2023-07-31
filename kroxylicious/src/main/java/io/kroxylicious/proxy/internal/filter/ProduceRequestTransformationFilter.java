@@ -13,6 +13,7 @@ import java.util.concurrent.CompletionStage;
 
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceRequestData.PartitionProduceData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionType;
@@ -25,9 +26,9 @@ import org.apache.kafka.common.record.TimestampType;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.kroxylicious.proxy.config.BaseConfig;
-import io.kroxylicious.proxy.filter.FilterResult;
 import io.kroxylicious.proxy.filter.KrpcFilterContext;
 import io.kroxylicious.proxy.filter.ProduceRequestFilter;
+import io.kroxylicious.proxy.filter.RequestFilterResult;
 import io.kroxylicious.proxy.internal.util.MemoryRecordsHelper;
 
 /**
@@ -74,12 +75,13 @@ public class ProduceRequestTransformationFilter implements ProduceRequestFilter 
     }
 
     @Override
-    public CompletionStage<? extends FilterResult> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData data, KrpcFilterContext context) {
+    public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData data,
+                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
         applyTransformation(context, data);
         return context.completedForwardRequest(header, data);
     }
 
-    private void applyTransformation(KrpcFilterContext ctx, ProduceRequestData req) {
+    private void applyTransformation(KrpcFilterContext<ProduceRequestData, ProduceResponseData> ctx, ProduceRequestData req) {
         req.topicData().forEach(topicData -> {
             for (PartitionProduceData partitionData : topicData.partitionData()) {
                 MemoryRecords records = (MemoryRecords) partitionData.records();

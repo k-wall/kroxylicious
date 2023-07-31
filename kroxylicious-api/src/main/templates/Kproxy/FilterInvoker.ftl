@@ -11,6 +11,8 @@
   filterInvokerClass="${messageSpec.name}FilterInvoker"
   msgType=messageSpec.type?lower_case
 />
+
+<#assign filterReturnType>CompletionStage<<#if messageSpec.type?lower_case == 'response'>ResponseFilterResult<#else>RequestFilterResult</#if><${dataClass}>></#assign>
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
@@ -60,7 +62,7 @@ class ${filterInvokerClass} implements FilterInvoker {
     }
 
     @Override
-    public CompletionStage<<#if messageSpec.type?lower_case == 'response'>ResponseFilterResult<#else>? extends FilterResult</#if>> on<#if messageSpec.type?lower_case == 'response'>Response<#else>Request</#if>(ApiKeys apiKey, short apiVersion, <#if messageSpec.type?lower_case == 'response'>Response<#else>Request</#if>HeaderData header, ApiMessage body, KrpcFilterContext filterContext) {
+    public ${filterReturnType} on<#if messageSpec.type?lower_case == 'response'>Response<#else>Request</#if>(ApiKeys apiKey, short apiVersion, <#if messageSpec.type?lower_case == 'response'>Response<#else>Request</#if>HeaderData header, ApiMessage body, KrpcFilterContext filterContext) {
         return filter.on${messageSpec.name}(apiVersion, header, (${messageSpec.name}Data) body, filterContext);
     }
 }

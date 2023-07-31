@@ -172,14 +172,14 @@ public class SpecificFilterInvoker implements FilterInvoker {
      * @return
      */
     @Override
-    public CompletionStage<? extends FilterResult> onRequest(ApiKeys apiKey,
-                                                             short apiVersion,
-                                                             RequestHeaderData header,
-                                                             ApiMessage body,
-                                                             KrpcFilterContext filterContext) {
+    public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey,
+                                                                      short apiVersion,
+                                                                      RequestHeaderData header,
+                                                                      ApiMessage body,
+                                                                      KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
         return switch (apiKey) {
             case ADD_OFFSETS_TO_TXN ->
-                ((AddOffsetsToTxnRequestFilter) filter).onAddOffsetsToTxnRequest(apiVersion, header, (AddOffsetsToTxnRequestData) body, filterContext);
+                ((AddOffsetsToTxnRequestFilter) filter).onAddOffsetsToTxnRequest(apiVersion, header, (AddOffsetsToTxnRequestData) body, (KrpcFilterContext<AddOffsetsToTxnRequestData, AddOffsetsToTxnResponseData>)filterContext);
             case ADD_PARTITIONS_TO_TXN ->
                 ((AddPartitionsToTxnRequestFilter) filter).onAddPartitionsToTxnRequest(apiVersion, header, (AddPartitionsToTxnRequestData) body, filterContext);
             case ALLOCATE_PRODUCER_IDS ->
@@ -296,11 +296,11 @@ public class SpecificFilterInvoker implements FilterInvoker {
      * @return
      */
     @Override
-    public CompletionStage<ResponseFilterResult> onResponse(ApiKeys apiKey,
-                                                            short apiVersion,
-                                                            ResponseHeaderData header,
-                                                            ApiMessage body,
-                                                            KrpcFilterContext filterContext) {
+    public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey,
+                                                                        short apiVersion,
+                                                                        ResponseHeaderData header,
+                                                                        ApiMessage body,
+                                                                        KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
         return switch (apiKey) {
             case ADD_OFFSETS_TO_TXN ->
                 ((AddOffsetsToTxnResponseFilter) filter).onAddOffsetsToTxnResponse(apiVersion, header, (AddOffsetsToTxnResponseData) body, filterContext);

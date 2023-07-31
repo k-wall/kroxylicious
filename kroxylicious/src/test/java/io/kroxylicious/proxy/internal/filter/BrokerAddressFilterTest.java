@@ -78,7 +78,7 @@ class BrokerAddressFilterTest {
     private EndpointReconciler endpointReconciler;
 
     @Mock
-    private KrpcFilterContext context;
+    private KrpcFilterContext<ApiMessage, ApiMessage> context;
 
     @Captor
     private ArgumentCaptor<ApiMessage> apiMessageCaptor;

@@ -68,7 +68,7 @@ class MultiTenantTransformationFilterTest {
 
     private final FilterInvoker invoker = getOnlyElement(FilterAndInvoker.build(filter)).invoker();
 
-    private final KrpcFilterContext context = mock(KrpcFilterContext.class);
+    private final KrpcFilterContext<ApiMessage, ApiMessage> context = mock(KrpcFilterContext.class);
 
     @Captor
     private ArgumentCaptor<ApiMessage> apiMessageCaptor;

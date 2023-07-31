@@ -18,8 +18,9 @@ public class CreateTopicRejectFilter implements CreateTopicsRequestFilter {
     public static final String ERROR_MESSAGE = "rejecting all topics";
 
     @Override
-    public CompletionStage<? extends FilterResult> onCreateTopicsRequest(short apiVersion, RequestHeaderData header, CreateTopicsRequestData request,
-                                                                         KrpcFilterContext context) {
+    public CompletionStage<RequestFilterResult<CreateTopicsRequestData>> onCreateTopicsRequest(short apiVersion, RequestHeaderData header,
+                                                                                               CreateTopicsRequestData request,
+                                                                                               KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
         CreateTopicsResponseData response = new CreateTopicsResponseData();
         CreateTopicsResponseData.CreatableTopicResultCollection topics = new CreateTopicsResponseData.CreatableTopicResultCollection();
         allocateByteBufToTestKroxyliciousReleasesIt(context);
@@ -30,10 +31,10 @@ public class CreateTopicRejectFilter implements CreateTopicsRequestFilter {
             topics.add(result);
         });
         response.setTopics(topics);
-        return context.completedForwardResponse(response);
+        return context.completedShortCircuitResponse(response);
     }
 
-    private static void allocateByteBufToTestKroxyliciousReleasesIt(KrpcFilterContext context) {
+    private static void allocateByteBufToTestKroxyliciousReleasesIt(KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
         context.createByteBufferOutputStream(4000);
     }
 }

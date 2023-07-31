@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.record.CompressionType;
@@ -46,7 +47,7 @@ class SampleProduceRequestFilterTest {
     private static final String CONFIG_FIND_VALUE = "from";
     private static final String CONFIG_REPLACE_VALUE = "to";
 
-    private KrpcFilterContext context;
+    private KrpcFilterContext<ProduceRequestData, ProduceResponseData> context;
 
     @Captor
     private ArgumentCaptor<ApiMessage> apiMessageCaptor = ArgumentCaptor.forClass(ApiMessage.class);
@@ -98,7 +99,7 @@ class SampleProduceRequestFilterTest {
 
     private void setupContextMock() {
         context = mock(KrpcFilterContext.class);
-        var apiMessageCaptor = ArgumentCaptor.forClass(ApiMessage.class);
+        var apiMessageCaptor = ArgumentCaptor.forClass(ProduceRequestData.class);
         var requestHeaderDataCaptor = ArgumentCaptor.forClass(RequestHeaderData.class);
 
         when(context.completedForwardRequest(requestHeaderDataCaptor.capture(), apiMessageCaptor.capture()))
