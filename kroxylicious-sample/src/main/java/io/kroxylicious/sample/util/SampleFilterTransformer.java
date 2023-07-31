@@ -35,7 +35,7 @@ public class SampleFilterTransformer {
      * @param context the context
      * @param config the transform configuration
      */
-    public static void transform(ProduceRequestData.PartitionProduceData partitionData, KrpcFilterContext<?, ?> context, SampleFilterConfig config) {
+    public static void transform(ProduceRequestData.PartitionProduceData partitionData, KrpcFilterContext context, SampleFilterConfig config) {
         partitionData.setRecords(transformPartitionRecords((MemoryRecords) partitionData.records(), context, config.getFindValue(), config.getReplacementValue()));
     }
 
@@ -45,7 +45,7 @@ public class SampleFilterTransformer {
      * @param context the context
      * @param config the transform configuration
      */
-    public static void transform(FetchResponseData.PartitionData partitionData, KrpcFilterContext<?, ?> context, SampleFilterConfig config) {
+    public static void transform(FetchResponseData.PartitionData partitionData, KrpcFilterContext context, SampleFilterConfig config) {
         partitionData.setRecords(transformPartitionRecords((MemoryRecords) partitionData.records(), context, config.getFindValue(), config.getReplacementValue()));
     }
 
@@ -57,7 +57,7 @@ public class SampleFilterTransformer {
      * @param replacementValue the replacement value
      * @return the transformed partition records
      */
-    private static MemoryRecords transformPartitionRecords(MemoryRecords records, KrpcFilterContext<?, ?> context, String findValue,
+    private static MemoryRecords transformPartitionRecords(MemoryRecords records, KrpcFilterContext context, String findValue,
                                                            String replacementValue) {
         ByteBufferOutputStream stream = context.createByteBufferOutputStream(records.sizeInBytes());
         MemoryRecordsBuilder newRecords = createMemoryRecordsBuilder(stream);

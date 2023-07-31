@@ -12,7 +12,8 @@
   msgType=messageSpec.type?lower_case
 />
 
-<#assign filterReturnType>CompletionStage<<#if messageSpec.type?lower_case == 'response'>ResponseFilterResult<#else>RequestFilterResult</#if><${dataClass}>></#assign>
+<#--<#assign filterReturnType>CompletionStage<<#if messageSpec.type?lower_case == 'response'>ResponseFilterResult<#else>RequestFilterResult</#if><${dataClass}>></#assign>-->
+<#assign filterReturnType>CompletionStage<?></#assign>
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with

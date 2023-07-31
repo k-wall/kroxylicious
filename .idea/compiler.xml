@@ -26,7 +26,6 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="kroxylicious-bom" target="1.5" />
       <module name="kroxylicious-filter-api-bom" target="1.5" />
     </bytecodeTargetLevel>
   </component>

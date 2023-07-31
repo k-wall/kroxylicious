@@ -20,7 +20,7 @@ public class CreateTopicRejectFilter implements CreateTopicsRequestFilter {
     @Override
     public CompletionStage<RequestFilterResult<CreateTopicsRequestData>> onCreateTopicsRequest(short apiVersion, RequestHeaderData header,
                                                                                                CreateTopicsRequestData request,
-                                                                                               KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
+                                                                                               KrpcFilterContext context) {
         CreateTopicsResponseData response = new CreateTopicsResponseData();
         CreateTopicsResponseData.CreatableTopicResultCollection topics = new CreateTopicsResponseData.CreatableTopicResultCollection();
         allocateByteBufToTestKroxyliciousReleasesIt(context);
@@ -34,7 +34,7 @@ public class CreateTopicRejectFilter implements CreateTopicsRequestFilter {
         return context.completedShortCircuitResponse(response);
     }
 
-    private static void allocateByteBufToTestKroxyliciousReleasesIt(KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
+    private static void allocateByteBufToTestKroxyliciousReleasesIt(KrpcFilterContext context) {
         context.createByteBufferOutputStream(4000);
     }
 }

@@ -27,20 +27,20 @@ public class FourInterfaceFilter implements ProduceResponseFilter, ProduceReques
 
     @Override
     public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request,
-                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                     KrpcFilterContext context) {
         return null;
     }
 
     @Override
     public CompletionStage<ResponseFilterResult<ProduceResponseData>> onProduceResponse(short apiVersion, ResponseHeaderData header, ProduceResponseData response,
-                                                                                        KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                        KrpcFilterContext context) {
         return null;
     }
 
     @Override
     public CompletionStage<RequestFilterResult<CreateTopicsRequestData>> onCreateTopicsRequest(short apiVersion, RequestHeaderData header,
                                                                                                CreateTopicsRequestData request,
-                                                                                               KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
+                                                                                               KrpcFilterContext context) {
 
         return null;
     }
@@ -48,7 +48,7 @@ public class FourInterfaceFilter implements ProduceResponseFilter, ProduceReques
     @Override
     public CompletionStage<ResponseFilterResult<CreateTopicsResponseData>> onCreateTopicsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                   CreateTopicsResponseData response,
-                                                                                                  KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
+                                                                                                  KrpcFilterContext context) {
 
         return null;
     }

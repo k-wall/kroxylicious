@@ -43,7 +43,7 @@ public class RequestResponseMarkingFilter implements RequestFilter, ResponseFilt
 
     @Override
     public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey, RequestHeaderData header, ApiMessage body,
-                                                                      KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                      KrpcFilterContext filterContext) {
         if (keysToMark.contains(apiKey)) {
             body.unknownTaggedFields().add(createTaggedField("request"));
         }
@@ -52,7 +52,7 @@ public class RequestResponseMarkingFilter implements RequestFilter, ResponseFilt
 
     @Override
     public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey, ResponseHeaderData header, ApiMessage body,
-                                                                        KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                        KrpcFilterContext filterContext) {
         if (keysToMark.contains(apiKey)) {
             body.unknownTaggedFields().add(createTaggedField("response"));
         }

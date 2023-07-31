@@ -66,7 +66,7 @@ public class ProduceValidationFilter implements ProduceRequestFilter, ProduceRes
 
     @Override
     public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request,
-                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                     KrpcFilterContext context) {
         ProduceRequestValidationResult result = validator.validateRequest(request);
         if (result.isAnyTopicPartitionInvalid()) {
             return handleInvalidTopicPartitions(header, request, context, result);
@@ -77,7 +77,7 @@ public class ProduceValidationFilter implements ProduceRequestFilter, ProduceRes
     }
 
     private CompletionStage<RequestFilterResult<ProduceRequestData>> handleInvalidTopicPartitions(RequestHeaderData header, ProduceRequestData request,
-                                                                                                  KrpcFilterContext<ProduceRequestData, ProduceResponseData> context,
+                                                                                                  KrpcFilterContext context,
                                                                                                   ProduceRequestValidationResult result) {
         if (result.isAllTopicPartitionsInvalid()) {
             LOGGER.debug("all topic-partitions for request contained invalid data: {}", result);
@@ -152,7 +152,7 @@ public class ProduceValidationFilter implements ProduceRequestFilter, ProduceRes
 
     @Override
     public CompletionStage<ResponseFilterResult<ProduceResponseData>> onProduceResponse(short apiVersion, ResponseHeaderData header, ProduceResponseData response,
-                                                                                        KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                        KrpcFilterContext context) {
         ProduceRequestValidationResult produceRequestValidationResult = correlatedResults.remove(header.correlationId());
         if (produceRequestValidationResult != null) {
             LOGGER.debug("augmenting invalid topic-partition details into response: {}", produceRequestValidationResult);

@@ -6,11 +6,11 @@
 
 -->
 <#assign
-  base=messageSpec.name?replace("Request|Response", "", "r")
   dataClass="${messageSpec.name}Data"
   filterClass="${messageSpec.name}Filter"
   msgType=messageSpec.type?lower_case
 />
+<#assign headerClass><#if messageSpec.type?lower_case == 'response'>ResponseHeaderData<#else>RequestHeaderData</#if></#assign>
 <#assign filterReturnType>CompletionStage<<#if messageSpec.type?lower_case == 'response'>ResponseFilterResult<#else>RequestFilterResult</#if><${dataClass}>></#assign>
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -32,13 +32,8 @@ package io.kroxylicious.proxy.filter;
 
 import java.util.concurrent.CompletionStage;
 
-import org.apache.kafka.common.message.${base}RequestData;
-import org.apache.kafka.common.message.${base}ResponseData;
-<#if messageSpec.type?lower_case == 'response'>
-import org.apache.kafka.common.message.ResponseHeaderData;
-<#else>
-import org.apache.kafka.common.message.RequestHeaderData;
-</#if>
+import org.apache.kafka.common.message.${dataClass};
+import org.apache.kafka.common.message.${headerClass};
 
 /**
  * A stateless filter for ${messageSpec.name}s.
@@ -60,7 +55,7 @@ public interface ${filterClass} extends KrpcFilter {
 
     /**
      * Handle the given {@code ${msgType}},
-     * returning the {@code ${messageSpec.name}Data} instance to be passed to the next filter.
+     * returning the {@code ${dataClass}} instance to be passed to the next filter.
      * The implementation may modify the given {@code data} in-place and return it,
      * or instantiate a new one.
      *
@@ -68,9 +63,8 @@ public interface ${filterClass} extends KrpcFilter {
      * @param header <#if messageSpec.type?lower_case == 'response'>response<#else>request</#if> header.
      * @param ${msgType} The KRPC message to handle.
      * @param context The context.
-     * @return CompletionStage that will yield a <#if messageSpec.type?lower_case == 'response'>{@link ResponseFilterResult}<#else>{@link FilterResult}</#if>
-     *         containing the ${messageSpec.type?lower_case} to be forwarded.
+     * @return {@link ${filterReturnType}} that will yield a ${messageSpec.type?lower_case} to be forwarded.
      */
-    ${filterReturnType} on${messageSpec.name}(short apiVersion, <#if messageSpec.type?lower_case == 'response'>ResponseHeaderData<#else>RequestHeaderData</#if> header, ${dataClass} ${msgType}, KrpcFilterContext<${base}RequestData, ${base}ResponseData> context);
+    ${filterReturnType} on${messageSpec.name}(short apiVersion, ${headerClass} header, ${dataClass} ${msgType}, KrpcFilterContext context);
 
 }

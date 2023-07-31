@@ -13,7 +13,6 @@ import java.util.concurrent.CompletionStage;
 
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceRequestData.PartitionProduceData;
-import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionType;
@@ -76,12 +75,12 @@ public class ProduceRequestTransformationFilter implements ProduceRequestFilter 
 
     @Override
     public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData data,
-                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                     KrpcFilterContext context) {
         applyTransformation(context, data);
         return context.completedForwardRequest(header, data);
     }
 
-    private void applyTransformation(KrpcFilterContext<ProduceRequestData, ProduceResponseData> ctx, ProduceRequestData req) {
+    private void applyTransformation(KrpcFilterContext ctx, ProduceRequestData req) {
         req.topicData().forEach(topicData -> {
             for (PartitionProduceData partitionData : topicData.partitionData()) {
                 MemoryRecords records = (MemoryRecords) partitionData.records();

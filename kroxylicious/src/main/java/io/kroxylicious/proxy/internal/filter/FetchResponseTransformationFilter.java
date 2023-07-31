@@ -14,7 +14,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchResponseData.FetchableTopicResponse;
 import org.apache.kafka.common.message.FetchResponseData.PartitionData;
@@ -76,7 +75,7 @@ public class FetchResponseTransformationFilter implements FetchResponseFilter {
 
     @Override
     public CompletionStage<ResponseFilterResult<FetchResponseData>> onFetchResponse(short apiVersion, ResponseHeaderData header, FetchResponseData fetchResponse,
-                                                                                    KrpcFilterContext<FetchRequestData, FetchResponseData> context) {
+                                                                                    KrpcFilterContext context) {
         List<MetadataRequestData.MetadataRequestTopic> requestTopics = fetchResponse.responses().stream()
                 .filter(t -> t.topic().isEmpty())
                 .map(fetchableTopicResponse -> {
@@ -113,7 +112,7 @@ public class FetchResponseTransformationFilter implements FetchResponseFilter {
         }
     }
 
-    private void applyTransformation(KrpcFilterContext<FetchRequestData, FetchResponseData> context, FetchResponseData responseData) {
+    private void applyTransformation(KrpcFilterContext context, FetchResponseData responseData) {
         for (FetchableTopicResponse topicData : responseData.responses()) {
             for (PartitionData partitionData : topicData.partitions()) {
                 MemoryRecords records = (MemoryRecords) partitionData.records();

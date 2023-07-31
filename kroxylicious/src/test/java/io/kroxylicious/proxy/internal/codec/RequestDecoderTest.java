@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 
 import org.apache.kafka.common.message.ApiVersionsRequestData;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -69,7 +68,7 @@ public class RequestDecoderTest extends AbstractCodecTest {
                                     @Override
                                     public CompletionStage<RequestFilterResult<ApiVersionsRequestData>> onApiVersionsRequest(short apiVersion, RequestHeaderData header,
                                                                                                                              ApiVersionsRequestData request,
-                                                                                                                             KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
+                                                                                                                             KrpcFilterContext context) {
                                         return context.completedForwardRequest(header, request);
                                     }
                                 }))),

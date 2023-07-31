@@ -18,7 +18,7 @@ import io.kroxylicious.proxy.filter.FilterResultBuilder.ResponseFilterResultBuil
 /**
  * A context to allow filters to interact with other filters and the pipeline.
  */
-public interface KrpcFilterContext<RQD extends ApiMessage, RSD extends ApiMessage> {
+public interface KrpcFilterContext {
     /**
      * A description of this channel.
      * @return A description of this channel (typically used for logging).
@@ -48,11 +48,11 @@ public interface KrpcFilterContext<RQD extends ApiMessage, RSD extends ApiMessag
     // */
     // void forwardRequest(RequestHeaderData header, ApiMessage request);
 
-    default CompletionStage<RequestFilterResult<RQD>> completedForwardRequest(RQD request) {
+    default CompletionStage<RequestFilterResult<ApiMessage>> completedForwardRequest(ApiMessage request) {
         return completedForwardRequest(null, request);
     }
 
-    CompletionStage<RequestFilterResult<RQD>> completedForwardRequest(RequestHeaderData header, RQD request);
+    CompletionStage<RequestFilterResult<ApiMessage>> completedForwardRequest(RequestHeaderData header, ApiMessage request);
 
     /**
      * Send a message from a filter towards the broker, invoking upstream filters
@@ -93,19 +93,19 @@ public interface KrpcFilterContext<RQD extends ApiMessage, RSD extends ApiMessag
     // */
     // void forwardResponse(ApiMessage response);
 
-    default CompletionStage<ResponseFilterResult<RSD>> completedForwardResponse(RSD response) {
+    default CompletionStage<ResponseFilterResult<?>> completedForwardResponse(ApiMessage response) {
         return completedForwardResponse(null, response);
     }
 
-    ResponseFilterResultBuilder<RSD> responseFilterResultBuilder();
+    ResponseFilterResultBuilder<ApiMessage> responseFilterResultBuilder();
 
-    RequestFilterResultBuilder<RQD> requestFilterResultBuilder();
+    RequestFilterResultBuilder<ApiMessage> requestFilterResultBuilder();
 
-    CompletionStage<ResponseFilterResult<RSD>> completedForwardResponse(ResponseHeaderData header, RSD response);
+    CompletionStage<ResponseFilterResult<?>> completedForwardResponse(ResponseHeaderData header, ApiMessage response);
 
-    CompletionStage<RequestFilterResult<RQD>> completedShortCircuitResponse(ResponseHeaderData responseHeaderData, RSD response);
+    CompletionStage<RequestFilterResult<?>> completedShortCircuitResponse(ResponseHeaderData responseHeaderData, ApiMessage response);
 
-    default CompletionStage<RequestFilterResult<RQD>> completedShortCircuitResponse(RSD response) {
+    default CompletionStage<RequestFilterResult<?>> completedShortCircuitResponse(ApiMessage response) {
         return completedShortCircuitResponse(null, response);
     };
 

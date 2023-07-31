@@ -39,7 +39,7 @@ import io.kroxylicious.proxy.internal.util.ByteBufOutputStream;
 /**
  * Implementation of {@link KrpcFilterContext}.
  */
-class DefaultFilterContext implements KrpcFilterContext<ApiMessage, ApiMessage> {
+class DefaultFilterContext implements KrpcFilterContext {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultFilterContext.class);
 
@@ -227,12 +227,12 @@ class DefaultFilterContext implements KrpcFilterContext<ApiMessage, ApiMessage> 
     }
 
     @Override
-    public CompletionStage<ResponseFilterResult<ApiMessage>> completedForwardResponse(ResponseHeaderData header, ApiMessage response) {
+    public CompletionStage<ResponseFilterResult<?>> completedForwardResponse(ResponseHeaderData header, ApiMessage response) {
         return CompletableFuture.completedStage(responseFilterResultBuilder().withHeader(header).withMessage(response).build());
     }
 
     @Override
-    public CompletionStage<RequestFilterResult<ApiMessage>> completedShortCircuitResponse(ResponseHeaderData responseHeaderData, ApiMessage response) {
+    public CompletionStage<RequestFilterResult<?>> completedShortCircuitResponse(ResponseHeaderData responseHeaderData, ApiMessage response) {
         FilterResultBuilder.ShortCircuitResponseFilterResultBuilder shortCircuitResponseFilterResultBuilder = requestFilterResultBuilder()
                 .withShortCircuitResponse();
         shortCircuitResponseFilterResultBuilder.withMessage(response).withHeader(responseHeaderData);

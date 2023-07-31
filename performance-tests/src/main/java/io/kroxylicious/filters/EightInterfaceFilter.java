@@ -36,20 +36,20 @@ public class EightInterfaceFilter implements ProduceResponseFilter, ProduceReque
 
     @Override
     public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request,
-                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                     KrpcFilterContext context) {
         return null;
     }
 
     @Override
     public CompletionStage<ResponseFilterResult<ProduceResponseData>> onProduceResponse(short apiVersion, ResponseHeaderData header, ProduceResponseData response,
-                                                                                        KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                        KrpcFilterContext context) {
         return null;
     }
 
     @Override
     public CompletionStage<RequestFilterResult<CreateTopicsRequestData>> onCreateTopicsRequest(short apiVersion, RequestHeaderData header,
                                                                                                CreateTopicsRequestData request,
-                                                                                               KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
+                                                                                               KrpcFilterContext context) {
 
         return null;
     }
@@ -57,7 +57,7 @@ public class EightInterfaceFilter implements ProduceResponseFilter, ProduceReque
     @Override
     public CompletionStage<ResponseFilterResult<CreateTopicsResponseData>> onCreateTopicsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                   CreateTopicsResponseData response,
-                                                                                                  KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
+                                                                                                  KrpcFilterContext context) {
 
         return null;
     }
@@ -65,7 +65,7 @@ public class EightInterfaceFilter implements ProduceResponseFilter, ProduceReque
     @Override
     public CompletionStage<RequestFilterResult<DeleteTopicsRequestData>> onDeleteTopicsRequest(short apiVersion, RequestHeaderData header,
                                                                                                DeleteTopicsRequestData request,
-                                                                                               KrpcFilterContext<DeleteTopicsRequestData, DeleteTopicsResponseData> context) {
+                                                                                               KrpcFilterContext context) {
 
         return null;
     }
@@ -73,7 +73,7 @@ public class EightInterfaceFilter implements ProduceResponseFilter, ProduceReque
     @Override
     public CompletionStage<ResponseFilterResult<DeleteTopicsResponseData>> onDeleteTopicsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                   DeleteTopicsResponseData response,
-                                                                                                  KrpcFilterContext<DeleteTopicsRequestData, DeleteTopicsResponseData> context) {
+                                                                                                  KrpcFilterContext context) {
 
         return null;
     }
@@ -81,7 +81,7 @@ public class EightInterfaceFilter implements ProduceResponseFilter, ProduceReque
     @Override
     public CompletionStage<RequestFilterResult<DescribeGroupsRequestData>> onDescribeGroupsRequest(short apiVersion, RequestHeaderData header,
                                                                                                    DescribeGroupsRequestData request,
-                                                                                                   KrpcFilterContext<DescribeGroupsRequestData, DescribeGroupsResponseData> context) {
+                                                                                                   KrpcFilterContext context) {
 
         return null;
     }
@@ -89,7 +89,7 @@ public class EightInterfaceFilter implements ProduceResponseFilter, ProduceReque
     @Override
     public CompletionStage<ResponseFilterResult<DescribeGroupsResponseData>> onDescribeGroupsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                       DescribeGroupsResponseData response,
-                                                                                                      KrpcFilterContext<DescribeGroupsRequestData, DescribeGroupsResponseData> context) {
+                                                                                                      KrpcFilterContext context) {
 
         return null;
     }

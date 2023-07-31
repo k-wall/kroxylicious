@@ -86,7 +86,7 @@ public class InvokerDispatchBenchmark {
         String invoker;
 
         private RequestHeaderData requestHeaders;
-        private KrpcFilterContext<ApiMessage, ApiMessage> filterContext;
+        private KrpcFilterContext filterContext;
         private Map.Entry<ApiKeys, ApiMessage>[] apiMessages;
 
         @SuppressWarnings("unchecked")
@@ -145,7 +145,7 @@ public class InvokerDispatchBenchmark {
     }
 
     private static void invokeHandleRequest(FilterInvoker[] filters, Map.Entry<ApiKeys, ApiMessage>[] apiMessages, RequestHeaderData requestHeaders,
-                                            KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                            KrpcFilterContext filterContext) {
         for (Map.Entry<ApiKeys, ApiMessage> entry : apiMessages) {
             final ApiKeys apiKey = entry.getKey();
             final short apiVersion = apiKey.latestVersion();
@@ -157,7 +157,7 @@ public class InvokerDispatchBenchmark {
         }
     }
 
-    private static class StubFilterContext implements KrpcFilterContext<ApiMessage, ApiMessage> {
+    private static class StubFilterContext implements KrpcFilterContext {
         @Override
         public String channelDescriptor() {
             return null;
@@ -194,12 +194,12 @@ public class InvokerDispatchBenchmark {
         }
 
         @Override
-        public CompletionStage<ResponseFilterResult<ApiMessage>> completedForwardResponse(ResponseHeaderData header, ApiMessage response) {
+        public CompletionStage<ResponseFilterResult<?>> completedForwardResponse(ResponseHeaderData header, ApiMessage response) {
             return null;
         }
 
         @Override
-        public CompletionStage<RequestFilterResult<ApiMessage>> completedShortCircuitResponse(ResponseHeaderData responseHeaderData, ApiMessage response) {
+        public CompletionStage<RequestFilterResult<?>> completedShortCircuitResponse(ResponseHeaderData responseHeaderData, ApiMessage response) {
             return null;
         }
     }

@@ -176,10 +176,10 @@ public class SpecificFilterInvoker implements FilterInvoker {
                                                                       short apiVersion,
                                                                       RequestHeaderData header,
                                                                       ApiMessage body,
-                                                                      KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                      KrpcFilterContext filterContext) {
         return switch (apiKey) {
             case ADD_OFFSETS_TO_TXN ->
-                ((AddOffsetsToTxnRequestFilter) filter).onAddOffsetsToTxnRequest(apiVersion, header, (AddOffsetsToTxnRequestData) body, (KrpcFilterContext<AddOffsetsToTxnRequestData, AddOffsetsToTxnResponseData>)filterContext);
+                ((AddOffsetsToTxnRequestFilter) filter).onAddOffsetsToTxnRequest(apiVersion, header, (AddOffsetsToTxnRequestData) body, (KrpcFilterContext)filterContext);
             case ADD_PARTITIONS_TO_TXN ->
                 ((AddPartitionsToTxnRequestFilter) filter).onAddPartitionsToTxnRequest(apiVersion, header, (AddPartitionsToTxnRequestData) body, filterContext);
             case ALLOCATE_PRODUCER_IDS ->
@@ -300,7 +300,7 @@ public class SpecificFilterInvoker implements FilterInvoker {
                                                                         short apiVersion,
                                                                         ResponseHeaderData header,
                                                                         ApiMessage body,
-                                                                        KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                        KrpcFilterContext filterContext) {
         return switch (apiKey) {
             case ADD_OFFSETS_TO_TXN ->
                 ((AddOffsetsToTxnResponseFilter) filter).onAddOffsetsToTxnResponse(apiVersion, header, (AddOffsetsToTxnResponseData) body, filterContext);

@@ -30,28 +30,28 @@ public class FourInterfaceFilter3 implements ProduceResponseFilter, ProduceReque
 
     @Override
     public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request,
-                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                     KrpcFilterContext context) {
         Blackhole.consumeCPU(CONSUME_TOKENS);
         return null;
     }
 
     @Override
     public CompletionStage<ResponseFilterResult<ProduceResponseData>> onProduceResponse(short apiVersion, ResponseHeaderData header, ProduceResponseData response,
-                                                                                        KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                        KrpcFilterContext context) {
         Blackhole.consumeCPU(CONSUME_TOKENS);
         return null;
     }
 
     @Override
     public CompletionStage<RequestFilterResult<FetchRequestData>> onFetchRequest(short apiVersion, RequestHeaderData header, FetchRequestData request,
-                                                                                 KrpcFilterContext<FetchRequestData, FetchResponseData> context) {
+                                                                                 KrpcFilterContext context) {
         Blackhole.consumeCPU(CONSUME_TOKENS);
         return null;
     }
 
     @Override
     public CompletionStage<ResponseFilterResult<FetchResponseData>> onFetchResponse(short apiVersion, ResponseHeaderData header, FetchResponseData response,
-                                                                                    KrpcFilterContext<FetchRequestData, FetchResponseData> context) {
+                                                                                    KrpcFilterContext context) {
         Blackhole.consumeCPU(CONSUME_TOKENS);
         return null;
     }

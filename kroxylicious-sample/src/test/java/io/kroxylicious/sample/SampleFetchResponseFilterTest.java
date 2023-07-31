@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.kafka.common.message.ApiMessageType;
-import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.record.CompressionType;
@@ -45,7 +44,7 @@ class SampleFetchResponseFilterTest {
     private static final String CONFIG_FIND_VALUE = "from";
     private static final String CONFIG_REPLACE_VALUE = "to";
 
-    private KrpcFilterContext<FetchRequestData, FetchResponseData> context;
+    private KrpcFilterContext context;
 
     private SampleFetchResponseFilter filter;
     private ResponseHeaderData headerData;

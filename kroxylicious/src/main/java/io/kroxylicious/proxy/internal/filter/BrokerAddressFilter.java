@@ -13,13 +13,10 @@ import java.util.function.Function;
 import java.util.function.ObjIntConsumer;
 import java.util.function.ToIntFunction;
 
-import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
-import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
-import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker;
 import org.apache.kafka.common.message.ResponseHeaderData;
@@ -53,7 +50,7 @@ public class BrokerAddressFilter implements MetadataResponseFilter, FindCoordina
 
     @Override
     public CompletionStage<ResponseFilterResult<MetadataResponseData>> onMetadataResponse(short apiVersion, ResponseHeaderData header, MetadataResponseData data,
-                                                                                          KrpcFilterContext<MetadataRequestData, MetadataResponseData> context) {
+                                                                                          KrpcFilterContext context) {
         var nodeMap = new HashMap<Integer, HostPort>();
         for (MetadataResponseBroker broker : data.brokers()) {
             nodeMap.put(broker.nodeId(), new HostPort(broker.host(), broker.port()));
@@ -67,7 +64,7 @@ public class BrokerAddressFilter implements MetadataResponseFilter, FindCoordina
     @Override
     public CompletionStage<ResponseFilterResult<DescribeClusterResponseData>> onDescribeClusterResponse(short apiVersion, ResponseHeaderData header,
                                                                                                         DescribeClusterResponseData data,
-                                                                                                        KrpcFilterContext<DescribeClusterRequestData, DescribeClusterResponseData> context) {
+                                                                                                        KrpcFilterContext context) {
         var nodeMap = new HashMap<Integer, HostPort>();
         for (DescribeClusterBroker broker : data.brokers()) {
             nodeMap.put(broker.brokerId(), new HostPort(broker.host(), broker.port()));
@@ -81,7 +78,7 @@ public class BrokerAddressFilter implements MetadataResponseFilter, FindCoordina
     @Override
     public CompletionStage<ResponseFilterResult<FindCoordinatorResponseData>> onFindCoordinatorResponse(short apiVersion, ResponseHeaderData header,
                                                                                                         FindCoordinatorResponseData data,
-                                                                                                        KrpcFilterContext<FindCoordinatorRequestData, FindCoordinatorResponseData> context) {
+                                                                                                        KrpcFilterContext context) {
         // Version 4+
         for (Coordinator coordinator : data.coordinators()) {
             // If the coordinator is not yet available, the server returns a nodeId of -1.
@@ -97,7 +94,7 @@ public class BrokerAddressFilter implements MetadataResponseFilter, FindCoordina
         return context.completedForwardResponse(header, data);
     }
 
-    private <T> void apply(KrpcFilterContext<?, ?> context, T broker, Function<T, Integer> nodeIdGetter, Function<T, String> hostGetter,
+    private <T> void apply(KrpcFilterContext context, T broker, Function<T, Integer> nodeIdGetter, Function<T, String> hostGetter,
                            ToIntFunction<T> portGetter,
                            BiConsumer<T, String> hostSetter,
                            ObjIntConsumer<T> portSetter) {

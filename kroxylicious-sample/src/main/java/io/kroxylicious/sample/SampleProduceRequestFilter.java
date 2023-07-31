@@ -10,7 +10,6 @@ import java.util.concurrent.CompletionStage;
 
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceRequestData.PartitionProduceData;
-import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.RequestHeaderData;
 
 import io.micrometer.core.instrument.Metrics;
@@ -62,7 +61,7 @@ public class SampleProduceRequestFilter implements ProduceRequestFilter {
      */
     @Override
     public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request,
-                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                     KrpcFilterContext context) {
         this.timer.record(() -> applyTransformation(request, context)); // We're timing this to report how long it takes through Micrometer
 
         return context.completedForwardRequest(header, request);
@@ -73,7 +72,7 @@ public class SampleProduceRequestFilter implements ProduceRequestFilter {
      * @param request the request to be transformed
      * @param context the context
      */
-    private void applyTransformation(ProduceRequestData request, KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+    private void applyTransformation(ProduceRequestData request, KrpcFilterContext context) {
         request.topicData().forEach(topicData -> {
             for (PartitionProduceData partitionData : topicData.partitionData()) {
                 SampleFilterTransformer.transform(partitionData, context, this.config);

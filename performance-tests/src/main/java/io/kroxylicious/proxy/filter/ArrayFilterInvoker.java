@@ -458,7 +458,7 @@ public class ArrayFilterInvoker implements FilterInvoker {
                                                                       short apiVersion,
                                                                       RequestHeaderData header,
                                                                       ApiMessage body,
-                                                                      KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                      KrpcFilterContext filterContext) {
         FilterInvoker invoker = requestInvokers[apiKey.id];
         return invoker.onRequest(apiKey, apiVersion, header, body, filterContext);
     }
@@ -478,7 +478,7 @@ public class ArrayFilterInvoker implements FilterInvoker {
                                                                         short apiVersion,
                                                                         ResponseHeaderData header,
                                                                         ApiMessage body,
-                                                                        KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                        KrpcFilterContext filterContext) {
         FilterInvoker invoker = responseInvokers[apiKey.id];
         return invoker.onResponse(apiKey, apiVersion, header, body, filterContext);
     }

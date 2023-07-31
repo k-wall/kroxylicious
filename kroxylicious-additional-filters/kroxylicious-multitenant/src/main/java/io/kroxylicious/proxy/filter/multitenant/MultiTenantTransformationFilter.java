@@ -11,7 +11,6 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
-import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -23,24 +22,17 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeTransactionsRequestData;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.message.EndTxnRequestData;
-import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
-import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
-import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
-import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
-import org.apache.kafka.common.message.LeaveGroupResponseData;
-import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
-import org.apache.kafka.common.message.ListTransactionsRequestData;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataResponseData;
@@ -57,7 +49,6 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
-import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.slf4j.Logger;
@@ -145,7 +136,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<CreateTopicsRequestData>> onCreateTopicsRequest(short apiVersion, RequestHeaderData header,
                                                                                                CreateTopicsRequestData request,
-                                                                                               KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
+                                                                                               KrpcFilterContext context) {
         request.topics().forEach(topic -> applyTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardRequest(request);
     }
@@ -153,7 +144,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<CreateTopicsResponseData>> onCreateTopicsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                   CreateTopicsResponseData response,
-                                                                                                  KrpcFilterContext<CreateTopicsRequestData, CreateTopicsResponseData> context) {
+                                                                                                  KrpcFilterContext context) {
         response.topics().forEach(topic -> removeTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardResponse(response);
     }
@@ -161,7 +152,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<DeleteTopicsRequestData>> onDeleteTopicsRequest(short apiVersion, RequestHeaderData header,
                                                                                                DeleteTopicsRequestData request,
-                                                                                               KrpcFilterContext<DeleteTopicsRequestData, DeleteTopicsResponseData> context) {
+                                                                                               KrpcFilterContext context) {
         // the topicName field was present up to and including version 5
         request.setTopicNames(request.topicNames().stream().map(topic -> applyTenantPrefix(context, topic)).toList());
         request.topics().forEach(topic -> applyTenantPrefix(context, topic::name, topic::setName, topic.topicId() != null));
@@ -171,14 +162,14 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<DeleteTopicsResponseData>> onDeleteTopicsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                   DeleteTopicsResponseData response,
-                                                                                                  KrpcFilterContext<DeleteTopicsRequestData, DeleteTopicsResponseData> context) {
+                                                                                                  KrpcFilterContext context) {
         response.responses().forEach(topic -> removeTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardResponse(response);
     }
 
     @Override
     public CompletionStage<RequestFilterResult<MetadataRequestData>> onMetadataRequest(short apiVersion, RequestHeaderData header, MetadataRequestData request,
-                                                                                       KrpcFilterContext<MetadataRequestData, MetadataResponseData> context) {
+                                                                                       KrpcFilterContext context) {
         if (request.topics() != null) {
             // n.b. request.topics() == null used to query all the topics.
             request.topics().forEach(topic -> applyTenantPrefix(context, topic::name, topic::setName, false));
@@ -188,7 +179,7 @@ public class MultiTenantTransformationFilter
 
     @Override
     public CompletionStage<ResponseFilterResult<MetadataResponseData>> onMetadataResponse(short apiVersion, ResponseHeaderData header, MetadataResponseData response,
-                                                                                          KrpcFilterContext<MetadataRequestData, MetadataResponseData> context) {
+                                                                                          KrpcFilterContext context) {
         String tenantPrefix = getTenantPrefix(context);
         response.topics().removeIf(topic -> !topic.name().startsWith(tenantPrefix)); // TODO: allow kafka internal topics to be returned?
         response.topics().forEach(topic -> removeTenantPrefix(context, topic::name, topic::setName, false));
@@ -197,7 +188,7 @@ public class MultiTenantTransformationFilter
 
     @Override
     public CompletionStage<RequestFilterResult<ProduceRequestData>> onProduceRequest(short apiVersion, RequestHeaderData header, ProduceRequestData request,
-                                                                                     KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                     KrpcFilterContext context) {
         applyTenantPrefix(context, request::transactionalId, request::setTransactionalId, true);
         request.topicData().forEach(topic -> applyTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardRequest(request);
@@ -205,14 +196,14 @@ public class MultiTenantTransformationFilter
 
     @Override
     public CompletionStage<ResponseFilterResult<ProduceResponseData>> onProduceResponse(short apiVersion, ResponseHeaderData header, ProduceResponseData response,
-                                                                                        KrpcFilterContext<ProduceRequestData, ProduceResponseData> context) {
+                                                                                        KrpcFilterContext context) {
         response.responses().forEach(topic -> removeTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardResponse(response);
     }
 
     @Override
     public CompletionStage<RequestFilterResult<ListOffsetsRequestData>> onListOffsetsRequest(short apiVersion, RequestHeaderData header, ListOffsetsRequestData request,
-                                                                                             KrpcFilterContext<ListOffsetsRequestData, ListOffsetsResponseData> context) {
+                                                                                             KrpcFilterContext context) {
         request.topics().forEach(topic -> applyTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardRequest(request);
     }
@@ -220,14 +211,14 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<ListOffsetsResponseData>> onListOffsetsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                 ListOffsetsResponseData response,
-                                                                                                KrpcFilterContext<ListOffsetsRequestData, ListOffsetsResponseData> context) {
+                                                                                                KrpcFilterContext context) {
         response.topics().forEach(topic -> removeTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardResponse(response);
     }
 
     @Override
     public CompletionStage<RequestFilterResult<OffsetFetchRequestData>> onOffsetFetchRequest(short apiVersion, RequestHeaderData header, OffsetFetchRequestData request,
-                                                                                             KrpcFilterContext<OffsetFetchRequestData, OffsetFetchResponseData> context) {
+                                                                                             KrpcFilterContext context) {
         // the groupId and top-level topic fields were present up to and including version 7
         Optional.ofNullable(request.groupId()).ifPresent(groupId -> applyTenantPrefix(context, request::groupId, request::setGroupId, true));
         Optional.ofNullable(request.topics()).ifPresent(topics -> topics.forEach(topic -> applyTenantPrefix(context, topic::name, topic::setName, false)));
@@ -243,7 +234,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<OffsetFetchResponseData>> onOffsetFetchResponse(short apiVersion, ResponseHeaderData header,
                                                                                                 OffsetFetchResponseData response,
-                                                                                                KrpcFilterContext<OffsetFetchRequestData, OffsetFetchResponseData> context) {
+                                                                                                KrpcFilterContext context) {
         response.topics().forEach(topic -> removeTenantPrefix(context, topic::name, topic::setName, false));
         response.groups().forEach(responseGroup -> {
             removeTenantPrefix(context, responseGroup::groupId, responseGroup::setGroupId, false);
@@ -255,7 +246,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<OffsetForLeaderEpochRequestData>> onOffsetForLeaderEpochRequest(short apiVersion, RequestHeaderData header,
                                                                                                                OffsetForLeaderEpochRequestData request,
-                                                                                                               KrpcFilterContext<OffsetForLeaderEpochRequestData, OffsetForLeaderEpochResponseData> context) {
+                                                                                                               KrpcFilterContext context) {
         request.topics().forEach(topic -> applyTenantPrefix(context, topic::topic, topic::setTopic, false));
         return context.completedForwardRequest(request);
     }
@@ -263,7 +254,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<OffsetForLeaderEpochResponseData>> onOffsetForLeaderEpochResponse(short apiVersion, ResponseHeaderData header,
                                                                                                                   OffsetForLeaderEpochResponseData response,
-                                                                                                                  KrpcFilterContext<OffsetForLeaderEpochRequestData, OffsetForLeaderEpochResponseData> context) {
+                                                                                                                  KrpcFilterContext context) {
         response.topics().forEach(topic -> removeTenantPrefix(context, topic::topic, topic::setTopic, false));
         return context.completedForwardResponse(response);
     }
@@ -271,7 +262,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<OffsetCommitRequestData>> onOffsetCommitRequest(short apiVersion, RequestHeaderData header,
                                                                                                OffsetCommitRequestData request,
-                                                                                               KrpcFilterContext<OffsetCommitRequestData, OffsetCommitResponseData> context) {
+                                                                                               KrpcFilterContext context) {
         applyTenantPrefix(context, request::groupId, request::setGroupId, false);
         request.topics().forEach(topic -> applyTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardRequest(request);
@@ -280,7 +271,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<OffsetCommitResponseData>> onOffsetCommitResponse(short apiVersion, ResponseHeaderData header,
                                                                                                   OffsetCommitResponseData response,
-                                                                                                  KrpcFilterContext<OffsetCommitRequestData, OffsetCommitResponseData> context) {
+                                                                                                  KrpcFilterContext context) {
         response.topics().forEach(topic -> removeTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardResponse(response);
     }
@@ -288,7 +279,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<OffsetDeleteRequestData>> onOffsetDeleteRequest(short apiVersion, RequestHeaderData header,
                                                                                                OffsetDeleteRequestData request,
-                                                                                               KrpcFilterContext<OffsetDeleteRequestData, OffsetDeleteResponseData> context) {
+                                                                                               KrpcFilterContext context) {
         applyTenantPrefix(context, request::groupId, request::setGroupId, false);
         request.topics().forEach(topic -> applyTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardRequest(request);
@@ -297,21 +288,21 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<OffsetDeleteResponseData>> onOffsetDeleteResponse(short apiVersion, ResponseHeaderData header,
                                                                                                   OffsetDeleteResponseData response,
-                                                                                                  KrpcFilterContext<OffsetDeleteRequestData, OffsetDeleteResponseData> context) {
+                                                                                                  KrpcFilterContext context) {
         response.topics().forEach(topic -> removeTenantPrefix(context, topic::name, topic::setName, false));
         return context.completedForwardResponse(response);
     }
 
     @Override
     public CompletionStage<RequestFilterResult<FetchRequestData>> onFetchRequest(short apiVersion, RequestHeaderData header, FetchRequestData request,
-                                                                                 KrpcFilterContext<FetchRequestData, FetchResponseData> context) {
+                                                                                 KrpcFilterContext context) {
         request.topics().forEach(topic -> applyTenantPrefix(context, topic::topic, topic::setTopic, topic.topicId() != null));
         return context.completedForwardRequest(request);
     }
 
     @Override
     public CompletionStage<ResponseFilterResult<FetchResponseData>> onFetchResponse(short apiVersion, ResponseHeaderData header, FetchResponseData response,
-                                                                                    KrpcFilterContext<FetchRequestData, FetchResponseData> context) {
+                                                                                    KrpcFilterContext context) {
         response.responses().forEach(topic -> removeTenantPrefix(context, topic::topic, topic::setTopic, topic.topicId() != null));
         return context.completedForwardResponse(response);
     }
@@ -319,7 +310,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<FindCoordinatorRequestData>> onFindCoordinatorRequest(short apiVersion, RequestHeaderData header,
                                                                                                      FindCoordinatorRequestData request,
-                                                                                                     KrpcFilterContext<FindCoordinatorRequestData, FindCoordinatorResponseData> context) {
+                                                                                                     KrpcFilterContext context) {
         // the key fields was present up to and including version 4
         Optional.ofNullable(request.key()).ifPresent(unused -> applyTenantPrefix(context, request::key, request::setKey, true));
         request.setCoordinatorKeys(request.coordinatorKeys().stream().map(key -> applyTenantPrefix(context, key)).toList());
@@ -329,7 +320,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<FindCoordinatorResponseData>> onFindCoordinatorResponse(short apiVersion, ResponseHeaderData header,
                                                                                                         FindCoordinatorResponseData response,
-                                                                                                        KrpcFilterContext<FindCoordinatorRequestData, FindCoordinatorResponseData> context) {
+                                                                                                        KrpcFilterContext context) {
         response.coordinators().forEach(coordinator -> removeTenantPrefix(context, coordinator::key, coordinator::setKey, false));
         return context.completedForwardResponse(response);
     }
@@ -337,7 +328,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<ListGroupsResponseData>> onListGroupsResponse(short apiVersion, ResponseHeaderData header,
                                                                                               ListGroupsResponseData response,
-                                                                                              KrpcFilterContext<ListGroupsRequestData, ListGroupsResponseData> context) {
+                                                                                              KrpcFilterContext context) {
         var tenantPrefix = getTenantPrefix(context);
         var filteredGroups = response.groups().stream().filter(listedGroup -> listedGroup.groupId().startsWith(tenantPrefix)).toList();
         filteredGroups.forEach(listedGroup -> removeTenantPrefix(context, listedGroup::groupId, listedGroup::setGroupId, false));
@@ -347,7 +338,7 @@ public class MultiTenantTransformationFilter
 
     @Override
     public CompletionStage<RequestFilterResult<JoinGroupRequestData>> onJoinGroupRequest(short apiVersion, RequestHeaderData header, JoinGroupRequestData request,
-                                                                                         KrpcFilterContext<JoinGroupRequestData, JoinGroupResponseData> context) {
+                                                                                         KrpcFilterContext context) {
         var tenantPrefix = getTenantPrefix(context);
         request.setGroupId(tenantPrefix + request.groupId());
         return context.completedForwardRequest(request);
@@ -355,7 +346,7 @@ public class MultiTenantTransformationFilter
 
     @Override
     public CompletionStage<RequestFilterResult<SyncGroupRequestData>> onSyncGroupRequest(short apiVersion, RequestHeaderData header, SyncGroupRequestData request,
-                                                                                         KrpcFilterContext<SyncGroupRequestData, SyncGroupResponseData> context) {
+                                                                                         KrpcFilterContext context) {
         var tenantPrefix = getTenantPrefix(context);
         request.setGroupId(tenantPrefix + request.groupId());
         return context.completedForwardRequest(request);
@@ -363,7 +354,7 @@ public class MultiTenantTransformationFilter
 
     @Override
     public CompletionStage<RequestFilterResult<LeaveGroupRequestData>> onLeaveGroupRequest(short apiVersion, RequestHeaderData header, LeaveGroupRequestData request,
-                                                                                           KrpcFilterContext<LeaveGroupRequestData, LeaveGroupResponseData> context) {
+                                                                                           KrpcFilterContext context) {
         var tenantPrefix = getTenantPrefix(context);
         request.setGroupId(tenantPrefix + request.groupId());
         return context.completedForwardRequest(request);
@@ -371,7 +362,7 @@ public class MultiTenantTransformationFilter
 
     @Override
     public CompletionStage<RequestFilterResult<HeartbeatRequestData>> onHeartbeatRequest(short apiVersion, RequestHeaderData header, HeartbeatRequestData request,
-                                                                                         KrpcFilterContext<HeartbeatRequestData, HeartbeatResponseData> context) {
+                                                                                         KrpcFilterContext context) {
         var tenantPrefix = getTenantPrefix(context);
         request.setGroupId(tenantPrefix + request.groupId());
         return context.completedForwardRequest(request);
@@ -380,7 +371,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<DescribeGroupsRequestData>> onDescribeGroupsRequest(short apiVersion, RequestHeaderData header,
                                                                                                    DescribeGroupsRequestData request,
-                                                                                                   KrpcFilterContext<DescribeGroupsRequestData, DescribeGroupsResponseData> context) {
+                                                                                                   KrpcFilterContext context) {
         request.setGroups(request.groups().stream().map(group -> applyTenantPrefix(context, group)).toList());
         return context.completedForwardRequest(request);
     }
@@ -388,7 +379,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<DescribeGroupsResponseData>> onDescribeGroupsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                       DescribeGroupsResponseData response,
-                                                                                                      KrpcFilterContext<DescribeGroupsRequestData, DescribeGroupsResponseData> context) {
+                                                                                                      KrpcFilterContext context) {
         response.groups().forEach(group -> removeTenantPrefix(context, group::groupId, group::setGroupId, false));
         return context.completedForwardResponse(response);
     }
@@ -396,7 +387,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<InitProducerIdRequestData>> onInitProducerIdRequest(short apiVersion, RequestHeaderData header,
                                                                                                    InitProducerIdRequestData request,
-                                                                                                   KrpcFilterContext<InitProducerIdRequestData, InitProducerIdResponseData> context) {
+                                                                                                   KrpcFilterContext context) {
         applyTenantPrefix(context, request::transactionalId, request::setTransactionalId, true);
         return context.completedForwardRequest(request);
     }
@@ -404,7 +395,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<AddPartitionsToTxnRequestData>> onAddPartitionsToTxnRequest(short apiVersion, RequestHeaderData header,
                                                                                                            AddPartitionsToTxnRequestData request,
-                                                                                                           KrpcFilterContext<AddPartitionsToTxnRequestData, AddPartitionsToTxnResponseData> context) {
+                                                                                                           KrpcFilterContext context) {
         request.v3AndBelowTopics().forEach(topic -> applyTenantPrefix(context, topic::name, topic::setName, false));
         applyTenantPrefix(context, request::v3AndBelowTransactionalId, request::setV3AndBelowTransactionalId, true);
 
@@ -420,7 +411,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<AddPartitionsToTxnResponseData>> onAddPartitionsToTxnResponse(short apiVersion, ResponseHeaderData header,
                                                                                                               AddPartitionsToTxnResponseData response,
-                                                                                                              KrpcFilterContext<AddPartitionsToTxnRequestData, AddPartitionsToTxnResponseData> context) {
+                                                                                                              KrpcFilterContext context) {
         response.resultsByTopicV3AndBelow().forEach(results -> removeTenantPrefix(context, results::name, results::setName, false));
 
         response.resultsByTransaction().forEach(addPartitionsToTxnResult -> {
@@ -435,7 +426,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<AddOffsetsToTxnRequestData>> onAddOffsetsToTxnRequest(short apiVersion, RequestHeaderData header,
                                                                                                      AddOffsetsToTxnRequestData request,
-                                                                                                     KrpcFilterContext<AddOffsetsToTxnRequestData, AddOffsetsToTxnResponseData> context) {
+                                                                                                     KrpcFilterContext context) {
         var tenantPrefix = getTenantPrefix(context);
         request.setTransactionalId(tenantPrefix + request.transactionalId());
         request.setGroupId(tenantPrefix + request.groupId());
@@ -445,7 +436,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<TxnOffsetCommitRequestData>> onTxnOffsetCommitRequest(short apiVersion, RequestHeaderData header,
                                                                                                      TxnOffsetCommitRequestData request,
-                                                                                                     KrpcFilterContext<TxnOffsetCommitRequestData, TxnOffsetCommitResponseData> context) {
+                                                                                                     KrpcFilterContext context) {
         var tenantPrefix = getTenantPrefix(context);
         request.setTransactionalId(tenantPrefix + request.transactionalId());
         request.setGroupId(tenantPrefix + request.groupId());
@@ -456,7 +447,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<TxnOffsetCommitResponseData>> onTxnOffsetCommitResponse(short apiVersion, ResponseHeaderData header,
                                                                                                         TxnOffsetCommitResponseData response,
-                                                                                                        KrpcFilterContext<TxnOffsetCommitRequestData, TxnOffsetCommitResponseData> context) {
+                                                                                                        KrpcFilterContext context) {
         response.topics().forEach(results -> removeTenantPrefix(context, results::name, results::setName, false));
         return context.completedForwardResponse(response);
     }
@@ -464,7 +455,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<ListTransactionsResponseData>> onListTransactionsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                           ListTransactionsResponseData response,
-                                                                                                          KrpcFilterContext<ListTransactionsRequestData, ListTransactionsResponseData> context) {
+                                                                                                          KrpcFilterContext context) {
         var tenantPrefix = getTenantPrefix(context);
         var filteredTransactions = response.transactionStates().stream().filter(listedTxn -> listedTxn.transactionalId().startsWith(tenantPrefix)).toList();
         filteredTransactions.forEach(listedTxn -> removeTenantPrefix(context, listedTxn::transactionalId, listedTxn::setTransactionalId, false));
@@ -475,7 +466,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<RequestFilterResult<DescribeTransactionsRequestData>> onDescribeTransactionsRequest(short apiVersion, RequestHeaderData header,
                                                                                                                DescribeTransactionsRequestData request,
-                                                                                                               KrpcFilterContext<DescribeTransactionsRequestData, DescribeTransactionsResponseData> context) {
+                                                                                                               KrpcFilterContext context) {
         request.setTransactionalIds(request.transactionalIds().stream().map(group -> applyTenantPrefix(context, group)).toList());
         return context.completedForwardRequest(request);
     }
@@ -483,7 +474,7 @@ public class MultiTenantTransformationFilter
     @Override
     public CompletionStage<ResponseFilterResult<DescribeTransactionsResponseData>> onDescribeTransactionsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                                   DescribeTransactionsResponseData response,
-                                                                                                                  KrpcFilterContext<DescribeTransactionsRequestData, DescribeTransactionsResponseData> context) {
+                                                                                                                  KrpcFilterContext context) {
         response.transactionStates().forEach(ts -> {
             removeTenantPrefix(context, ts::transactionalId, ts::setTransactionalId, false);
             ts.topics().forEach(t -> removeTenantPrefix(context, t::topic, t::setTopic, false));
@@ -493,13 +484,13 @@ public class MultiTenantTransformationFilter
 
     @Override
     public CompletionStage<RequestFilterResult<EndTxnRequestData>> onEndTxnRequest(short apiVersion, RequestHeaderData header, EndTxnRequestData request,
-                                                                                   KrpcFilterContext<EndTxnRequestData, EndTxnResponseData> context) {
+                                                                                   KrpcFilterContext context) {
         var tenantPrefix = getTenantPrefix(context);
         request.setTransactionalId(tenantPrefix + request.transactionalId());
         return context.completedForwardRequest(request);
     }
 
-    private void applyTenantPrefix(KrpcFilterContext<?, ?> context, Supplier<String> getter, Consumer<String> setter, boolean ignoreEmpty) {
+    private void applyTenantPrefix(KrpcFilterContext context, Supplier<String> getter, Consumer<String> setter, boolean ignoreEmpty) {
         String clientSideName = getter.get();
         if (ignoreEmpty && (clientSideName == null || clientSideName.isEmpty())) {
             return;
@@ -507,12 +498,12 @@ public class MultiTenantTransformationFilter
         setter.accept(applyTenantPrefix(context, clientSideName));
     }
 
-    private String applyTenantPrefix(KrpcFilterContext<?, ?> context, String clientSideName) {
+    private String applyTenantPrefix(KrpcFilterContext context, String clientSideName) {
         var tenantPrefix = getTenantPrefix(context);
         return tenantPrefix + clientSideName;
     }
 
-    private void removeTenantPrefix(KrpcFilterContext<?, ?> context, Supplier<String> getter, Consumer<String> setter, boolean ignoreEmpty) {
+    private void removeTenantPrefix(KrpcFilterContext context, Supplier<String> getter, Consumer<String> setter, boolean ignoreEmpty) {
         var brokerSideName = getter.get();
         if (ignoreEmpty && (brokerSideName == null || brokerSideName.isEmpty())) {
             return;
@@ -521,12 +512,12 @@ public class MultiTenantTransformationFilter
         setter.accept(removeTenantPrefix(context, brokerSideName));
     }
 
-    private String removeTenantPrefix(KrpcFilterContext<?, ?> context, String brokerSideName) {
+    private String removeTenantPrefix(KrpcFilterContext context, String brokerSideName) {
         var tenantPrefix = getTenantPrefix(context);
         return brokerSideName.substring(tenantPrefix.length());
     }
 
-    private static String getTenantPrefix(KrpcFilterContext<?, ?> context) {
+    private static String getTenantPrefix(KrpcFilterContext context) {
         // TODO naive - POC implementation uses the first component of a FQDN as the multi-tenant prefix.
         var sniHostname = context.sniHostname();
         if (sniHostname == null) {

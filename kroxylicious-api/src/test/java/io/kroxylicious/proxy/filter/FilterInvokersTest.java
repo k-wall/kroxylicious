@@ -80,13 +80,13 @@ class FilterInvokersTest {
 
         @Override
         public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey, RequestHeaderData header, ApiMessage body,
-                                                                          KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                          KrpcFilterContext filterContext) {
             return null;
         }
 
         @Override
         public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey, ResponseHeaderData header, ApiMessage body,
-                                                                            KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                            KrpcFilterContext filterContext) {
             return null;
         }
     }
@@ -112,7 +112,7 @@ class FilterInvokersTest {
         @Override
         public CompletionStage<RequestFilterResult<ApiVersionsRequestData>> onApiVersionsRequest(short apiVersion, RequestHeaderData header,
                                                                                                  ApiVersionsRequestData request,
-                                                                                                 KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
+                                                                                                 KrpcFilterContext context) {
 
             return null;
         }
@@ -120,7 +120,7 @@ class FilterInvokersTest {
         @Override
         public CompletionStage<ResponseFilterResult<ApiVersionsResponseData>> onApiVersionsResponse(short apiVersion, ResponseHeaderData header,
                                                                                                     ApiVersionsResponseData response,
-                                                                                                    KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
+                                                                                                    KrpcFilterContext context) {
 
             return null;
         }
@@ -134,7 +134,7 @@ class FilterInvokersTest {
 
         @Override
         public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey, RequestHeaderData header, ApiMessage body,
-                                                                          KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                          KrpcFilterContext filterContext) {
 
             return null;
         }
@@ -165,7 +165,7 @@ class FilterInvokersTest {
 
         @Override
         public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey, ResponseHeaderData header, ApiMessage body,
-                                                                            KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                            KrpcFilterContext filterContext) {
 
             return null;
         }
@@ -176,7 +176,7 @@ class FilterInvokersTest {
         @Override
         public CompletionStage<RequestFilterResult<ApiVersionsRequestData>> onApiVersionsRequest(short apiVersion, RequestHeaderData header,
                                                                                                  ApiVersionsRequestData request,
-                                                                                                 KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
+                                                                                                 KrpcFilterContext context) {
 
             return null;
         }
@@ -192,14 +192,14 @@ class FilterInvokersTest {
         @Override
         public CompletionStage<RequestFilterResult<ApiVersionsRequestData>> onApiVersionsRequest(short apiVersion, RequestHeaderData header,
                                                                                                  ApiVersionsRequestData request,
-                                                                                                 KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
+                                                                                                 KrpcFilterContext context) {
 
             return null;
         }
 
         @Override
         public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey, ResponseHeaderData header, ApiMessage body,
-                                                                            KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                            KrpcFilterContext filterContext) {
 
             return null;
         }
@@ -209,7 +209,7 @@ class FilterInvokersTest {
 
         @Override
         public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey, RequestHeaderData header, ApiMessage body,
-                                                                          KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                          KrpcFilterContext filterContext) {
 
             return null;
         }
@@ -217,7 +217,7 @@ class FilterInvokersTest {
         @Override
         public CompletionStage<RequestFilterResult<ApiVersionsRequestData>> onApiVersionsRequest(short apiVersion, RequestHeaderData header,
                                                                                                  ApiVersionsRequestData request,
-                                                                                                 KrpcFilterContext<ApiVersionsRequestData, ApiVersionsResponseData> context) {
+                                                                                                 KrpcFilterContext context) {
 
             return null;
         }

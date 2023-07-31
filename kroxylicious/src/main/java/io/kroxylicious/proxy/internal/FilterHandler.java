@@ -21,6 +21,7 @@ import io.netty.channel.ChannelPromise;
 import io.kroxylicious.proxy.filter.FilterAndInvoker;
 import io.kroxylicious.proxy.filter.FilterInvoker;
 import io.kroxylicious.proxy.filter.KrpcFilter;
+import io.kroxylicious.proxy.filter.RequestFilterResult;
 import io.kroxylicious.proxy.filter.ResponseFilterResult;
 import io.kroxylicious.proxy.frame.DecodedRequestFrame;
 import io.kroxylicious.proxy.frame.DecodedResponseFrame;
@@ -62,9 +63,10 @@ public class FilterHandler extends ChannelDuplexHandler {
 
             var stage = invoker.onRequest(decodedFrame.apiKey(), decodedFrame.apiVersion(), decodedFrame.header(),
                     decodedFrame.body(), filterContext);
-            stage.whenComplete((filterResult, t) -> {
+            stage.whenComplete((r, t) -> {
                 // maybe better to run the whole thing on the netty thread.
 
+                RequestFilterResult<?> filterResult = (RequestFilterResult) r;
                 if (t != null) {
                     filterContext.closeConnection();
                     return;
@@ -124,7 +126,8 @@ public class FilterHandler extends ChannelDuplexHandler {
                 var stage = invoker.onResponse(decodedFrame.apiKey(), decodedFrame.apiVersion(),
                         decodedFrame.header(), decodedFrame.body(), filterContext);
 
-                stage.whenComplete((rfr, t) -> {
+                stage.whenComplete((r, t) -> {
+                    ResponseFilterResult<?> rfr = ((ResponseFilterResult) r);
                     if (t != null) {
                         filterContext.closeConnection();
                         return;

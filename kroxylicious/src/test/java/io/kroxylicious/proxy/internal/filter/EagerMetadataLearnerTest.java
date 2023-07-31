@@ -49,7 +49,7 @@ import static org.mockito.Mockito.when;
 class EagerMetadataLearnerTest {
 
     @Mock
-    KrpcFilterContext<ApiMessage, ApiMessage> context;
+    KrpcFilterContext context;
     private EagerMetadataLearner learner;
 
     @BeforeEach

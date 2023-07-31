@@ -46,5 +46,5 @@ public interface RequestFilter extends KrpcFilter {
     CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey,
                                                                RequestHeaderData header,
                                                                ApiMessage body,
-                                                               KrpcFilterContext<ApiMessage, ApiMessage> filterContext);
+                                                               KrpcFilterContext filterContext);
 }

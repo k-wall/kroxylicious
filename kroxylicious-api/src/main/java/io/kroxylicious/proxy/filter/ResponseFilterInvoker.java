@@ -15,7 +15,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 record ResponseFilterInvoker(ResponseFilter filter) implements FilterInvoker {
 
     @Override
-    public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey, short apiVersion, ResponseHeaderData header, ApiMessage body, KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+    public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey, short apiVersion, ResponseHeaderData header, ApiMessage body, KrpcFilterContext filterContext) {
         return filter.onResponse(apiKey, header, body, filterContext);
     }
 

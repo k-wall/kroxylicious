@@ -17,12 +17,12 @@ record HandleNothingFilterInvoker() implements FilterInvoker {
     static final FilterInvoker INSTANCE = new HandleNothingFilterInvoker();
 
     @Override
-    public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey, short apiVersion, RequestHeaderData header, ApiMessage body, KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+    public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey, short apiVersion, RequestHeaderData header, ApiMessage body, KrpcFilterContext filterContext) {
         throw new IllegalStateException("I should never be invoked");
     }
 
     @Override
-    public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey, short apiVersion, ResponseHeaderData header, ApiMessage body, KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+    public CompletionStage<ResponseFilterResult<ApiMessage>> onResponse(ApiKeys apiKey, short apiVersion, ResponseHeaderData header, ApiMessage body, KrpcFilterContext filterContext) {
         throw new IllegalStateException("I should never be invoked");
     }
 }

@@ -29,7 +29,7 @@ public class CompositePrefixingFixedClientIdFilter implements CompositeFilter {
     private class PrefixingFilter implements RequestFilter {
         @Override
         public CompletionStage<RequestFilterResult<ApiMessage>> onRequest(ApiKeys apiKey, RequestHeaderData header, ApiMessage body,
-                                                                          KrpcFilterContext<ApiMessage, ApiMessage> filterContext) {
+                                                                          KrpcFilterContext filterContext) {
             header.setClientId(config.prefix + header.clientId());
             return filterContext.completedForwardRequest(header, body);
         }
