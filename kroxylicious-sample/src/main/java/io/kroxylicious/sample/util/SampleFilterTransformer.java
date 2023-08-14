@@ -11,12 +11,12 @@ import java.nio.charset.StandardCharsets;
 
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
-import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
@@ -36,7 +36,7 @@ public class SampleFilterTransformer {
      * @param config the transform configuration
      */
     public static void transform(ProduceRequestData.PartitionProduceData partitionData, KrpcFilterContext context, SampleFilterConfig config) {
-        partitionData.setRecords(transformPartitionRecords((AbstractRecords) partitionData.records(), context, config.getFindValue(), config.getReplacementValue()));
+        partitionData.setRecords(transformPartitionRecords((Records) partitionData.records(), context, config.getFindValue(), config.getReplacementValue()));
     }
 
     /**
@@ -46,7 +46,7 @@ public class SampleFilterTransformer {
      * @param config the transform configuration
      */
     public static void transform(FetchResponseData.PartitionData partitionData, KrpcFilterContext context, SampleFilterConfig config) {
-        partitionData.setRecords(transformPartitionRecords((AbstractRecords) partitionData.records(), context, config.getFindValue(), config.getReplacementValue()));
+        partitionData.setRecords(transformPartitionRecords((Records) partitionData.records(), context, config.getFindValue(), config.getReplacementValue()));
     }
 
     /**
@@ -57,9 +57,9 @@ public class SampleFilterTransformer {
      * @param replacementValue the replacement value
      * @return the transformed partition records
      */
-    private static MemoryRecords transformPartitionRecords(AbstractRecords records, KrpcFilterContext context, String findValue, String replacementValue) {
+    private static MemoryRecords transformPartitionRecords(Records records, KrpcFilterContext context, String findValue, String replacementValue) {
         ByteBufferOutputStream stream = context.createByteBufferOutputStream(records.sizeInBytes());
-        MemoryRecordsBuilder newRecords = createMemoryRecordsBuilder(stream, records.firstBatch());
+        MemoryRecordsBuilder newRecords = createMemoryRecordsBuilder(stream, records.batchIterator().hasNext() ? records.batchIterator().next() : null);
 
         for (RecordBatch batch : records.batches()) {
             for (Record batchRecord : batch) {
