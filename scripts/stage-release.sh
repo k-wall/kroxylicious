@@ -136,7 +136,7 @@ RELEASE_TAG="v${RELEASE_VERSION}"
 
 echo "Committing framework release to git"
 git add '**/pom.xml' 'pom.xml'
-git commit --message "Release Framework version ${RELEASE_TAG}" --signoff
+git commit --message "Release version ${RELEASE_TAG}" --signoff
 
 git tag -f "${RELEASE_TAG}"
 
