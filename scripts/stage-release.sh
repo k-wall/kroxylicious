@@ -67,7 +67,7 @@ if [[ -z "${GPG_KEY}" ]]; then
 fi
 
 if [[ -z ${RELEASE_VERSION} ]]; then
-  echo "No version specified aborting"
+  echo "No version specified, aborting"
   exit 1
 fi
 
