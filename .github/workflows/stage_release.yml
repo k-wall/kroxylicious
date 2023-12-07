@@ -124,3 +124,14 @@ jobs:
           SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
         run: ./scripts/transition-staging-repository-state.sh -s close
 
+      - name: 'Write release tag'
+        if: ${{ github.event.inputs.dry-run == 'false' }}
+        run: |
+          echo "${{ github.event.inputs.release-version }}" > release_tag.txt
+
+      - name: 'Upload release tag'
+        uses: actions/upload-artifact@v2
+        if: ${{ github.event.inputs.dry-run == 'false' }}
+        with:
+          path: ${{ github.workspace }}
+          name: release_tag.txt
