@@ -7,7 +7,7 @@
 
 
 set -euo pipefail
-set -x
+
 usage() {
       1>&2 cat << EOF
 usage: $0 -v <release number> <-a|-s (close|drop|release)|-h>
@@ -51,7 +51,7 @@ TAG=v${RELEASE_VERSION}
 if [[ ${ASSERT_NO_RELEASE_NOTES_EXIST} == "true" ]]; then
   NUM_EXIST_RELEASE_NOTES=$(curl "${CURL_ARGS[@]}" | jq --arg tag "${TAG}" '[.[] | select ( .tag_name == $tag )] | length')
   if [[ ${NUM_EXIST_RELEASE_NOTES} -gt 0 ]]; then
-      >&2 echo "${NUM_EXIST_RELEASE_NOTES} release notes already exist for tag ${TAG}"
+      >&2 echo "${NUM_EXIST_RELEASE_NOTES} release note(s) already exist for tag ${TAG}"
    exit -1
   fi
   exit 0
