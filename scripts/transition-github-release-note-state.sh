@@ -63,9 +63,9 @@ elif [[ ${STATE} ]]; then
   fi
 
   if [[ ${STATE} == "release" ]]; then
-    gh release edit --verify-tag --draft=false "$(TAG)"
+    gh release edit --verify-tag --draft=false "${TAG}"
   else
-    gh release delete --yes "$(TAG)"
+    gh release delete --yes "${TAG}"
   fi
 else
   usage

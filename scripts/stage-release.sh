@@ -162,17 +162,18 @@ then
     exit
 fi
 
-# create GitHub release via CLI https://cli.github.com/manual/gh_release_create
-gh release create "${RELEASE_TAG}" ./kroxylicious-*/target/kroxylicious-*-bin.* --title "${RELEASE_TAG}" --notes-file "CHANGELOG.md" --draft
-echo "Draft release created. This must be manually published."
-
 ORIGINAL_GH_DEFAULT_REPO=$(gh repo set-default -v | (grep -v 'no default repository' || true))
 gh repo set-default $(git remote get-url ${REPOSITORY})
+
+# create GitHub release via CLI https://cli.github.com/manual/gh_release_create
+# it is created as a draft, the deploy_release workflow will publish it.
+echo "Creating draft release notes."
+gh release create "${RELEASE_TAG}" ./kroxylicious-*/target/kroxylicious-*-bin.* --title "${RELEASE_TAG}" --notes-file "CHANGELOG.md" --draft
 
 BODY="Release version ${RELEASE_VERSION}"
 
 # Workaround https://github.com/cli/cli/issues/2691
 git push ${REPOSITORY} HEAD
 
-echo "Create pull request to merge the released version."
+echo "Creating pull request to merge the released version."
 gh pr create --head ${PREPARE_DEVELOPMENT_BRANCH} --base ${BRANCH_FROM} --title "Kroxylicious development version ${RELEASE_DATE}" --body "${BODY}" --repo $(gh repo set-default -v)
