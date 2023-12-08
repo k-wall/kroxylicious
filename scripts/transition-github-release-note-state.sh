@@ -65,7 +65,7 @@ elif [[ ${STATE} ]]; then
   if [[ ${{ github.event.inputs.next-state }} == "release" ]]; then
     gh release edit --verify-tag --draft=false "$(TAG)"
   else
-    gh release delete "$(TAG)"
+    gh release delete --yes "$(TAG)"
   fi
 else
   usage
