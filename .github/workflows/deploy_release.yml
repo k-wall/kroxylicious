@@ -71,11 +71,6 @@ jobs:
           server-password: SONATYPE_TOKEN_PASSWORD # env variable for Sonatype password
           overwrite-settings: true
 
-      - name: 'Download release tag'
-        uses: actions/download-artifact@v3
-        with:
-          name: release_tag.txt
-
 #      - name: 'Transition snapshot repository to desired state'
 #        env:
 #          SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
