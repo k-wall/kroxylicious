@@ -1,4 +1,4 @@
-#!/usr/bin/env bash -x
+#!/usr/bin/env bash
 #
 # Copyright Kroxylicious Authors.
 #
@@ -7,7 +7,7 @@
 
 
 set -euo pipefail
-
+set -x
 usage() {
       1>&2 cat << EOF
 usage: $0 -v <release number> <-a|-s (close|drop|release)|-h>
