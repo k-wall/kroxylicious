@@ -117,12 +117,12 @@ jobs:
           SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
         run: ./scripts/transition-staging-repository-state.sh -s drop
 
-      - name: 'Close stage repository'
-        if: ${{ github.event.inputs.dry-run == 'false' }}
-        env:
-          SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
-          SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
-        run: ./scripts/transition-staging-repository-state.sh -s close
+#      - name: 'Close stage repository'
+#        if: ${{ github.event.inputs.dry-run == 'false' }}
+#        env:
+#          SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
+#          SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
+#        run: ./scripts/transition-staging-repository-state.sh -s close
 
       - name: 'Write release tag'
         if: ${{ github.event.inputs.dry-run == 'false' }}
@@ -130,7 +130,7 @@ jobs:
           echo "${{ github.event.inputs.release-version }}" > release_tag.txt
 
       - name: 'Upload release tag'
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: ${{ github.event.inputs.dry-run == 'false' }}
         with:
           path: ${{ github.workspace }}

@@ -68,10 +68,25 @@ jobs:
           server-password: SONATYPE_TOKEN_PASSWORD # env variable for Sonatype password
           overwrite-settings: true
 
+      - name: 'Download release tag'
+        uses: actions/download-artifact@v3
+        with:
+          name: release_tag.txt
+
       - name: 'Transition snapshot repository to desired state'
         env:
           SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
           SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
         run: ./scripts/transition-staging-repository-state.sh -s ${{ github.event.inputs.next-state }}
 
-
+      - name: 'Transition release notes to desired state'
+        env:
+          GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }} # For the gh cmd line tool used by stage-release.sh
+        run: |
+          tag=$(cat release_tag.txt)
+          if [[ ${{ github.event.inputs.next-state }} == "release" ]]; then
+            gh release edit --verify-tag --draft=false $(tag)
+          else
+            gh release delete $(tag)
+          fi
+        
