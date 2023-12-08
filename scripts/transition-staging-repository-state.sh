@@ -5,9 +5,6 @@
 # Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
 #
 
-# https://support.sonatype.com/hc/en-us/articles/213465448-Automatically-dropping-old-staging-repositories
-# https://support.sonatype.com/hc/en-us/articles/213465868-Uploading-to-a-Nexus-Repository-2-Staging-Repository-via-REST-API
-# curl --silent -u xxxx:xxx  -H "accept: application/json" -X GET https://s01.oss.sonatype.org/service/local/staging/profile_repositories | jq .
 set -euo pipefail
 
 usage() {
@@ -38,6 +35,12 @@ while getopts ":s:ah" opt; do
     ;;
   esac
 done
+
+# TODO: refactor to use the REST API https://oss.sonatype.org/nexus-staging-plugin/default/docs/index.html
+# https://support.sonatype.com/hc/en-us/articles/213465448-Automatically-dropping-old-staging-repositories
+# https://support.sonatype.com/hc/en-us/articles/213465868-Uploading-to-a-Nexus-Repository-2-Staging-Repository-via-REST-API
+# curl --silent -u xxxx:xxx  -H "accept: application/json" -X GET https://s01.oss.sonatype.org/service/local/staging/profile_repositories | jq .
+
 
 # The rc-list table looks like this:
 #[INFO] ID                   State    Description

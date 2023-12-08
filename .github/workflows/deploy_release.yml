@@ -31,6 +31,9 @@ name: Deploy Release
 on:
   workflow_dispatch:
     inputs:
+      release-version:
+        description: 'The release version, e.g. 0.7.0'
+        required: true
       next-state:
         description: 'Desired next state for the staging repository'
         required: true
@@ -73,20 +76,14 @@ jobs:
         with:
           name: release_tag.txt
 
-      - name: 'Transition snapshot repository to desired state'
-        env:
-          SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
-          SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
-        run: ./scripts/transition-staging-repository-state.sh -s ${{ github.event.inputs.next-state }}
+#      - name: 'Transition snapshot repository to desired state'
+#        env:
+#          SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
+#          SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
+#        run: ./scripts/transition-staging-repository-state.sh -s ${{ github.event.inputs.next-state }}
 
       - name: 'Transition release notes to desired state'
         env:
-          GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }} # For the gh cmd line tool used by stage-release.sh
-        run: |
-          tag=$(cat release_tag.txt)
-          if [[ ${{ github.event.inputs.next-state }} == "release" ]]; then
-            gh release edit --verify-tag --draft=false $(tag)
-          else
-            gh release delete $(tag)
-          fi
-        
+          GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }} # For the gh cmd line tool used by transition-github-release-note-state.sh
+        run: ./scripts/transition-github-release-note-state.sh -s  ${{ github.event.inputs.next-state }} -v ${{ github.event.inputs.release-version }}
+
