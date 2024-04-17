@@ -66,7 +66,7 @@ public abstract class AbstractTestKmsFacadeTest<C, K, E> {
     }
 
     @Test
-    void rotateKek() {
+    public void rotateKek() {
         try (var facade = factory.build()) {
             facade.start();
             var manager = facade.getTestKekManager();
@@ -78,7 +78,7 @@ public abstract class AbstractTestKmsFacadeTest<C, K, E> {
     }
 
     @Test
-    void rotateKekFailsIfAliasDoesNotExist() {
+    public void rotateKekFailsIfAliasDoesNotExist() {
         try (var facade = factory.build()) {
             facade.start();
             var manager = facade.getTestKekManager();
