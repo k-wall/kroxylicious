@@ -40,6 +40,12 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'");
     private static final String APPLICATION_X_AMZ_JSON_1_1 = "application/x-amz-json-1.1";
+    private static final TypeReference<CreateKeyResponse> CREATE_KEY_TYPE_REF = new TypeReference<>() {
+    };
+    private static final TypeReference<DescribeKeyResponse> DESCRIBE_KEY_TYPE_REF = new TypeReference<>() {
+    };
+    private static final TypeReference<ScheduleKeyDeletionResponse> SCHEDULE_KEY_DELETION_TYPE_REF = new TypeReference<>() {
+    };
     private final HttpClient client = HttpClient.newHttpClient();
     private LocalStackContainer localStackContainer;
 
@@ -136,9 +142,8 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
                 throw new UnknownAliasException(alias);
             }
             else {
-                throw new UnsupportedOperationException();
+                delete(alias);
             }
-
         }
 
         @Override
@@ -156,8 +161,7 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
 
             var keyRequest = createRequest(new CreateKeyRequest("key for alias : " + keyId));
 
-            var createKeyResponse = sendRequest(keyId, keyRequest, new TypeReference<CreateKeyResponse>() {
-            });
+            var createKeyResponse = sendRequest(keyId, keyRequest, CREATE_KEY_TYPE_REF);
 
             var aliasRequest = createRequest(new CreateAliasRequest(createKeyResponse.keyMetadata().keyId(), "alias/" + keyId));
             sendRequestExpectingNoResponse(aliasRequest);
@@ -166,8 +170,19 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
 
         private DescribeKeyResponse read(String alias) {
             var request = createRequest(new DescribeKeyRequest("alias/" + alias));
-            return sendRequest(alias, request, new TypeReference<>() {
-            });
+            return sendRequest(alias, request, DESCRIBE_KEY_TYPE_REF);
+        }
+
+        private void delete(String alias) {
+
+            var key = read(alias);
+            var keyId = key.keyMetadata().keyId();
+            var scheduleDeleteRequest = createRequest(new ScheduleKeyDeletionRequest(keyId, 7 /* Minimum allowed */));
+
+            sendRequest(keyId, scheduleDeleteRequest, SCHEDULE_KEY_DELETION_TYPE_REF);
+
+            var deleteAliasRequest = createRequest(new DeleteAliasRequest("alias/" + alias));
+            sendRequestExpectingNoResponse(deleteAliasRequest);
         }
 
     }
@@ -211,6 +226,12 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
         }
         else if (aClass == CreateAliasRequest.class) {
             return "TrentService.CreateAlias";
+        }
+        else if (aClass == DeleteAliasRequest.class) {
+            return "TrentService.DeleteAlias";
+        }
+        else if (aClass == ScheduleKeyDeletionRequest.class) {
+            return "TrentService.ScheduleKeyDeletion";
         }
         else {
             throw new IllegalArgumentException("target not known for class " + aClass);
@@ -262,9 +283,7 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
 
     private String getBody(Object obj) {
         try {
-            return OBJECT_MAPPER.writeValueAsString(obj)
-
-            ;
+            return OBJECT_MAPPER.writeValueAsString(obj);
         }
         catch (JsonProcessingException e) {
             throw new UncheckedIOException("Failed to create request body", e);

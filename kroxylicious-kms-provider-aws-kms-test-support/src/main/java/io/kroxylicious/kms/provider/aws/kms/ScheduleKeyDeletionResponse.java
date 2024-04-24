@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-record DescribeKeyResponse(@JsonProperty(value = "KeyMetadata") KeyMetadata keyMetadata) {
+record ScheduleKeyDeletionResponse(@JsonProperty(value = "KeyState") String keyState,
+                                   @JsonProperty(value = "PendingWindowInDays") int pendingWindowInDays) {
 
 }

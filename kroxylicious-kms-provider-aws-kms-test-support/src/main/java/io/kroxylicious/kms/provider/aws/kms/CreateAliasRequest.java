@@ -6,9 +6,7 @@
 
 package io.kroxylicious.kms.provider.aws.kms;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-@JsonIgnoreProperties(ignoreUnknown = true)
-record CreateAliasRequest(@JsonProperty("targetKeyId") String targetKeyId,
-                          @JsonProperty("aliasName") String aliasName) {}
+record CreateAliasRequest(@JsonProperty("TargetKeyId") String targetKeyId,
+                          @JsonProperty("AliasName") String aliasName) {}

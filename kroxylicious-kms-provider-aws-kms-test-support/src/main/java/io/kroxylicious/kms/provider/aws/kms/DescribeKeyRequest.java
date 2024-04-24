@@ -6,10 +6,8 @@
 
 package io.kroxylicious.kms.provider.aws.kms;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 record DescribeKeyRequest(@JsonProperty(value = "KeyId") String keyId) {
 
 }

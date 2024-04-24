@@ -8,4 +8,4 @@ package io.kroxylicious.kms.provider.aws.kms;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-record CreateKeyRequest(@JsonProperty("description") String description) {}
+record DeleteAliasRequest(@JsonProperty("AliasName") String aliasName) {}
