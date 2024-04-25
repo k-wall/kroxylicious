@@ -40,11 +40,13 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'");
     private static final String APPLICATION_X_AMZ_JSON_1_1 = "application/x-amz-json-1.1";
-    private static final TypeReference<CreateKeyResponse> CREATE_KEY_TYPE_REF = new TypeReference<>() {
+    private static final TypeReference<CreateKeyResponse> CREATE_KEY_RESPONSE_TYPE_REF = new TypeReference<>() {
     };
-    private static final TypeReference<DescribeKeyResponse> DESCRIBE_KEY_TYPE_REF = new TypeReference<>() {
+    private static final TypeReference<DescribeKeyResponse> DESCRIBE_KEY_RESPONSE_TYPE_REF = new TypeReference<>() {
     };
-    private static final TypeReference<ScheduleKeyDeletionResponse> SCHEDULE_KEY_DELETION_TYPE_REF = new TypeReference<>() {
+    private static final TypeReference<ScheduleKeyDeletionResponse> SCHEDULE_KEY_DELETION_RESPONSE_TYPE_REF = new TypeReference<>() {
+    };
+    private static final TypeReference<ErrorResponse> ERROR_RESPONSE_TYPE_REF = new TypeReference<>() {
     };
     private final HttpClient client = HttpClient.newHttpClient();
     private LocalStackContainer localStackContainer;
@@ -130,10 +132,14 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
 
         @Override
         public void rotateKek(String alias) {
-            // Rotate is not supported on localstack
-            // https://docs.localstack.cloud/references/coverage/coverage_kms/
-            throw new UnsupportedOperationException();
+            Objects.requireNonNull(alias);
 
+            if (!exists(alias)) {
+                throw new UnknownAliasException(alias);
+            }
+            else {
+                rotate(alias);
+            }
         }
 
         @Override
@@ -157,136 +163,145 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
             }
         }
 
-        private void create(String keyId) {
+        private void create(String alias) {
+            var keyRequest = createRequest(new CreateKeyRequest("key for alias : " + alias));
+            var createKeyResponse = sendRequest(alias, keyRequest, CREATE_KEY_RESPONSE_TYPE_REF);
 
-            var keyRequest = createRequest(new CreateKeyRequest("key for alias : " + keyId));
-
-            var createKeyResponse = sendRequest(keyId, keyRequest, CREATE_KEY_TYPE_REF);
-
-            var aliasRequest = createRequest(new CreateAliasRequest(createKeyResponse.keyMetadata().keyId(), "alias/" + keyId));
+            var aliasRequest = createRequest(new CreateAliasRequest(createKeyResponse.keyMetadata().keyId(), "alias/" + alias));
             sendRequestExpectingNoResponse(aliasRequest);
-            // TODO clean up key if alias create fails?
         }
 
         private DescribeKeyResponse read(String alias) {
             var request = createRequest(new DescribeKeyRequest("alias/" + alias));
-            return sendRequest(alias, request, DESCRIBE_KEY_TYPE_REF);
+            return sendRequest(alias, request, DESCRIBE_KEY_RESPONSE_TYPE_REF);
+        }
+
+        private void rotate(String alias) {
+            // RotateKeyOnDemand is not implemented in localstack.
+            // https://docs.localstack.cloud/references/coverage/coverage_kms/#:~:text=Show%20Tests-,RotateKeyOnDemand,-ScheduleKeyDeletion
+            // https://github.com/localstack/localstack/issues/10723
+
+            // mimic a rotate by creating a new key and report the alias at it, leaving the original
+            // key in place.
+            var keyRequest = createRequest(new CreateKeyRequest("[rotated] key for alias : " + alias));
+            var createKeyResponse = sendRequest(alias, keyRequest, CREATE_KEY_RESPONSE_TYPE_REF);
+
+            var aliasRequest = createRequest(new UpdateAliasRequest(createKeyResponse.keyMetadata().keyId(), "alias/" + alias));
+            sendRequestExpectingNoResponse(aliasRequest);
         }
 
         private void delete(String alias) {
-
             var key = read(alias);
             var keyId = key.keyMetadata().keyId();
             var scheduleDeleteRequest = createRequest(new ScheduleKeyDeletionRequest(keyId, 7 /* Minimum allowed */));
 
-            sendRequest(keyId, scheduleDeleteRequest, SCHEDULE_KEY_DELETION_TYPE_REF);
+            sendRequest(keyId, scheduleDeleteRequest, SCHEDULE_KEY_DELETION_RESPONSE_TYPE_REF);
 
             var deleteAliasRequest = createRequest(new DeleteAliasRequest("alias/" + alias));
             sendRequestExpectingNoResponse(deleteAliasRequest);
         }
 
-    }
-
-    private HttpRequest createRequest(Object request) {
-
-        var body = getBody(request).getBytes(UTF_8);
-        var date = DATE_TIME_FORMATTER.format(now(ZoneOffset.UTC));
-
-        var headers = new HashMap<String, String>();
-        AmazonRequestSignatureV4Utils.calculateAuthorizationHeaders(
-                "POST",
-                getAwsUrl().getHost(),
-                null,
-                null,
-                headers,
-                body,
-                date,
-                getAccessKey(),
-                getSecretKey(),
-                getRegion(),
-                "kms");
-
-        var builder = HttpRequest.newBuilder().uri(getAwsUrl());
-        headers.entrySet().stream().filter(e -> !e.getKey().equals("Host")).forEach(e -> builder.header(e.getKey(), e.getValue()));
-
-        return builder
-                .header("Content-Type", APPLICATION_X_AMZ_JSON_1_1)
-                .header("X-Amz-Target", getTarget(request.getClass()))
-                .POST(BodyPublishers.ofByteArray(body))
-                .build();
-    }
-
-    @NonNull
-    private static String getTarget(Class<?> aClass) {
-        if (aClass == DescribeKeyRequest.class) {
-            return "TrentService.DescribeKey";
-        }
-        else if (aClass == CreateKeyRequest.class) {
-            return "TrentService.CreateKey";
-        }
-        else if (aClass == CreateAliasRequest.class) {
-            return "TrentService.CreateAlias";
-        }
-        else if (aClass == DeleteAliasRequest.class) {
-            return "TrentService.DeleteAlias";
-        }
-        else if (aClass == ScheduleKeyDeletionRequest.class) {
-            return "TrentService.ScheduleKeyDeletion";
-        }
-        else {
-            throw new IllegalArgumentException("target not known for class " + aClass);
-        }
-    }
-
-    private <R> R sendRequest(String key, HttpRequest request, TypeReference<R> valueTypeRef) {
-        try {
-            HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (response.statusCode() != 200) {
-                var er = decodeJson(new TypeReference<ErrorResponse>() {
-                }, response.body());
-                if (er.type().equalsIgnoreCase("NotFoundException")) {
-                    throw new UnknownAliasException(key);
+        private <R> R sendRequest(String key, HttpRequest request, TypeReference<R> valueTypeRef) {
+            try {
+                HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                if (response.statusCode() != 200) {
+                    var er = decodeJson(ERROR_RESPONSE_TYPE_REF, response.body());
+                    if (er.type().equalsIgnoreCase("NotFoundException")) {
+                        throw new UnknownAliasException(key);
+                    }
+                    throw new IllegalStateException("unexpected response %s (%s) for request: %s".formatted(response.statusCode(), er, request.uri()));
                 }
-                throw new IllegalStateException("unexpected response %s (%s) for request: %s".formatted(response.statusCode(), er, request.uri()));
+                return decodeJson(valueTypeRef, response.body());
             }
-            byte[] body = response
-                    .body();
-            return decodeJson(valueTypeRef, body);
-        }
-        catch (IOException e) {
-            if (e.getCause() instanceof KmsException ke) {
-                throw ke;
+            catch (IOException e) {
+                if (e.getCause() instanceof KmsException ke) {
+                    throw ke;
+                }
+                throw new UncheckedIOException("Request to %s failed".formatted(request), e);
             }
-            throw new UncheckedIOException("Request to %s failed".formatted(request), e);
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted during REST API call : %s".formatted(request.uri()), e);
+            }
         }
-        catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted during REST API call : %s".formatted(request.uri()), e);
-        }
-    }
 
-    private void sendRequestExpectingNoResponse(HttpRequest request) {
-        try {
-            var response = client.send(request, HttpResponse.BodyHandlers.discarding());
-            if (response.statusCode() != 200) {
-                throw new IllegalStateException("Unexpected response : %d to request %s".formatted(response.statusCode(), request.uri()));
+        private HttpRequest createRequest(Object request) {
+
+            var body = getBody(request).getBytes(UTF_8);
+            var date = DATE_TIME_FORMATTER.format(now(ZoneOffset.UTC));
+
+            var headers = new HashMap<String, String>();
+            AmazonRequestSignatureV4Utils.calculateAuthorizationHeaders(
+                    "POST",
+                    getAwsUrl().getHost(),
+                    null,
+                    null,
+                    headers,
+                    body,
+                    date,
+                    getAccessKey(),
+                    getSecretKey(),
+                    getRegion(),
+                    "kms");
+
+            var builder = HttpRequest.newBuilder().uri(getAwsUrl());
+            headers.entrySet().stream().filter(e -> !e.getKey().equals("Host")).forEach(e -> builder.header(e.getKey(), e.getValue()));
+
+            return builder
+                    .header("Content-Type", APPLICATION_X_AMZ_JSON_1_1)
+                    .header("X-Amz-Target", getTarget(request.getClass()))
+                    .POST(BodyPublishers.ofByteArray(body))
+                    .build();
+        }
+
+        @NonNull
+        private static String getTarget(Class<?> clazz) {
+            if (clazz == DescribeKeyRequest.class) {
+                return "TrentService.DescribeKey";
+            }
+            else if (clazz == CreateKeyRequest.class) {
+                return "TrentService.CreateKey";
+            }
+            else if (clazz == CreateAliasRequest.class) {
+                return "TrentService.CreateAlias";
+            }
+            else if (clazz == UpdateAliasRequest.class) {
+                return "TrentService.UpdateAlias";
+            }
+            else if (clazz == DeleteAliasRequest.class) {
+                return "TrentService.DeleteAlias";
+            }
+            else if (clazz == ScheduleKeyDeletionRequest.class) {
+                return "TrentService.ScheduleKeyDeletion";
+            }
+            else {
+                throw new IllegalArgumentException("target not known for class " + clazz);
             }
         }
-        catch (IOException e) {
-            throw new UncheckedIOException("Request to %s failed".formatted(request), e);
-        }
-        catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(e);
-        }
-    }
 
-    private String getBody(Object obj) {
-        try {
-            return OBJECT_MAPPER.writeValueAsString(obj);
+        private void sendRequestExpectingNoResponse(HttpRequest request) {
+            try {
+                var response = client.send(request, HttpResponse.BodyHandlers.discarding());
+                if (response.statusCode() != 200) {
+                    throw new IllegalStateException("Unexpected response : %d to request %s".formatted(response.statusCode(), request.uri()));
+                }
+            }
+            catch (IOException e) {
+                throw new UncheckedIOException("Request to %s failed".formatted(request), e);
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
         }
-        catch (JsonProcessingException e) {
-            throw new UncheckedIOException("Failed to create request body", e);
+
+        private String getBody(Object obj) {
+            try {
+                return OBJECT_MAPPER.writeValueAsString(obj);
+            }
+            catch (JsonProcessingException e) {
+                throw new UncheckedIOException("Failed to create request body", e);
+            }
         }
     }
 

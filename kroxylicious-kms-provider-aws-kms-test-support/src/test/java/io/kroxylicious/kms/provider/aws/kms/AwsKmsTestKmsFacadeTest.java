@@ -7,7 +7,6 @@
 package io.kroxylicious.kms.provider.aws.kms;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
 
@@ -37,17 +36,17 @@ class AwsKmsTestKmsFacadeTest extends AbstractTestKmsFacadeTest<Config, String, 
         }
     }
 
-    @Test
-    @Disabled("rotate not supported by openstack")
-    @SuppressWarnings("java:S2699")
-    @Override
-    public void rotateKek() {
-    }
-
-    @Test
-    @Disabled("rotate not supported by openstack")
-    @SuppressWarnings("java:S2699")
-    @Override
-    public void rotateKekFailsIfAliasDoesNotExist() {
-    }
+    // @Test
+    // @Disabled("rotate not supported by openstack")
+    // @SuppressWarnings("java:S2699")
+    // @Override
+    // public void rotateKek() {
+    // }
+    //
+    // @Test
+    // @Disabled("rotate not supported by openstack")
+    // @SuppressWarnings("java:S2699")
+    // @Override
+    // public void rotateKekFailsIfAliasDoesNotExist() {
+    // }
 }
