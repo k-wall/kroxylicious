@@ -14,7 +14,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Objects;
 
@@ -38,8 +37,6 @@ import static java.time.ZonedDateTime.now;
 public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
     private static final DockerImageName LOCALSTACK_IMAGE = DockerImageName.parse("localstack/localstack:0.11.3");
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'");
-    private static final String APPLICATION_X_AMZ_JSON_1_1 = "application/x-amz-json-1.1";
     private static final TypeReference<CreateKeyResponse> CREATE_KEY_RESPONSE_TYPE_REF = new TypeReference<>() {
     };
     private static final TypeReference<DescribeKeyResponse> DESCRIBE_KEY_RESPONSE_TYPE_REF = new TypeReference<>() {
@@ -228,7 +225,7 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
         private HttpRequest createRequest(Object request) {
 
             var body = getBody(request).getBytes(UTF_8);
-            var date = DATE_TIME_FORMATTER.format(now(ZoneOffset.UTC));
+            var date = AmazonRequestSignatureV4Utils.DATE_TIME_FORMATTER.format(now(ZoneOffset.UTC));
 
             var headers = new HashMap<String, String>();
             AmazonRequestSignatureV4Utils.calculateAuthorizationHeaders(
@@ -248,7 +245,7 @@ public class AwsKmsTestKmsFacade extends AbstractAwsKmsTestKmsFacade {
             headers.entrySet().stream().filter(e -> !e.getKey().equals("Host")).forEach(e -> builder.header(e.getKey(), e.getValue()));
 
             return builder
-                    .header("Content-Type", APPLICATION_X_AMZ_JSON_1_1)
+                    .header("Content-Type", AmazonRequestSignatureV4Utils.APPLICATION_X_AMZ_JSON_1_1)
                     .header("X-Amz-Target", getTarget(request.getClass()))
                     .POST(BodyPublishers.ofByteArray(body))
                     .build();

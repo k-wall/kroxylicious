@@ -8,6 +8,7 @@ package io.kroxylicious.kms.provider.aws.kms;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -18,11 +19,10 @@ import java.util.stream.Collectors;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
-/**
- * From: https://stackoverflow.com/questions/62144379/how-to-make-amazon-aws-api-call-from-java
- * Copyright 2020 Alex Vasiliev, licensed under the Apache 2.0 license: https://opensource.org/licenses/Apache-2.0
- */
 public class AmazonRequestSignatureV4Utils {
+
+    static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'");
+    static final String APPLICATION_X_AMZ_JSON_1_1 = "application/x-amz-json-1.1";
 
     /**
      * Generates signing headers for HTTP request in accordance with Amazon AWS API Signature version 4 process.

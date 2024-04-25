@@ -13,8 +13,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Arrays;
+import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
@@ -26,22 +28,17 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.kroxylicious.kms.provider.aws.kms.AwsKmsResponse.DataKeyData;
-import io.kroxylicious.kms.provider.aws.kms.AwsKmsResponse.DecryptData;
-import io.kroxylicious.kms.provider.aws.kms.AwsKmsResponse.ReadKeyData;
 import io.kroxylicious.kms.service.DekPair;
-import io.kroxylicious.kms.service.DestroyableRawSecretKey;
 import io.kroxylicious.kms.service.Kms;
 import io.kroxylicious.kms.service.KmsException;
 import io.kroxylicious.kms.service.Serde;
 import io.kroxylicious.kms.service.UnknownAliasException;
-import io.kroxylicious.kms.service.UnknownKeyException;
 import io.kroxylicious.proxy.tag.VisibleForTesting;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
 
-import static java.net.URLEncoder.encode;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.time.ZonedDateTime.now;
 
 /**
  * An implementation of the KMS interface backed by a remote instance of AWS KMS.
@@ -50,28 +47,33 @@ public class AwsKmsKms implements Kms<String, AwsKmsEdek> {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String AES_KEY_ALGO = "AES";
-    private static final TypeReference<AwsKmsResponse<DataKeyData>> DATA_KEY_DATA_TYPE_REF = new TypeReference<>() {
+    private static final TypeReference<DescribeKeyResponse> DESCRIBE_KEY_RESPONSE_TYPE_REF = new TypeReference<>() {
     };
-    private static final TypeReference<AwsKmsResponse<ReadKeyData>> READ_KEY_DATA_TYPE_REF = new TypeReference<>() {
+    private static final TypeReference<ErrorResponse> ERROR_RESPONSE_TYPE_REF = new TypeReference<>() {
     };
-    private static final TypeReference<AwsKmsResponse<DecryptData>> DECRYPT_DATA_TYPE_REF = new TypeReference<>() {
-    };
+
     private final String secretKey;
+    private final String region;
     private final Duration timeout;
-    private final HttpClient vaultClient;
+    private final HttpClient client;
 
     /**
      * The vault url which will include the path to the transit engine.
      */
     private final URI awsUrl;
-    private final String vaultToken;
+    private final String accessKey;
 
-    AwsKmsKms(URI awsUrl, String accessKey, String secretKey, Duration timeout, SSLContext sslContext) {
+    AwsKmsKms(URI awsUrl, String accessKey, String secretKey, String region, Duration timeout, SSLContext sslContext) {
+        Objects.requireNonNull(awsUrl);
+        Objects.requireNonNull(accessKey);
+        Objects.requireNonNull(secretKey);
+        Objects.requireNonNull(region);
         this.awsUrl = awsUrl;
-        this.vaultToken = accessKey;
+        this.accessKey = accessKey;
         this.secretKey = secretKey;
+        this.region = region;
         this.timeout = timeout;
-        vaultClient = createClient(sslContext);
+        client = createClient(sslContext);
     }
 
     @VisibleForTesting
@@ -94,17 +96,18 @@ public class AwsKmsKms implements Kms<String, AwsKmsEdek> {
     @NonNull
     @Override
     public CompletionStage<DekPair<AwsKmsEdek>> generateDekPair(@NonNull String kekRef) {
-
-        var request = createVaultRequest()
-                .uri(awsUrl.resolve("datakey/plaintext/%s".formatted(encode(kekRef, UTF_8))))
-                .POST(HttpRequest.BodyPublishers.noBody())
-                .build();
-
-        return sendAsync(kekRef, request, DATA_KEY_DATA_TYPE_REF, UnknownKeyException::new)
-                .thenApply(data -> {
-                    var secretKey = DestroyableRawSecretKey.takeOwnershipOf(data.plaintext(), AES_KEY_ALGO);
-                    return new DekPair<>(new AwsKmsEdek(kekRef, data.ciphertext().getBytes(UTF_8)), secretKey);
-                });
+        throw new UnsupportedOperationException();
+        //
+        // var request = createVaultRequest()
+        // .uri(awsUrl.resolve("datakey/plaintext/%s".formatted(encode(kekRef, UTF_8))))
+        // .POST(HttpRequest.BodyPublishers.noBody())
+        // .build();
+        //
+        // return sendAsync(kekRef, request, DATA_KEY_DATA_TYPE_REF, UnknownKeyException::new)
+        // .thenApply(data -> {
+        // var secretKey = DestroyableRawSecretKey.takeOwnershipOf(data.plaintext(), AES_KEY_ALGO);
+        // return new DekPair<>(new AwsKmsEdek(kekRef, data.ciphertext().getBytes(UTF_8)), secretKey);
+        // });
 
     }
 
@@ -116,16 +119,17 @@ public class AwsKmsKms implements Kms<String, AwsKmsEdek> {
     @NonNull
     @Override
     public CompletionStage<SecretKey> decryptEdek(@NonNull AwsKmsEdek edek) {
-
-        var body = createDecryptPostBody(edek);
-
-        var request = createVaultRequest()
-                .uri(awsUrl.resolve("decrypt/%s".formatted(encode(edek.kekRef(), UTF_8))))
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
-
-        return sendAsync(edek.kekRef(), request, DECRYPT_DATA_TYPE_REF, UnknownKeyException::new)
-                .thenApply(data -> DestroyableRawSecretKey.takeOwnershipOf(data.plaintext(), AES_KEY_ALGO));
+        throw new UnsupportedOperationException();
+        //
+        // var body = createDecryptPostBody(edek);
+        //
+        // var request = createVaultRequest()
+        // .uri(awsUrl.resolve("decrypt/%s".formatted(encode(edek.kekRef(), UTF_8))))
+        // .POST(HttpRequest.BodyPublishers.ofString(body))
+        // .build();
+        //
+        // return sendAsync(edek.kekRef(), request, DECRYPT_DATA_TYPE_REF, UnknownKeyException::new)
+        // .thenApply(data -> DestroyableRawSecretKey.takeOwnershipOf(data.plaintext(), AES_KEY_ALGO));
     }
 
     private String createDecryptPostBody(@NonNull AwsKmsEdek edek) {
@@ -147,29 +151,24 @@ public class AwsKmsKms implements Kms<String, AwsKmsEdek> {
     @NonNull
     @Override
     public CompletableFuture<String> resolveAlias(@NonNull String alias) {
-
-        var request = createVaultRequest()
-                .uri(awsUrl.resolve("keys/%s".formatted(encode(alias, UTF_8))))
-                .build();
-        return sendAsync(alias, request, READ_KEY_DATA_TYPE_REF, UnknownAliasException::new)
-                .thenApply(ReadKeyData::name);
+        var request = createRequest(new DescribeKeyRequest("alias/" + alias));
+        return sendAsync(alias, request, DESCRIBE_KEY_RESPONSE_TYPE_REF, UnknownAliasException::new)
+                .thenApply(DescribeKeyResponse::keyMetadata)
+                .thenApply(KeyMetadata::keyId);
     }
 
     private <T> CompletableFuture<T> sendAsync(@NonNull String key, HttpRequest request,
-                                               TypeReference<AwsKmsResponse<T>> valueTypeRef,
+                                               TypeReference<T> valueTypeRef,
                                                Function<String, KmsException> exception) {
-        return vaultClient.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
+        return client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
                 .thenApply(response -> checkResponseStatus(key, response, exception))
                 .thenApply(HttpResponse::body)
-                .thenApply(bytes -> decodeJson(valueTypeRef, bytes))
-                .thenApply(AwsKmsResponse::data);
+                .thenApply(bytes -> decodeJson(valueTypeRef, bytes));
     }
 
-    private static <T> AwsKmsResponse<T> decodeJson(TypeReference<AwsKmsResponse<T>> valueTypeRef, byte[] bytes) {
+    private static <T> T decodeJson(TypeReference<T> valueTypeRef, byte[] bytes) {
         try {
-            AwsKmsResponse<T> result = OBJECT_MAPPER.readValue(bytes, valueTypeRef);
-            Arrays.fill(bytes, (byte) 0);
-            return result;
+            return OBJECT_MAPPER.readValue(bytes, valueTypeRef);
         }
         catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -199,12 +198,99 @@ public class AwsKmsKms implements Kms<String, AwsKmsEdek> {
     HttpRequest.Builder createVaultRequest() {
         return HttpRequest.newBuilder()
                 .timeout(timeout)
-                .header("X-Vault-Token", vaultToken)
+                .header("X-Vault-Token", accessKey)
                 .header("Accept", "application/json");
     }
 
-    @VisibleForTesting
-    URI getVaultTransitEngineUri() {
+    @NonNull
+    private URI getAwsUrl() {
         return awsUrl;
     }
+
+    private <R> R sendRequest(String key, HttpRequest request, TypeReference<R> valueTypeRef) {
+        try {
+            HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() != 200) {
+                var er = decodeJson(ERROR_RESPONSE_TYPE_REF, response.body());
+                if (er.type().equalsIgnoreCase("NotFoundException")) {
+                    throw new UnknownAliasException(key);
+                }
+                throw new IllegalStateException("unexpected response %s (%s) for request: %s".formatted(response.statusCode(), er, request.uri()));
+            }
+            return decodeJson(valueTypeRef, response.body());
+        }
+        catch (IOException e) {
+            if (e.getCause() instanceof KmsException ke) {
+                throw ke;
+            }
+            throw new UncheckedIOException("Request to %s failed".formatted(request), e);
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted during REST API call : %s".formatted(request.uri()), e);
+        }
+    }
+
+    private HttpRequest createRequest(Object request) {
+
+        var body = getBody(request).getBytes(UTF_8);
+        var date = AmazonRequestSignatureV4Utils.DATE_TIME_FORMATTER.format(now(ZoneOffset.UTC));
+
+        var headers = new HashMap<String, String>();
+        AmazonRequestSignatureV4Utils.calculateAuthorizationHeaders(
+                "POST",
+                getAwsUrl().getHost(),
+                null,
+                null,
+                headers,
+                body,
+                date,
+                accessKey,
+                secretKey,
+                region,
+                "kms");
+
+        var builder = HttpRequest.newBuilder().uri(getAwsUrl());
+        headers.entrySet().stream().filter(e -> !e.getKey().equals("Host")).forEach(e -> builder.header(e.getKey(), e.getValue()));
+
+        return builder
+                .header("Content-Type", AmazonRequestSignatureV4Utils.APPLICATION_X_AMZ_JSON_1_1)
+                .header("X-Amz-Target", getTarget(request.getClass()))
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+                .build();
+    }
+
+    private String getBody(Object obj) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(obj);
+        }
+        catch (JsonProcessingException e) {
+            throw new UncheckedIOException("Failed to create request body", e);
+        }
+    }
+
+    private static String getTarget(Class<?> clazz) {
+        if (clazz == DescribeKeyRequest.class) {
+            return "TrentService.DescribeKey";
+        }
+        // else if (clazz == CreateKeyRequest.class) {
+        // return "TrentService.CreateKey";
+        // }
+        // else if (clazz == CreateAliasRequest.class) {
+        // return "TrentService.CreateAlias";
+        // }
+        // else if (clazz == UpdateAliasRequest.class) {
+        // return "TrentService.UpdateAlias";
+        // }
+        // else if (clazz == DeleteAliasRequest.class) {
+        // return "TrentService.DeleteAlias";
+        // }
+        // else if (clazz == ScheduleKeyDeletionRequest.class) {
+        // return "TrentService.ScheduleKeyDeletion";
+        // }
+        else {
+            throw new IllegalArgumentException("target not known for class " + clazz);
+        }
+    }
+
 }
