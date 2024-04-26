@@ -188,10 +188,12 @@ public class AwsKmsKms implements Kms<String, AwsKmsEdek> {
         var date = AmazonRequestSignatureV4Utils.DATE_TIME_FORMATTER.format(now(ZoneOffset.UTC));
 
         var headers = new HashMap<String, String>();
+        headers.put("Content-Type", AmazonRequestSignatureV4Utils.APPLICATION_X_AMZ_JSON_1_1);
+        headers.put("X-Amz-Target", getTarget(request.getClass()));
         AmazonRequestSignatureV4Utils.calculateAuthorizationHeaders(
                 "POST",
                 getAwsUrl().getHost(),
-                null,
+                "/",
                 null,
                 headers,
                 body,
@@ -204,11 +206,12 @@ public class AwsKmsKms implements Kms<String, AwsKmsEdek> {
         var builder = HttpRequest.newBuilder().uri(getAwsUrl());
         headers.entrySet().stream().filter(e -> !e.getKey().equals("Host")).forEach(e -> builder.header(e.getKey(), e.getValue()));
 
-        return builder
-                .header("Content-Type", AmazonRequestSignatureV4Utils.APPLICATION_X_AMZ_JSON_1_1)
-                .header("X-Amz-Target", getTarget(request.getClass()))
+        HttpRequest build = builder
+//                .header("Content-Type", AmazonRequestSignatureV4Utils.APPLICATION_X_AMZ_JSON_1_1)
+                //                .header("X-Amz-Target", getTarget(request.getClass()))
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body))
                 .build();
+        return build;
     }
 
     private String getBody(Object obj) {
