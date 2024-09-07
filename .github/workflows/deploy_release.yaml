@@ -29,19 +29,25 @@ name: Deploy Release
 #
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       release-version:
+        type: string
         description: 'The release version, e.g. 0.7.0'
         required: true
       next-state:
         description: 'Desired next state for this release'
         required: true
-        type: choice
-        default: drop
-        options:
-          - drop
-          - release
+        type: string
+      pr-number:
+        description: 'Pull request number that performs the release'
+        type: number
+        required: true
+    secrets:
+      KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD:
+        required: true
+      KROXYLICIOUS_RELEASE_TOKEN:
+        required: true
 
 jobs:
   build:
@@ -82,3 +88,4 @@ jobs:
           GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }} # For the gh cmd line tool used by transition-github-release-note-state.sh
         run: ./scripts/transition-github-release-note-state.sh -s  ${{ github.event.inputs.next-state }} -v ${{ github.event.inputs.release-version }}
 
+# Merge the PR or Close the PR
