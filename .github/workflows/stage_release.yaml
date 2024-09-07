@@ -132,3 +132,22 @@ jobs:
           SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
           SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
         run: ./scripts/transition-staging-repository-state.sh -s close
+
+      - name: 'Comment on PR to prompt next phase of the release'
+        if: ${{ github.event.inputs.dry-run == 'false' }}
+        env:
+          GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }} # For the gh cmd line tool used by stage-release.sh
+        run: |
+          gh pr comment --body-file - << 'EOF'
+          Hey, that's your release ${{ github.event.inputs.release-version }} prepared and its artefacts successfully staged to Sonatype.
+          There are a couple of steps to go to complete the release.
+          
+          * [ ] Let the CI workflow on this PR complete
+          * [ ] [Kick the tyres](https://github.com/kroxylicious/kroxylicious-junit5-extension/blob/main/RELEASING.md#making-the-release-public) of the Maven artefacts.
+          
+          Once done, comment `&commat;kroxylicious-robot release` on this PR to complete the release.  If things don't look
+          good, abort the release by saying `&commat;kroxylicious-robot drop`.
+          
+          Thank you,
+          Your friendly Kroxylicious Github Robot.
+          EOF
