@@ -5,6 +5,7 @@ For changes that effect a public API, the [deprecation policy](./DEV_GUIDE.md#de
 
 Format `<github issue/pr number>: <short description>`.
 
+## SNAPSHOT
 ## 0.9.0
 ## 0.8.0
 
