@@ -21,8 +21,6 @@ on:
     types: [created]
 
 jobs:
-  process-command2:
-    runs-on: ubuntu-latest
 
   process-command:
     runs-on: ubuntu-latest
