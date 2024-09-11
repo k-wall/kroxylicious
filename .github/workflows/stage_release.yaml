@@ -167,9 +167,9 @@ jobs:
           * [ ] [Kick the tyres](https://github.com/kroxylicious/kroxylicious-junit5-extension/blob/main/RELEASING.md#making-the-release-public)
             on the Maven artefacts.
           
-          Once done, comment <code>&commat;kroxylicious-robot release</code> on this PR. This will release the artefacts to Maven Central and merge this PR to main.
+          Once done, comment <code>&commat;kroxylicious-robot promote-release</code> on this PR. This will release the artefacts to Maven Central and merge this PR to main.
           
-          If things don't look good, abort the release by saying <code>&commat;kroxylicious-robot drop</code>.
+          If things don't look good, abort the release by saying <code>&commat;kroxylicious-robot drop-release</code>.
           
           Thank you,
           Your friendly Kroxylicious Github Robot.
