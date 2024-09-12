@@ -15,7 +15,7 @@ At a high level, the process is as follows:
 
 ## Pre-Requisites
 
-You must be a member of the Kroxylicious organization and have access to [create 
+You must be a member of the Kroxylicious [release-engineers](https://github.com/orgs/kroxylicious/teams/release-engineers) and have access to [create 
 secrets](https://github.com/kroxylicious/kroxylicious/settings/secrets/actions) within the kroxylicious repository.
 
 You will need a GPG key, follow this [guide](https://help.ubuntu.com/community/GnuPrivacyGuardHowto#Generating_an_OpenPGP_Key).
@@ -61,6 +61,7 @@ This will:
   1. the first will version the artefacts at `release-version`.  A `release-version` tag will point at this commit.
   2. the second will re-open main for development, at the next snapshot.
 * stage a release [Nexus UI](https://s01.oss.sonatype.org/). It'll be named `iokroxylicious-nn`.
+* raised a PR in the https://github.com/kroxylicious/kroxylicious.github.io/ containing the documentation for the release.
 
 If anything goes wrong, follow the steps in [Failed Releases](#failed-releases)
 
@@ -88,21 +89,17 @@ The local changes made to `T`'s POM can be reverted.
 
 ### Making the release public
 
-1. Run [deploy_workflow](https://github.com/kroxylicious/kroxylicious/actions/workflows/deploy_release.yaml)
-   setting the `next-state` to `release` to publish the artefact and publish the release notes.
-1. Merge release PR (use Rebase and Merge strategy) and delete the branch after.
+1. Comment on the PR `@kroxylcious-robot promote-release`.
 1. Let [Kroxylicious Team Developers](https://kroxylicious.slack.com/archives/C04V1K6EAKZ) know the release is finished.
-1. [Publish](https://github.com/kroxylicious/kroxylicious.github.io/blob/main/docs/README.md) the documentation for the release
-1. Merge the blog post PR
+1. Merge the documentation and blog post PR on https://github.com/kroxylicious/kroxylicious.github.io/
 1. Post to social media about the release.
 
 If anything goes wrong, follow the steps in [Failed Releases](#failed-releases)
 
 ### Failed Releases
 
-If the release fails verification, use the [deploy_workflow](https://github.com/kroxylicious/kroxylicious/actions/workflows/deploy_release.yaml) with  the `drop` argument.
-This will drop the snapshot repository and delete the release notes. Manually close the PR
-and delete the associated branch.
+If the release fails verification, comment on the PR `@kroxylcious-robot drop-release`.
+This will drop the snapshot repository, delete the release notes and close PR.
 
 ### Remove your private key/passphrase
 
