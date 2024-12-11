@@ -211,14 +211,8 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
 
                 return configureTrustProvider(tlsConfiguration).apply(sslContextBuilder).build();
             }
-            catch (Exception e) {
-                e.printStackTrace();
-                try {
-                    throw new Exception(e);
-                }
-                catch (Exception ex) {
-                    throw new RuntimeException(ex);
-                }
+            catch (SSLException e) {
+                throw new UncheckedIOException(e);
             }
         });
     }

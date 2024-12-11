@@ -35,8 +35,8 @@ public record Tls(KeyProvider key,
      * {@see io.kroxylicious.proxy.config.tls.Tls#Tls(
      *      io.kroxylicious.proxy.config.tls.KeyProvider,
      *      io.kroxylicious.proxy.config.tls.TrustProvider,
-     *      java.lang.String,
-     *      java.lang.String)
+     *      List<java.lang.String>,
+     *      List<java.lang.String>)
      * }
      */
     // This is required for API backwards compatability
