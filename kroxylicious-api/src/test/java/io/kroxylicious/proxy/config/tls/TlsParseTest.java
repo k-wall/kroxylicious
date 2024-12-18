@@ -33,7 +33,7 @@ class TlsParseTest {
         assertThat(tls.trust()).isNull();
         assertThat(tls.key()).isNull();
         assertThat(tls.cipherSuites()).isNull();
-        assertThat(tls.enabledProtocols()).isNull();
+        assertThat(tls.protocols()).isNull();
     }
 
     @Test
@@ -449,30 +449,56 @@ class TlsParseTest {
     void testCipherSuitesProvider() throws IOException {
         String json = """
                 {
-                    "cipherSuites": [
-                            "CIPHER_SUITE_1",
-                            "CIPHER_SUITE_2",
-                            "CIPHER_SUITE_3"
+                    "cipherSuites": {
+                        "allowed": [
+                            "ALLOWED_CIPHER_SUITE_1",
+                            "ALLOWED_CIPHER_SUITE_2",
+                            "ALLOWED_CIPHER_SUITE_3"
+                        ],
+                        "denied": [
+                            "DENIED_CIPHER_SUITE_1",
+                            "DENIED_CIPHER_SUITE_2",
+                            "DENIED_CIPHER_SUITE_3"
                         ]
+                    }
                 }
                 """;
         Tls tls = readTls(json);
-        assertThat(tls).isEqualTo(new Tls(null, null, List.of("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3"), null));
+        assertThat(tls).isEqualTo(new Tls(
+                null,
+                null,
+                new AllowDeny<String>(
+                        List.of("ALLOWED_CIPHER_SUITE_1", "ALLOWED_CIPHER_SUITE_2", "ALLOWED_CIPHER_SUITE_3"),
+                        List.of("DENIED_CIPHER_SUITE_1", "DENIED_CIPHER_SUITE_2", "DENIED_CIPHER_SUITE_3")),
+                null));
     }
 
     @Test
     void testEnabledProtocolsProvider() throws IOException {
         String json = """
                 {
-                    "enabledProtocols": [
-                        "ENABLED_PROTOCOL_1",
-                        "ENABLED_PROTOCOL_2",
-                        "ENABLED_PROTOCOL_3"
-                    ]
+                    "protocols": {
+                        "allowed": [
+                            "ALLOWED_PROTOCOL_1",
+                            "ALLOWED_PROTOCOL_2",
+                            "ALLOWED_PROTOCOL_3"
+                        ],
+                        "denied": [
+                            "DENIED_PROTOCOL_1",
+                            "DENIED_PROTOCOL_2",
+                            "DENIED_PROTOCOL_3"
+                        ]
+                    }
                 }
                 """;
         Tls tls = readTls(json);
-        assertThat(tls).isEqualTo(new Tls(null, null, null, List.of("ENABLED_PROTOCOL_1", "ENABLED_PROTOCOL_2", "ENABLED_PROTOCOL_3")));
+        assertThat(tls).isEqualTo(new Tls(
+                null,
+                null,
+                null,
+                new AllowDeny<String>(
+                        List.of("ALLOWED_PROTOCOL_1", "ALLOWED_PROTOCOL_2", "ALLOWED_PROTOCOL_3"),
+                        List.of("DENIED_PROTOCOL_1", "DENIED_PROTOCOL_2", "DENIED_PROTOCOL_3"))));
     }
 
     private Tls readTls(String json) throws IOException {

@@ -6,6 +6,7 @@
 package io.kroxylicious.proxy.model;
 
 import java.io.UncheckedIOException;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -21,12 +22,14 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 
 import io.kroxylicious.proxy.config.TargetCluster;
+import io.kroxylicious.proxy.config.tls.AllowDeny;
 import io.kroxylicious.proxy.config.tls.NettyKeyProvider;
 import io.kroxylicious.proxy.config.tls.NettyTrustProvider;
 import io.kroxylicious.proxy.config.tls.PlatformTrustProvider;
 import io.kroxylicious.proxy.config.tls.Tls;
 import io.kroxylicious.proxy.config.tls.TrustOptions;
 import io.kroxylicious.proxy.config.tls.TrustProvider;
+import io.kroxylicious.proxy.filter.DenyCipherSuiteFilter;
 import io.kroxylicious.proxy.service.ClusterNetworkAddressConfigProvider;
 import io.kroxylicious.proxy.service.HostPort;
 
@@ -80,34 +83,38 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
                                                  Optional<Tls> tls) {
         try {
             HostPort downstreamBootstrap = clusterNetworkAddressConfigProvider.getClusterBootstrapAddress();
-            var downstreamTls = tls.map(t -> Optional.ofNullable(t.trust())
-                    .map(TrustProvider::trustOptions)
-                    .map(TrustOptions::toString).orElse("-"))
-                    .map(options -> " (TLS: " + options + ") ").orElse("");
-            var downstreamCipherSuites = tls.map(t -> Optional.ofNullable(t.cipherSuites())
-                    .map(Iterable<String>::toString).orElse("Default"))
-                    .map(cipherSuites -> " (Configured Ciphers: " + cipherSuites + ")").orElse("");
-            var downstreamEnabledProtocols = tls.map(t -> Optional.ofNullable(t.enabledProtocols())
-                    .map(Iterable<String>::toString).orElse("Default"))
-                    .map(enabledProtocols -> " (Configured Protocols: " + enabledProtocols + ")").orElse("");
+            var downstreamTlsSummary = generateTlsSummary(tls);
 
             HostPort upstreamHostPort = targetCluster.bootstrapServersList().get(0);
-            var upstreamTls = targetCluster.tls().map(tls1 -> " (TLS)").orElse("");
-            var upstreamCipherSuites = targetCluster.tls().map(t -> Optional.ofNullable(t.cipherSuites())
-                    .map(Iterable<String>::toString).orElse("Default"))
-                    .map(cipherSuites -> " (Configured Ciphers: " + cipherSuites + ")").orElse("");
-            var upstreamEnabledProtocols = targetCluster.tls().map(t -> Optional.ofNullable(t.enabledProtocols())
-                    .map(Iterable<String>::toString).orElse("Default"))
-                    .map(enabledProtocols -> " (Configured Protocols: " + enabledProtocols + ")").orElse("");
+            var upstreamTlsSummary = generateTlsSummary(targetCluster.tls());
 
-            LOGGER.info("Virtual Cluster: {}, Downstream {}{}{}{} => Upstream {}{}{}{}",
-                    clusterName,
-                    downstreamBootstrap, downstreamTls, downstreamCipherSuites, downstreamEnabledProtocols,
-                    upstreamHostPort, upstreamTls, upstreamCipherSuites, upstreamEnabledProtocols);
+            LOGGER.info("Virtual Cluster: {}, Downstream {}{} => Upstream {}{}",
+                    clusterName, downstreamBootstrap, downstreamTlsSummary, upstreamHostPort, upstreamTlsSummary);
         }
         catch (Exception e) {
             LOGGER.warn("Failed to log summary for Virtual Cluster: {}", clusterName, e);
         }
+    }
+
+    public static String generateTlsSummary(Optional<Tls> tlsToSummarize) {
+        var tls = tlsToSummarize.map(t -> Optional.ofNullable(t.trust())
+                .map(TrustProvider::trustOptions)
+                .map(TrustOptions::toString).orElse("-"))
+                .map(options -> " (TLS: " + options + ") ").orElse("");
+        var cipherSuitesAllowed = tlsToSummarize.map(t -> Optional.ofNullable(t.cipherSuites())
+                .map(AllowDeny::allowed).orElse(Collections.emptyList()))
+                .map(allowedCiphers -> " (Allowed Ciphers: " + allowedCiphers + ")").orElse("");
+        var cipherSuitesDenied = tlsToSummarize.map(t -> Optional.ofNullable(t.cipherSuites())
+                .map(AllowDeny::denied).orElse(Collections.emptyList()))
+                .map(deniedCiphers -> " (Denied Ciphers: " + deniedCiphers + ")").orElse("");
+        var protocolsAllowed = tlsToSummarize.map(t -> Optional.ofNullable(t.protocols())
+                .map(AllowDeny::allowed).orElse(Collections.emptyList()))
+                .map(protocols -> " (Allowed Protocols: " + protocols + ")").orElse("");
+        var protocolsDenied = tlsToSummarize.map(t -> Optional.ofNullable(t.protocols())
+                .map(AllowDeny::denied).orElse(Collections.emptyList()))
+                .map(protocols -> " (Denied Protocols: " + protocols + ")").orElse("");
+
+        return tls + cipherSuitesAllowed + cipherSuitesDenied + protocolsAllowed + protocolsDenied;
     }
 
     public String getClusterName() {
@@ -251,12 +258,14 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
 
     private static void configureCipherSuites(SslContextBuilder sslContextBuilder, Tls tlsConfiguration) {
         Optional.ofNullable(tlsConfiguration.cipherSuites())
-                .map(ciphers -> sslContextBuilder.ciphers(tlsConfiguration.cipherSuites()));
+                .map(ciphers -> sslContextBuilder.ciphers(
+                        tlsConfiguration.cipherSuites().allowed(),
+                        DenyCipherSuiteFilter.INSTANCE.deniedCiphers(tlsConfiguration.cipherSuites().denied())));
     }
 
     private static void configureEnabledProtocols(SslContextBuilder sslContextBuilder, Tls tlsConfiguration) {
-        Optional.ofNullable(tlsConfiguration.enabledProtocols())
-                .map(ciphers -> sslContextBuilder.protocols(tlsConfiguration.enabledProtocols()));
+        Optional.ofNullable(tlsConfiguration.protocols())
+                .map(ciphers -> sslContextBuilder.protocols(tlsConfiguration.protocols().allowed()));
     }
 
     private static void validatePortUsage(ClusterNetworkAddressConfigProvider clusterNetworkAddressConfigProvider) {

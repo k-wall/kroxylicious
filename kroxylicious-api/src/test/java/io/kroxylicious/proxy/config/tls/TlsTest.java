@@ -48,14 +48,14 @@ class TlsTest {
 
     @Test
     void testCipherSuitesDefined() {
-        Tls tls = new Tls(null, null, List.of("CIPHER_SUITES"), null);
-        assertThat(tls.cipherSuites()).isNotNull();
+        Tls tls = new Tls(null, null, new AllowDeny<String>(List.of("ALLOWED_CIPHER_SUITES"), null), null);
+        assertThat(tls.cipherSuites().allowed()).isNotNull();
     }
 
     @Test
     void testEnabledProtocolsDefined() {
-        Tls tls = new Tls(null, null, null, List.of("ENABLED_PROTOCOLS"));
-        assertThat(tls.enabledProtocols()).isNotNull();
+        Tls tls = new Tls(null, null, null, new AllowDeny<String>(List.of("ALLOWED_PROTOCOLS"), null));
+        assertThat(tls.protocols().allowed()).isNotNull();
     }
 
 }
