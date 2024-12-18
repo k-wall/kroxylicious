@@ -40,8 +40,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import io.netty.handler.ssl.Ciphers;
-
 import io.kroxylicious.proxy.config.ClusterNetworkAddressConfigProviderDefinition;
 import io.kroxylicious.proxy.config.ClusterNetworkAddressConfigProviderDefinitionBuilder;
 import io.kroxylicious.proxy.config.ConfigurationBuilder;
@@ -358,7 +356,7 @@ class TlsIT extends BaseIT {
     @Test
     void downstreamMutualTls_SuccessfulTlsClientAuthRequiredWithCipherSuitesAllowed(KafkaCluster cluster) throws Exception {
         // Cipher we want to use
-        AllowDeny<String> cipherSuites = new AllowDeny<>(List.of(Ciphers.TLS_CHACHA20_POLY1305_SHA256), null);
+        AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_CHACHA20_POLY1305_SHA256"), null);
 
         try (var tester = kroxyliciousTester(constructMutualTlsBuilder(cluster, TlsClientAuth.REQUIRED, cipherSuites));
                 var admin = tester.admin("demo",
@@ -369,7 +367,7 @@ class TlsIT extends BaseIT {
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Cipher matches what we want to use
-                                SslConfigs.SSL_CIPHER_SUITES_CONFIG, Ciphers.TLS_CHACHA20_POLY1305_SHA256))) {
+                                SslConfigs.SSL_CIPHER_SUITES_CONFIG, "TLS_CHACHA20_POLY1305_SHA256"))) {
             // do some work to ensure connection is opened
             final CreateTopicsResult createTopicsResult = createTopic(admin, TOPIC, 1);
             assertThat(createTopicsResult.all()).isDone();
@@ -379,7 +377,7 @@ class TlsIT extends BaseIT {
     @Test
     void downstreamMutualTls_UnsuccessfulTlsClientAuthRequiredWithCipherSuitesAllowed(KafkaCluster cluster) throws Exception {
         // Cipher we want to use
-        AllowDeny<String> cipherSuites = new AllowDeny<>(List.of(Ciphers.TLS_AES_128_GCM_SHA256), null);
+        AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_AES_128_GCM_SHA256"), null);
 
         try (var tester = kroxyliciousTester(constructMutualTlsBuilder(cluster, TlsClientAuth.REQUIRED, cipherSuites));
                 var admin = tester.admin("demo",
@@ -390,7 +388,7 @@ class TlsIT extends BaseIT {
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Cipher doesn't match what we want to use
-                                SslConfigs.SSL_CIPHER_SUITES_CONFIG, Ciphers.TLS_CHACHA20_POLY1305_SHA256))) {
+                                SslConfigs.SSL_CIPHER_SUITES_CONFIG, "TLS_CHACHA20_POLY1305_SHA256"))) {
             // Server will only allow us to use TLS_CHACHA20_POLY1305_SHA256 and we only want to use TLS_AES_128_GCM_SHA256
             assertThatThrownBy(() -> admin.describeCluster().clusterId().get(10, TimeUnit.SECONDS)).hasRootCauseInstanceOf(SSLHandshakeException.class)
                     .hasRootCauseMessage("Received fatal alert: handshake_failure");
