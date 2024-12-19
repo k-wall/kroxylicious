@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 class DenyCipherSuiteFilterTest {
 
     @Test
-    public void emptyCiphersDefaultsToDefaultCiphers() {
+   void emptyCiphersDefaultsToDefaultCiphers() {
         List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
         Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3"));
         List<String> defaultAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3");
