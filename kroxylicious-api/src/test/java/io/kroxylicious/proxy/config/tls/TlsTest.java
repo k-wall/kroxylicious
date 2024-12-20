@@ -7,8 +7,8 @@
 package io.kroxylicious.proxy.config.tls;
 
 import java.security.KeyStore;
-import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -48,14 +48,14 @@ class TlsTest {
 
     @Test
     void testCipherSuitesDefined() {
-        Tls tls = new Tls(null, null, new AllowDeny<String>(List.of("ALLOWED_CIPHER_SUITES"), null), null);
-        assertThat(tls.cipherSuites().allowed()).isNotNull();
+        Tls tls = new Tls(null, null, new AllowDeny<String>(Set.of("ALLOWED_CIPHER_SUITES"), null), null);
+        assertThat(tls.cipherSuites()).isNotNull();
     }
 
     @Test
     void testEnabledProtocolsDefined() {
-        Tls tls = new Tls(null, null, null, new AllowDeny<String>(List.of("ALLOWED_PROTOCOLS"), null));
-        assertThat(tls.protocols().allowed()).isNotNull();
+        Tls tls = new Tls(null, null, null, new AllowDeny<Protocols>(Set.of(Protocols.TLSv1_2), null));
+        assertThat(tls.protocols()).isNotNull();
     }
 
 }

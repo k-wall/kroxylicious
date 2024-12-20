@@ -7,7 +7,7 @@
 package io.kroxylicious.proxy.config.tls;
 
 import java.io.IOException;
-import java.util.List;
+import java.util.Set;
 
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -468,8 +468,8 @@ class TlsParseTest {
                 null,
                 null,
                 new AllowDeny<String>(
-                        List.of("ALLOWED_CIPHER_SUITE_1", "ALLOWED_CIPHER_SUITE_2", "ALLOWED_CIPHER_SUITE_3"),
-                        List.of("DENIED_CIPHER_SUITE_1", "DENIED_CIPHER_SUITE_2", "DENIED_CIPHER_SUITE_3")),
+                        Set.of("ALLOWED_CIPHER_SUITE_1", "ALLOWED_CIPHER_SUITE_2", "ALLOWED_CIPHER_SUITE_3"),
+                        Set.of("DENIED_CIPHER_SUITE_1", "DENIED_CIPHER_SUITE_2", "DENIED_CIPHER_SUITE_3")),
                 null));
     }
 
@@ -479,14 +479,11 @@ class TlsParseTest {
                 {
                     "protocols": {
                         "allowed": [
-                            "ALLOWED_PROTOCOL_1",
-                            "ALLOWED_PROTOCOL_2",
-                            "ALLOWED_PROTOCOL_3"
+                            "TLSv1_2",
+                            "TLSv1_3"
                         ],
                         "denied": [
-                            "DENIED_PROTOCOL_1",
-                            "DENIED_PROTOCOL_2",
-                            "DENIED_PROTOCOL_3"
+                            "TLSv1_1"
                         ]
                     }
                 }
@@ -496,9 +493,9 @@ class TlsParseTest {
                 null,
                 null,
                 null,
-                new AllowDeny<String>(
-                        List.of("ALLOWED_PROTOCOL_1", "ALLOWED_PROTOCOL_2", "ALLOWED_PROTOCOL_3"),
-                        List.of("DENIED_PROTOCOL_1", "DENIED_PROTOCOL_2", "DENIED_PROTOCOL_3"))));
+                new AllowDeny<Protocols>(
+                        Set.of(Protocols.TLSv1_2, Protocols.TLSv1_3),
+                        Set.of(Protocols.TLSv1_1))));
     }
 
     private Tls readTls(String json) throws IOException {

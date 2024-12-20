@@ -6,7 +6,7 @@
 
 package io.kroxylicious.proxy.config.tls;
 
-import java.util.List;
+import java.util.Set;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 
@@ -16,4 +16,4 @@ import edu.umd.cs.findbugs.annotations.Nullable;
  * @param allowed specifies a list of allowed objects.
  * @param denied specifies a list of denied objects.
  */
-public record AllowDeny<T>(@Nullable List<T> allowed, @Nullable List<T> denied) {}
+public record AllowDeny<T>(@Nullable Set<T> allowed, @Nullable Set<T> denied) {}

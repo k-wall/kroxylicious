@@ -26,10 +26,10 @@ import io.kroxylicious.proxy.config.tls.AllowDeny;
 import io.kroxylicious.proxy.config.tls.NettyKeyProvider;
 import io.kroxylicious.proxy.config.tls.NettyTrustProvider;
 import io.kroxylicious.proxy.config.tls.PlatformTrustProvider;
+import io.kroxylicious.proxy.config.tls.Protocols;
 import io.kroxylicious.proxy.config.tls.Tls;
 import io.kroxylicious.proxy.config.tls.TrustOptions;
 import io.kroxylicious.proxy.config.tls.TrustProvider;
-import io.kroxylicious.proxy.filter.DenyCipherSuiteFilter;
 import io.kroxylicious.proxy.service.ClusterNetworkAddressConfigProvider;
 import io.kroxylicious.proxy.service.HostPort;
 
@@ -102,16 +102,16 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
                 .map(TrustOptions::toString).orElse("-"))
                 .map(options -> " (TLS: " + options + ") ").orElse("");
         var cipherSuitesAllowed = tlsToSummarize.map(t -> Optional.ofNullable(t.cipherSuites())
-                .map(AllowDeny::allowed).orElse(Collections.emptyList()))
+                .map(AllowDeny::allowed).orElse(Collections.emptySet()))
                 .map(allowedCiphers -> " (Allowed Ciphers: " + allowedCiphers + ")").orElse("");
         var cipherSuitesDenied = tlsToSummarize.map(t -> Optional.ofNullable(t.cipherSuites())
-                .map(AllowDeny::denied).orElse(Collections.emptyList()))
+                .map(AllowDeny::denied).orElse(Collections.emptySet()))
                 .map(deniedCiphers -> " (Denied Ciphers: " + deniedCiphers + ")").orElse("");
         var protocolsAllowed = tlsToSummarize.map(t -> Optional.ofNullable(t.protocols())
-                .map(AllowDeny::allowed).orElse(Collections.emptyList()))
+                .map(AllowDeny::allowed).orElse(Collections.emptySet()))
                 .map(protocols -> " (Allowed Protocols: " + protocols + ")").orElse("");
         var protocolsDenied = tlsToSummarize.map(t -> Optional.ofNullable(t.protocols())
-                .map(AllowDeny::denied).orElse(Collections.emptyList()))
+                .map(AllowDeny::denied).orElse(Collections.emptySet()))
                 .map(protocols -> " (Denied Protocols: " + protocols + ")").orElse("");
 
         return tls + cipherSuitesAllowed + cipherSuitesDenied + protocolsAllowed + protocolsDenied;
@@ -260,12 +260,27 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
         Optional.ofNullable(tlsConfiguration.cipherSuites())
                 .map(ciphers -> sslContextBuilder.ciphers(
                         tlsConfiguration.cipherSuites().allowed(),
-                        DenyCipherSuiteFilter.INSTANCE.deniedCiphers(tlsConfiguration.cipherSuites().denied())));
+                        new DenyCipherSuiteFilter(tlsConfiguration.cipherSuites().denied())));
     }
 
     private static void configureEnabledProtocols(SslContextBuilder sslContextBuilder, Tls tlsConfiguration) {
-        Optional.ofNullable(tlsConfiguration.protocols())
-                .map(ciphers -> sslContextBuilder.protocols(tlsConfiguration.protocols().allowed()));
+        var protocols = Optional.ofNullable(tlsConfiguration.protocols());
+
+        if (protocols.isPresent()) {
+            var allowedProtocols = Optional.ofNullable(protocols.get().allowed()).orElse(Set.of(Protocols.TLSv1_2, Protocols.TLSv1_3));
+            var deniedProtocols = Optional.ofNullable(protocols.get().denied()).orElse(Collections.EMPTY_SET);
+
+            var protocolsToUse = allowedProtocols.stream()
+                    .filter(Predicate.not(p -> deniedProtocols.contains(p)))
+                    .map(Protocols::getSslProtocol)
+                    .collect(Collectors.toList());
+
+            if(!protocolsToUse.isEmpty()) {
+                sslContextBuilder.protocols(protocolsToUse);
+            } else {
+                LOGGER.warn("The protocols configuration you have in place has resulted in platform defaults being used");
+            }
+        }
     }
 
     private static void validatePortUsage(ClusterNetworkAddressConfigProvider clusterNetworkAddressConfigProvider) {

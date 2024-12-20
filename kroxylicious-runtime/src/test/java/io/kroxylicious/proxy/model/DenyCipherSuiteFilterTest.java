@@ -4,7 +4,7 @@
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-package io.kroxylicious.proxy.filter;
+package io.kroxylicious.proxy.model;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -13,7 +13,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class DenyCipherSuiteFilterTest {
 
@@ -23,21 +23,21 @@ class DenyCipherSuiteFilterTest {
         Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3"));
         List<String> defaultAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3");
 
-        String[] filtered = DenyCipherSuiteFilter.INSTANCE.deniedCiphers(null)
+        String[] filtered = new DenyCipherSuiteFilter(null)
                 .filterCipherSuites(null, defaultCiphers, supportedCiphers);
-        assertArrayEquals(defaultAllowedCiphers.toArray(), filtered);
+        assertThat(filtered).containsExactlyElementsOf(defaultAllowedCiphers);
     }
 
     @Test
     public void emptyCiphersDefaultsToDefaultCiphersMinusDenied() {
         List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
         Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3"));
-        List<String> deniedCiphers = Arrays.asList("CIPHER_SUITE_2");
+        Set<String> deniedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_2", "CIPHER_SUITE_4"));
         List<String> defaultAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_3");
 
-        String[] filtered = DenyCipherSuiteFilter.INSTANCE.deniedCiphers(deniedCiphers)
+        String[] filtered = new DenyCipherSuiteFilter(deniedCiphers)
                 .filterCipherSuites(null, defaultCiphers, supportedCiphers);
-        assertArrayEquals(defaultAllowedCiphers.toArray(), filtered);
+        assertThat(filtered).containsExactlyElementsOf(defaultAllowedCiphers);
     }
 
     @Test
@@ -46,9 +46,9 @@ class DenyCipherSuiteFilterTest {
         List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
         Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4"));
 
-        String[] filtered = DenyCipherSuiteFilter.INSTANCE.deniedCiphers(null)
+        String[] filtered = new DenyCipherSuiteFilter(null)
                 .filterCipherSuites(requestedCiphers, defaultCiphers, supportedCiphers);
-        assertArrayEquals(requestedCiphers.toArray(), filtered);
+        assertThat(filtered).containsExactlyElementsOf(requestedCiphers);
     }
 
     @Test
@@ -58,22 +58,22 @@ class DenyCipherSuiteFilterTest {
         List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
         Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4"));
 
-        String[] filtered = DenyCipherSuiteFilter.INSTANCE.deniedCiphers(null)
+        String[] filtered = new DenyCipherSuiteFilter(null)
                 .filterCipherSuites(requestedCiphers, defaultCiphers, supportedCiphers);
-        assertArrayEquals(requestedSupportedCiphers.toArray(), filtered);
+        assertThat(filtered).containsExactlyElementsOf(requestedSupportedCiphers);
     }
 
     @Test
     public void specificCiphersInstanceImplementsWithRequestedCiphersMinusDenied() {
         List<String> requestedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3");
-        List<String> deniedCiphers = Arrays.asList("CIPHER_SUITE_2");
+        Set<String> deniedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_2"));
         List<String> requestedAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_3");
         List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
         Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4"));
 
-        String[] filtered = DenyCipherSuiteFilter.INSTANCE.deniedCiphers(deniedCiphers)
+        String[] filtered = new DenyCipherSuiteFilter(deniedCiphers)
                 .filterCipherSuites(requestedCiphers, defaultCiphers, supportedCiphers);
-        assertArrayEquals(requestedAllowedCiphers.toArray(), filtered);
+        assertThat(filtered).containsExactlyElementsOf(requestedAllowedCiphers);
     }
 
 }
