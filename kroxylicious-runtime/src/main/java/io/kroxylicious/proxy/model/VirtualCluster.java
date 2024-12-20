@@ -274,7 +274,7 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
             if (protocols.isPresent()) {
                 var allowedProtocols = Optional.ofNullable(protocols.get().allowed())
                         .orElse(Arrays.stream(SSLContext.getDefault().getSupportedSSLParameters().getProtocols())
-                        .map(sslProtocol -> SslProtocol.getProtocolName(sslProtocol).get()).collect(Collectors.toSet()));
+                                .map(sslProtocol -> SslProtocol.getProtocolName(sslProtocol).get()).collect(Collectors.toSet()));
                 var deniedProtocols = Optional.ofNullable(protocols.get().denied())
                         .orElse(Collections.EMPTY_SET);
 
@@ -292,10 +292,9 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
             }
 
         }
-        catch (NoSuchAlgorithmException nsae) {
-            nsae.printStackTrace();
+        catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
         }
-
 
     }
 
