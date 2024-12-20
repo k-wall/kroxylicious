@@ -28,8 +28,6 @@ import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLHandshakeException;
 
-import io.kroxylicious.proxy.config.tls.Protocols;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
@@ -51,6 +49,7 @@ import io.kroxylicious.proxy.config.secret.FilePassword;
 import io.kroxylicious.proxy.config.secret.InlinePassword;
 import io.kroxylicious.proxy.config.secret.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.AllowDeny;
+import io.kroxylicious.proxy.config.tls.SslProtocol;
 import io.kroxylicious.proxy.config.tls.TlsClientAuth;
 import io.kroxylicious.proxy.internal.clusternetworkaddressconfigprovider.PortPerBrokerClusterNetworkAddressConfigProvider;
 import io.kroxylicious.proxy.service.HostPort;
@@ -361,7 +360,7 @@ class TlsIT extends BaseIT {
         var bootstrapServers = cluster.getBootstrapServers();
 
         // Cipher we want to use
-        AllowDeny<Protocols> protocols = new AllowDeny<>(Set.of(Protocols.TLSv1_2), null);
+        AllowDeny<SslProtocol> protocols = new AllowDeny<>(Set.of(SslProtocol.TLSv1_2), null);
 
         var builder = new ConfigurationBuilder()
                 .addToVirtualClusters("demo", new VirtualClusterBuilder()
@@ -387,7 +386,7 @@ class TlsIT extends BaseIT {
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Protocol matches what we want to use
-                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Protocols.TLSv1_2.getSslProtocol()))) {
+                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, SslProtocol.TLSv1_2.getSslProtocol()))) {
             // do some work to ensure connection is opened
             final CreateTopicsResult createTopicsResult = createTopic(admin, TOPIC, 1);
             assertThat(createTopicsResult.all()).isDone();
@@ -399,7 +398,7 @@ class TlsIT extends BaseIT {
         var bootstrapServers = cluster.getBootstrapServers();
 
         // Protocol we want to use
-        AllowDeny<Protocols> protocols = new AllowDeny<>(Set.of(Protocols.TLSv1_2), null);
+        AllowDeny<SslProtocol> protocols = new AllowDeny<>(Set.of(SslProtocol.TLSv1_2), null);
 
         var builder = new ConfigurationBuilder()
                 .addToVirtualClusters("demo", new VirtualClusterBuilder()
@@ -425,7 +424,7 @@ class TlsIT extends BaseIT {
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Protocol doesn't match what we want to use
-                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Protocols.TLSv1_3.getSslProtocol()))) {
+                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, SslProtocol.TLSv1_3.getSslProtocol()))) {
             // Server will only allow us to use TLSv1.3
             assertThatThrownBy(() -> admin.describeCluster().clusterId().get(10, TimeUnit.SECONDS)).hasRootCauseInstanceOf(SSLHandshakeException.class)
                     .hasRootCauseMessage("Received fatal alert: protocol_version");
@@ -437,7 +436,7 @@ class TlsIT extends BaseIT {
         var bootstrapServers = cluster.getBootstrapServers();
 
         // Protocol we want to use
-        AllowDeny<Protocols> protocols = new AllowDeny<>(null, Set.of(Protocols.TLSv1_3));
+        AllowDeny<SslProtocol> protocols = new AllowDeny<>(null, Set.of(SslProtocol.TLSv1_3));
 
         var builder = new ConfigurationBuilder()
                 .addToVirtualClusters("demo", new VirtualClusterBuilder()
@@ -463,7 +462,7 @@ class TlsIT extends BaseIT {
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Protocol matches what we want to use even with a denied protocol
-                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Protocols.TLSv1_2.getSslProtocol() + "," + Protocols.TLSv1_3.getSslProtocol()))) {
+                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, SslProtocol.TLSv1_2.getSslProtocol() + "," + SslProtocol.TLSv1_3.getSslProtocol()))) {
             // do some work to ensure connection is opened
             final CreateTopicsResult createTopicsResult = createTopic(admin, TOPIC, 1);
             assertThat(createTopicsResult.all()).isDone();

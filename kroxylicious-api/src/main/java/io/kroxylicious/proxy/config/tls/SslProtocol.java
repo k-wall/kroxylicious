@@ -6,22 +6,30 @@
 
 package io.kroxylicious.proxy.config.tls;
 
-public enum Protocols {
-    SSL("SSL"),
-    SSLv2("SSLv2"),
+import java.util.Arrays;
+import java.util.Optional;
+
+public enum SslProtocol {
+    SSLv2("SSLv2Hello"),
     SSLv3("SSLv3"),
-    TLS("TLS"),
+    TLSv1("TLSv1"),
     TLSv1_1("TLSv1.1"),
     TLSv1_2("TLSv1.2"),
     TLSv1_3("TLSv1.3");
 
     String sslProtocol;
 
-    Protocols(String sslProtocol) {
+    SslProtocol(String sslProtocol) {
         this.sslProtocol = sslProtocol;
     }
 
     public String getSslProtocol() {
         return sslProtocol;
+    }
+
+    public static Optional<SslProtocol> getProtocolName(String sslProtocol) {
+        return Arrays.stream(SslProtocol.values())
+                .filter(protocol -> protocol.getSslProtocol().equals(sslProtocol))
+                .findFirst();
     }
 }

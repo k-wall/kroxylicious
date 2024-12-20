@@ -54,7 +54,7 @@ class TlsTest {
 
     @Test
     void testEnabledProtocolsDefined() {
-        Tls tls = new Tls(null, null, null, new AllowDeny<Protocols>(Set.of(Protocols.TLSv1_2), null));
+        Tls tls = new Tls(null, null, null, new AllowDeny<SslProtocol>(Set.of(SslProtocol.TLSv1_2), null));
         assertThat(tls.protocols()).isNotNull();
     }
 

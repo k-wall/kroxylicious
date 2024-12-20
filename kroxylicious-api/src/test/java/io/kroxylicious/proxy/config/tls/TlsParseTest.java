@@ -475,6 +475,8 @@ class TlsParseTest {
 
     @Test
     void testEnabledProtocolsProvider() throws IOException {
+        SslProtocol tst = SslProtocol.getProtocolName("TLSv1.2").get();
+
         String json = """
                 {
                     "protocols": {
@@ -493,9 +495,9 @@ class TlsParseTest {
                 null,
                 null,
                 null,
-                new AllowDeny<Protocols>(
-                        Set.of(Protocols.TLSv1_2, Protocols.TLSv1_3),
-                        Set.of(Protocols.TLSv1_1))));
+                new AllowDeny<SslProtocol>(
+                        Set.of(SslProtocol.TLSv1_2, SslProtocol.TLSv1_3),
+                        Set.of(SslProtocol.TLSv1_1))));
     }
 
     private Tls readTls(String json) throws IOException {

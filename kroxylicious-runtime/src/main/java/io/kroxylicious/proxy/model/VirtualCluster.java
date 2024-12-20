@@ -6,6 +6,8 @@
 package io.kroxylicious.proxy.model;
 
 import java.io.UncheckedIOException;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
@@ -13,6 +15,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLException;
 
 import org.slf4j.Logger;
@@ -26,7 +29,7 @@ import io.kroxylicious.proxy.config.tls.AllowDeny;
 import io.kroxylicious.proxy.config.tls.NettyKeyProvider;
 import io.kroxylicious.proxy.config.tls.NettyTrustProvider;
 import io.kroxylicious.proxy.config.tls.PlatformTrustProvider;
-import io.kroxylicious.proxy.config.tls.Protocols;
+import io.kroxylicious.proxy.config.tls.SslProtocol;
 import io.kroxylicious.proxy.config.tls.Tls;
 import io.kroxylicious.proxy.config.tls.TrustOptions;
 import io.kroxylicious.proxy.config.tls.TrustProvider;
@@ -264,23 +267,36 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
     }
 
     private static void configureEnabledProtocols(SslContextBuilder sslContextBuilder, Tls tlsConfiguration) {
-        var protocols = Optional.ofNullable(tlsConfiguration.protocols());
 
-        if (protocols.isPresent()) {
-            var allowedProtocols = Optional.ofNullable(protocols.get().allowed()).orElse(Set.of(Protocols.TLSv1_2, Protocols.TLSv1_3));
-            var deniedProtocols = Optional.ofNullable(protocols.get().denied()).orElse(Collections.EMPTY_SET);
+        try {
+            var protocols = Optional.ofNullable(tlsConfiguration.protocols());
 
-            var protocolsToUse = allowedProtocols.stream()
-                    .filter(Predicate.not(p -> deniedProtocols.contains(p)))
-                    .map(Protocols::getSslProtocol)
-                    .collect(Collectors.toList());
+            if (protocols.isPresent()) {
+                var allowedProtocols = Optional.ofNullable(protocols.get().allowed())
+                        .orElse(Arrays.stream(SSLContext.getDefault().getSupportedSSLParameters().getProtocols())
+                        .map(sslProtocol -> SslProtocol.getProtocolName(sslProtocol).get()).collect(Collectors.toSet()));
+                var deniedProtocols = Optional.ofNullable(protocols.get().denied())
+                        .orElse(Collections.EMPTY_SET);
 
-            if(!protocolsToUse.isEmpty()) {
-                sslContextBuilder.protocols(protocolsToUse);
-            } else {
-                LOGGER.warn("The protocols configuration you have in place has resulted in platform defaults being used");
+                var protocolsToUse = allowedProtocols.stream()
+                        .filter(Predicate.not(p -> deniedProtocols.contains(p)))
+                        .map(SslProtocol::getSslProtocol)
+                        .collect(Collectors.toList());
+
+                if (!protocolsToUse.isEmpty()) {
+                    sslContextBuilder.protocols(protocolsToUse);
+                }
+                else {
+                    LOGGER.warn("The protocols configuration you have in place has resulted in platform defaults being used");
+                }
             }
+
         }
+        catch (NoSuchAlgorithmException nsae) {
+            nsae.printStackTrace();
+        }
+
+
     }
 
     private static void validatePortUsage(ClusterNetworkAddressConfigProvider clusterNetworkAddressConfigProvider) {

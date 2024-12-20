@@ -18,11 +18,11 @@ import java.util.Locale;
 public record Tls(KeyProvider key,
                   TrustProvider trust,
                   AllowDeny<String> cipherSuites,
-                  AllowDeny<Protocols> protocols) {
+                  AllowDeny<SslProtocol> protocols) {
 
     // Sundrio seems to need constructor order to matter, or it won't generate the with* methods for integration tests
     // This can be removed once the old constructor is deprecated as unnecessary when the record will be generating it
-    public Tls(KeyProvider key, TrustProvider trust, AllowDeny<String> cipherSuites, AllowDeny<Protocols> protocols) {
+    public Tls(KeyProvider key, TrustProvider trust, AllowDeny<String> cipherSuites, AllowDeny<SslProtocol> protocols) {
         this.key = key;
         this.trust = trust;
         this.cipherSuites = cipherSuites;
