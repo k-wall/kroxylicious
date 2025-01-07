@@ -33,7 +33,7 @@ public final class DenyCipherSuiteFilter implements CipherSuiteFilter {
         this.deniedCiphers = deniedCiphers == null ? new HashSet<>() : deniedCiphers;
     }
 
-    private Set<String> deniedCiphers;
+    private final Set<String> deniedCiphers;
 
     @Override
     public String[] filterCipherSuites(Iterable<String> ciphers, List<String> defaultCiphers,
