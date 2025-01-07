@@ -284,7 +284,7 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
                 var protocolsToUse = allowedProtocols.stream()
                         .filter(Predicate.not(deniedProtocols::contains))
                         .map(SslProtocol::getSslProtocol)
-                        .collect(Collectors.toList());
+                        .toList();
 
                 if (!protocolsToUse.isEmpty()) {
                     sslContextBuilder.protocols(protocolsToUse);
