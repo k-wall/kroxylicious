@@ -359,7 +359,7 @@ class TlsIT extends BaseIT {
     void downstreamMutualTls_SuccessfulTlsWithProtocolsAllowed(KafkaCluster cluster) throws Exception {
         var bootstrapServers = cluster.getBootstrapServers();
 
-        // Cipher we want to use
+        // Protocol we want to use
         AllowDeny<SslProtocol> protocols = new AllowDeny<>(Set.of(SslProtocol.TLSv1_2), null);
 
         var builder = new ConfigurationBuilder()
