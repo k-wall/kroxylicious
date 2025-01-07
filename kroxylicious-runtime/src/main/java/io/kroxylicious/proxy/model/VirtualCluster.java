@@ -279,7 +279,7 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
                                 .map(Optional::get)
                                 .collect(Collectors.toSet()));
                 var deniedProtocols = Optional.ofNullable(protocols.get().denied())
-                        .orElse(Collections.EMPTY_SET);
+                        .orElse(Set.of());
 
                 var protocolsToUse = allowedProtocols.stream()
                         .filter(Predicate.not(p -> deniedProtocols.contains(p)))
