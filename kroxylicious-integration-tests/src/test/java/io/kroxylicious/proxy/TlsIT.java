@@ -49,8 +49,8 @@ import io.kroxylicious.proxy.config.secret.FilePassword;
 import io.kroxylicious.proxy.config.secret.InlinePassword;
 import io.kroxylicious.proxy.config.secret.PasswordProvider;
 import io.kroxylicious.proxy.config.tls.AllowDeny;
-import io.kroxylicious.proxy.config.tls.SslProtocol;
 import io.kroxylicious.proxy.config.tls.TlsClientAuth;
+import io.kroxylicious.proxy.config.tls.TlsProtocol;
 import io.kroxylicious.proxy.internal.clusternetworkaddressconfigprovider.PortPerBrokerClusterNetworkAddressConfigProvider;
 import io.kroxylicious.proxy.service.HostPort;
 import io.kroxylicious.testing.kafka.api.KafkaCluster;
@@ -356,11 +356,11 @@ class TlsIT extends BaseIT {
     }
 
     @Test
-    void downstreamMutualTls_SuccessfulTlsWithProtocolsAllowed(KafkaCluster cluster) throws Exception {
+    void downstream_SuccessfulTlsWithProtocolsAllowed(KafkaCluster cluster) throws Exception {
         var bootstrapServers = cluster.getBootstrapServers();
 
         // Protocol we want to use
-        AllowDeny<SslProtocol> protocols = new AllowDeny<>(Set.of(SslProtocol.TLSv1_2), null);
+        AllowDeny<TlsProtocol> protocols = new AllowDeny<>(List.of(TlsProtocol.TLS_V_1_2), null);
 
         var builder = new ConfigurationBuilder()
                 .addToVirtualClusters("demo", new VirtualClusterBuilder()
@@ -381,12 +381,10 @@ class TlsIT extends BaseIT {
                 var admin = tester.admin("demo",
                         Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                 SecurityProtocol.SSL.name,
-                                SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, clientCertGenerator.getKeyStoreLocation(),
-                                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, clientCertGenerator.getPassword(),
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Protocol matches what we want to use
-                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, SslProtocol.TLSv1_2.getSslProtocol()))) {
+                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, TlsProtocol.TLS_V_1_2.getTlsProtocol()))) {
             // do some work to ensure connection is opened
             final CreateTopicsResult createTopicsResult = createTopic(admin, TOPIC, 1);
             assertThat(createTopicsResult.all()).isDone();
@@ -394,11 +392,11 @@ class TlsIT extends BaseIT {
     }
 
     @Test
-    void downstreamMutualTls_UnsuccessfulTlsWithProtocolsAllowed(KafkaCluster cluster) throws Exception {
+    void downstream_UnsuccessfulTlsWithProtocolsAllowed(KafkaCluster cluster) throws Exception {
         var bootstrapServers = cluster.getBootstrapServers();
 
         // Protocol we want to use
-        AllowDeny<SslProtocol> protocols = new AllowDeny<>(Set.of(SslProtocol.TLSv1_2), null);
+        AllowDeny<TlsProtocol> protocols = new AllowDeny<>(List.of(TlsProtocol.TLS_V_1_2), null);
 
         var builder = new ConfigurationBuilder()
                 .addToVirtualClusters("demo", new VirtualClusterBuilder()
@@ -419,12 +417,10 @@ class TlsIT extends BaseIT {
                 var admin = tester.admin("demo",
                         Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                 SecurityProtocol.SSL.name,
-                                SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, clientCertGenerator.getKeyStoreLocation(),
-                                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, clientCertGenerator.getPassword(),
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Protocol doesn't match what we want to use
-                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, SslProtocol.TLSv1_3.getSslProtocol()))) {
+                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, TlsProtocol.TLS_V_1_3.getTlsProtocol()))) {
             // Server will only allow us to use TLSv1.3
             assertThatThrownBy(() -> admin.describeCluster().clusterId().get(10, TimeUnit.SECONDS)).hasRootCauseInstanceOf(SSLHandshakeException.class)
                     .hasRootCauseMessage("Received fatal alert: protocol_version");
@@ -432,11 +428,11 @@ class TlsIT extends BaseIT {
     }
 
     @Test
-    void downstreamMutualTls_SuccessfulTlsWithProtocolsDenied(KafkaCluster cluster) throws Exception {
+    void downstream_SuccessfulTlsWithProtocolsDenied(KafkaCluster cluster) throws Exception {
         var bootstrapServers = cluster.getBootstrapServers();
 
         // Protocol we want to use
-        AllowDeny<SslProtocol> protocols = new AllowDeny<>(null, Set.of(SslProtocol.TLSv1_3));
+        AllowDeny<TlsProtocol> protocols = new AllowDeny<>(null, Set.of(TlsProtocol.TLS_V_1_2));
 
         var builder = new ConfigurationBuilder()
                 .addToVirtualClusters("demo", new VirtualClusterBuilder()
@@ -457,12 +453,10 @@ class TlsIT extends BaseIT {
                 var admin = tester.admin("demo",
                         Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                 SecurityProtocol.SSL.name,
-                                SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, clientCertGenerator.getKeyStoreLocation(),
-                                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, clientCertGenerator.getPassword(),
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Protocol matches what we want to use even with a denied protocol
-                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, SslProtocol.TLSv1_2.getSslProtocol() + "," + SslProtocol.TLSv1_3.getSslProtocol()))) {
+                                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, TlsProtocol.TLS_V_1_2.getTlsProtocol() + "," + TlsProtocol.TLS_V_1_3.getTlsProtocol()))) {
             // do some work to ensure connection is opened
             final CreateTopicsResult createTopicsResult = createTopic(admin, TOPIC, 1);
             assertThat(createTopicsResult.all()).isDone();
@@ -470,11 +464,87 @@ class TlsIT extends BaseIT {
     }
 
     @Test
-    void downstreamMutualTls_SuccessfulTlsWithCipherSuitesAllowed(KafkaCluster cluster) throws Exception {
+    void upstream_SuccessfulTlsWithProtocolsAllowed(@Tls KafkaCluster cluster) {
+        var bootstrapServers = cluster.getBootstrapServers();
+        var brokerTruststore = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        assertThat(brokerTruststore).isNotEmpty();
+        assertThat(brokerTruststorePassword).isNotEmpty();
+
+        var brokerTrustPasswordProvider = constructPasswordProvider(InlinePassword.class, brokerTruststorePassword);
+
+        // Protocol we want to use
+        AllowDeny<TlsProtocol> protocols = new AllowDeny<>(List.of(TlsProtocol.TLS_V_1_2), null);
+
+        var builder = new ConfigurationBuilder()
+                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                        .withNewTargetCluster()
+                        .withBootstrapServers(bootstrapServers)
+                        .withNewTls()
+                        .withNewTrustStoreTrust()
+                        .withStoreFile(brokerTruststore)
+                        .withStorePasswordProvider(brokerTrustPasswordProvider)
+                        .endTrustStoreTrust()
+                        .withProtocols(protocols)
+                        .endTls()
+                        .endTargetCluster()
+                        .withClusterNetworkAddressConfigProvider(CONFIG_PROVIDER_DEFINITION)
+                        .build());
+
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin("demo")) {
+            // do some work to ensure connection is opened
+            final CreateTopicsResult createTopicsResult = createTopic(admin, TOPIC, 1);
+            assertThat(createTopicsResult.all()).isDone();
+        }
+    }
+
+    @Test
+    void upstream_UnsuccessfulTlsWithProtocolsAllowed(@Tls KafkaCluster cluster) {
+        var bootstrapServers = cluster.getBootstrapServers();
+        var brokerTruststore = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        assertThat(brokerTruststore).isNotEmpty();
+        assertThat(brokerTruststorePassword).isNotEmpty();
+
+        var brokerTrustPasswordProvider = constructPasswordProvider(InlinePassword.class, brokerTruststorePassword);
+
+        // Protocol we want to use
+        AllowDeny<TlsProtocol> protocols = new AllowDeny<>(List.of(TlsProtocol.TLS_V_1_1), null);
+
+        var builder = new ConfigurationBuilder()
+                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                        .withNewTargetCluster()
+                        .withBootstrapServers(bootstrapServers)
+                        .withNewTls()
+                        .withNewTrustStoreTrust()
+                        .withStoreFile(brokerTruststore)
+                        .withStorePasswordProvider(brokerTrustPasswordProvider)
+                        .endTrustStoreTrust()
+                        .withProtocols(protocols)
+                        .endTls()
+                        .endTargetCluster()
+                        .withClusterNetworkAddressConfigProvider(CONFIG_PROVIDER_DEFINITION)
+                        .build());
+
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin("demo")) {
+            // Upstream only wants us to use TLSv1.1
+            assertThat(admin.describeCluster(new DescribeClusterOptions().timeoutMs(10_000)).clusterId())
+                    .failsWithin(Duration.ofSeconds(30))
+                    .withThrowableThat()
+                    .withCauseInstanceOf(TimeoutException.class)
+                    .havingCause()
+                    .withMessageStartingWith("Timed out waiting for a node assignment.");
+        }
+    }
+
+    @Test
+    void downstream_SuccessfulTlsWithCipherSuitesAllowed(KafkaCluster cluster) throws Exception {
         var bootstrapServers = cluster.getBootstrapServers();
 
         // Cipher we want to use
-        AllowDeny<String> cipherSuites = new AllowDeny<>(Set.of("TLS_CHACHA20_POLY1305_SHA256"), null);
+        AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_CHACHA20_POLY1305_SHA256"), null);
 
         var builder = new ConfigurationBuilder()
                 .addToVirtualClusters("demo", new VirtualClusterBuilder()
@@ -495,8 +565,6 @@ class TlsIT extends BaseIT {
                 var admin = tester.admin("demo",
                         Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                 SecurityProtocol.SSL.name,
-                                SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, clientCertGenerator.getKeyStoreLocation(),
-                                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, clientCertGenerator.getPassword(),
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Cipher matches what we want to use
@@ -508,11 +576,11 @@ class TlsIT extends BaseIT {
     }
 
     @Test
-    void downstreamMutualTls_UnsuccessfulTlsWithCipherSuitesAllowed(KafkaCluster cluster) throws Exception {
+    void downstream_UnsuccessfulTlsWithCipherSuitesAllowed(KafkaCluster cluster) throws Exception {
         var bootstrapServers = cluster.getBootstrapServers();
 
         // Cipher we want to use
-        AllowDeny<String> cipherSuites = new AllowDeny<>(Set.of("TLS_AES_128_GCM_SHA256"), null);
+        AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_AES_128_GCM_SHA256"), null);
 
         var builder = new ConfigurationBuilder()
                 .addToVirtualClusters("demo", new VirtualClusterBuilder()
@@ -533,8 +601,6 @@ class TlsIT extends BaseIT {
                 var admin = tester.admin("demo",
                         Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                 SecurityProtocol.SSL.name,
-                                SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, clientCertGenerator.getKeyStoreLocation(),
-                                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, clientCertGenerator.getPassword(),
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Cipher doesn't match what we want to use
@@ -546,11 +612,11 @@ class TlsIT extends BaseIT {
     }
 
     @Test
-    void downstreamMutualTls_SuccessfulTlsWithCipherSuitesAllowedAndDenied(KafkaCluster cluster) throws Exception {
+    void downstream_SuccessfulTlsWithCipherSuitesAllowedAndDenied(KafkaCluster cluster) throws Exception {
         var bootstrapServers = cluster.getBootstrapServers();
 
         // Cipher we want to use
-        AllowDeny<String> cipherSuites = new AllowDeny<>(Set.of("TLS_CHACHA20_POLY1305_SHA256"), Set.of("TLS_AES_128_GCM_SHA256"));
+        AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_CHACHA20_POLY1305_SHA256"), Set.of("TLS_AES_128_GCM_SHA256"));
 
         var builder = new ConfigurationBuilder()
                 .addToVirtualClusters("demo", new VirtualClusterBuilder()
@@ -571,8 +637,6 @@ class TlsIT extends BaseIT {
                 var admin = tester.admin("demo",
                         Map.of(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                 SecurityProtocol.SSL.name,
-                                SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, clientCertGenerator.getKeyStoreLocation(),
-                                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, clientCertGenerator.getPassword(),
                                 SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, clientTrustStore.toAbsolutePath().toString(),
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Cipher matches what we want to use
@@ -580,6 +644,82 @@ class TlsIT extends BaseIT {
             // do some work to ensure connection is opened
             final CreateTopicsResult createTopicsResult = createTopic(admin, TOPIC, 1);
             assertThat(createTopicsResult.all()).isDone();
+        }
+    }
+
+    @Test
+    void upstream_SuccessfulTlsWithCipherSuitesAllowed(@Tls KafkaCluster cluster) {
+        var bootstrapServers = cluster.getBootstrapServers();
+        var brokerTruststore = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        assertThat(brokerTruststore).isNotEmpty();
+        assertThat(brokerTruststorePassword).isNotEmpty();
+
+        var brokerTrustPasswordProvider = constructPasswordProvider(InlinePassword.class, brokerTruststorePassword);
+
+        // Cipher we want to use
+        AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_CHACHA20_POLY1305_SHA256"), null);
+
+        var builder = new ConfigurationBuilder()
+                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                        .withNewTargetCluster()
+                        .withBootstrapServers(bootstrapServers)
+                        .withNewTls()
+                        .withNewTrustStoreTrust()
+                        .withStoreFile(brokerTruststore)
+                        .withStorePasswordProvider(brokerTrustPasswordProvider)
+                        .endTrustStoreTrust()
+                        .withCipherSuites(cipherSuites)
+                        .endTls()
+                        .endTargetCluster()
+                        .withClusterNetworkAddressConfigProvider(CONFIG_PROVIDER_DEFINITION)
+                        .build());
+
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin("demo")) {
+            // do some work to ensure connection is opened
+            final CreateTopicsResult createTopicsResult = createTopic(admin, TOPIC, 1);
+            assertThat(createTopicsResult.all()).isDone();
+        }
+    }
+
+    @Test
+    void upstream_UnsuccessfulTlsWithCipherSuitesAllowed(@Tls KafkaCluster cluster) {
+        var bootstrapServers = cluster.getBootstrapServers();
+        var brokerTruststore = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        var brokerTruststorePassword = (String) cluster.getKafkaClientConfiguration().get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        assertThat(brokerTruststore).isNotEmpty();
+        assertThat(brokerTruststorePassword).isNotEmpty();
+
+        var brokerTrustPasswordProvider = constructPasswordProvider(InlinePassword.class, brokerTruststorePassword);
+
+        // Cipher we want to use upstream
+        AllowDeny<String> upstreamCipherSuites = new AllowDeny<>(List.of("TLS_AES_128_WRONG_CIPHER"), null);
+
+        var builder = new ConfigurationBuilder()
+                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                        .withNewTargetCluster()
+                        .withBootstrapServers(bootstrapServers)
+                        .withNewTls()
+                        .withNewTrustStoreTrust()
+                        .withStoreFile(brokerTruststore)
+                        .withStorePasswordProvider(brokerTrustPasswordProvider)
+                        .endTrustStoreTrust()
+                        .withCipherSuites(upstreamCipherSuites)
+                        .endTls()
+                        .endTargetCluster()
+                        .withClusterNetworkAddressConfigProvider(CONFIG_PROVIDER_DEFINITION)
+                        .build());
+
+        try (var tester = kroxyliciousTester(builder);
+                var admin = tester.admin("demo")) {
+            // Upstream trying to use invalid cipher
+            assertThat(admin.describeCluster(new DescribeClusterOptions().timeoutMs(10_000)).clusterId())
+                    .failsWithin(Duration.ofSeconds(30))
+                    .withThrowableThat()
+                    .withCauseInstanceOf(TimeoutException.class)
+                    .havingCause()
+                    .withMessageStartingWith("Timed out waiting for a node assignment.");
         }
     }
 

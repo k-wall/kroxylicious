@@ -29,8 +29,8 @@ import io.kroxylicious.proxy.config.tls.AllowDeny;
 import io.kroxylicious.proxy.config.tls.NettyKeyProvider;
 import io.kroxylicious.proxy.config.tls.NettyTrustProvider;
 import io.kroxylicious.proxy.config.tls.PlatformTrustProvider;
-import io.kroxylicious.proxy.config.tls.SslProtocol;
 import io.kroxylicious.proxy.config.tls.Tls;
+import io.kroxylicious.proxy.config.tls.TlsProtocol;
 import io.kroxylicious.proxy.config.tls.TrustOptions;
 import io.kroxylicious.proxy.config.tls.TrustProvider;
 import io.kroxylicious.proxy.service.ClusterNetworkAddressConfigProvider;
@@ -105,13 +105,13 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
                 .map(TrustOptions::toString).orElse("-"))
                 .map(options -> " (TLS: " + options + ") ").orElse("");
         var cipherSuitesAllowed = tlsToSummarize.map(t -> Optional.ofNullable(t.cipherSuites())
-                .map(AllowDeny::allowed).orElse(Collections.emptySet()))
+                .map(AllowDeny::allowed).orElse(Collections.emptyList()))
                 .map(allowedCiphers -> " (Allowed Ciphers: " + allowedCiphers + ")").orElse("");
         var cipherSuitesDenied = tlsToSummarize.map(t -> Optional.ofNullable(t.cipherSuites())
                 .map(AllowDeny::denied).orElse(Collections.emptySet()))
                 .map(deniedCiphers -> " (Denied Ciphers: " + deniedCiphers + ")").orElse("");
         var protocolsAllowed = tlsToSummarize.map(t -> Optional.ofNullable(t.protocols())
-                .map(AllowDeny::allowed).orElse(Collections.emptySet()))
+                .map(AllowDeny::allowed).orElse(Collections.emptyList()))
                 .map(protocols -> " (Allowed Protocols: " + protocols + ")").orElse("");
         var protocolsDenied = tlsToSummarize.map(t -> Optional.ofNullable(t.protocols())
                 .map(AllowDeny::denied).orElse(Collections.emptySet()))
@@ -274,23 +274,25 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
             if (protocols.isPresent()) {
                 var allowedProtocols = Optional.ofNullable(protocols.get().allowed())
                         .orElse(Arrays.stream(SSLContext.getDefault().getSupportedSSLParameters().getProtocols())
-                                .map(SslProtocol::getProtocolName)
+                                .map(TlsProtocol::getProtocolName)
                                 .filter(Optional::isPresent)
                                 .map(Optional::get)
-                                .collect(Collectors.toSet()));
+                                .collect(Collectors.toList()));
                 var deniedProtocols = Optional.ofNullable(protocols.get().denied())
                         .orElse(Set.of());
 
                 var protocolsToUse = allowedProtocols.stream()
                         .filter(Predicate.not(deniedProtocols::contains))
-                        .map(SslProtocol::getSslProtocol)
+                        .map(TlsProtocol::getTlsProtocol)
                         .toList();
 
                 if (!protocolsToUse.isEmpty()) {
                     sslContextBuilder.protocols(protocolsToUse);
                 }
                 else {
-                    LOGGER.warn("The protocols configuration you have in place has resulted in platform defaults being used");
+                    throw new IllegalStateException(
+                            "The protocols configuration you have in place has resulted in no protocols being set. Allowed: " + allowedProtocols + ", Denied: "
+                                    + deniedProtocols);
                 }
             }
 

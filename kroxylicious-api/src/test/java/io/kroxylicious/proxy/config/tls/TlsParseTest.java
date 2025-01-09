@@ -7,6 +7,7 @@
 package io.kroxylicious.proxy.config.tls;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 
 import org.assertj.core.api.Assertions;
@@ -468,24 +469,22 @@ class TlsParseTest {
                 null,
                 null,
                 new AllowDeny<String>(
-                        Set.of("ALLOWED_CIPHER_SUITE_1", "ALLOWED_CIPHER_SUITE_2", "ALLOWED_CIPHER_SUITE_3"),
+                        List.of("ALLOWED_CIPHER_SUITE_1", "ALLOWED_CIPHER_SUITE_2", "ALLOWED_CIPHER_SUITE_3"),
                         Set.of("DENIED_CIPHER_SUITE_1", "DENIED_CIPHER_SUITE_2", "DENIED_CIPHER_SUITE_3")),
                 null));
     }
 
     @Test
     void testEnabledProtocolsProvider() throws IOException {
-        SslProtocol tst = SslProtocol.getProtocolName("TLSv1.2").get();
-
         String json = """
                 {
                     "protocols": {
                         "allowed": [
-                            "TLSv1_2",
-                            "TLSv1_3"
+                            "TLS_V_1_2",
+                            "TLS_V_1_3"
                         ],
                         "denied": [
-                            "TLSv1_1"
+                            "TLS_V_1_1"
                         ]
                     }
                 }
@@ -495,9 +494,9 @@ class TlsParseTest {
                 null,
                 null,
                 null,
-                new AllowDeny<SslProtocol>(
-                        Set.of(SslProtocol.TLSv1_2, SslProtocol.TLSv1_3),
-                        Set.of(SslProtocol.TLSv1_1))));
+                new AllowDeny<TlsProtocol>(
+                        List.of(TlsProtocol.TLS_V_1_2, TlsProtocol.TLS_V_1_3),
+                        Set.of(TlsProtocol.TLS_V_1_1))));
     }
 
     private Tls readTls(String json) throws IOException {
