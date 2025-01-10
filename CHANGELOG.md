@@ -6,6 +6,10 @@ For changes that effect a public API, the [deprecation policy](./DEV_GUIDE.md#de
 Format `<github issue/pr number>: <short description>`.
 
 ## SNAPSHOT
+
+* [#1643](https://github.com/kroxylicious/kroxylicious/pull/1643) Improve Encryption DEK co-ordination across threads
+* [#1705](https://github.com/kroxylicious/kroxylicious/pull/1705) Replace usages of Contributor with new Plugin mechanism and delete Contributor
+
 ## 0.9.0
 
 * [#1006](https://github.com/kroxylicious/kroxylicious/pull/1660) Allow CipherSuites and TLS Protocols to be passed via Configuration
