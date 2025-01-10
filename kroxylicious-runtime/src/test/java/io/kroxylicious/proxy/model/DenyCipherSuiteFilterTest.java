@@ -17,11 +17,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DenyCipherSuiteFilterTest {
 
+    List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
+    Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4"));
+
     @Test
     void emptyCiphersDefaultsToDefaultCiphers() {
-        List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
-        Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3"));
-        List<String> defaultAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3");
+        List<String> defaultAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
 
         String[] filtered = new DenyCipherSuiteFilter(null)
                 .filterCipherSuites(null, defaultCiphers, supportedCiphers);
@@ -30,8 +31,6 @@ class DenyCipherSuiteFilterTest {
 
     @Test
     void emptyCiphersDefaultsToDefaultCiphersMinusDenied() {
-        List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
-        Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3"));
         Set<String> deniedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_2", "CIPHER_SUITE_4"));
         List<String> defaultAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_3");
 
@@ -43,8 +42,6 @@ class DenyCipherSuiteFilterTest {
     @Test
     void specificCiphersInstanceImplementsWithRequestedCiphers() {
         List<String> requestedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2");
-        List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
-        Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4"));
 
         String[] filtered = new DenyCipherSuiteFilter(null)
                 .filterCipherSuites(requestedCiphers, defaultCiphers, supportedCiphers);
@@ -55,8 +52,6 @@ class DenyCipherSuiteFilterTest {
     void specificCiphersInstanceImplementsWithRequestedCiphersMinusUnsupported() {
         List<String> requestedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_8");
         List<String> requestedSupportedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2");
-        List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
-        Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4"));
 
         String[] filtered = new DenyCipherSuiteFilter(null)
                 .filterCipherSuites(requestedCiphers, defaultCiphers, supportedCiphers);
@@ -68,8 +63,6 @@ class DenyCipherSuiteFilterTest {
         List<String> requestedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3");
         Set<String> deniedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_2"));
         List<String> requestedAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_3");
-        List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
-        Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4"));
 
         String[] filtered = new DenyCipherSuiteFilter(deniedCiphers)
                 .filterCipherSuites(requestedCiphers, defaultCiphers, supportedCiphers);
