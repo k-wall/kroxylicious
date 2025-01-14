@@ -277,7 +277,7 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
                                 .map(TlsProtocol::getProtocolName)
                                 .filter(Optional::isPresent)
                                 .map(Optional::get)
-                                .collect(Collectors.toList()));
+                                .toList());
                 var deniedProtocols = Optional.ofNullable(protocols.get().denied())
                         .orElse(Set.of());
 
