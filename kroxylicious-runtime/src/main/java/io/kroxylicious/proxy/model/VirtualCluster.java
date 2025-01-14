@@ -99,7 +99,7 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
         }
     }
 
-    public static String generateTlsSummary(Optional<Tls> tlsToSummarize) {
+    private static String generateTlsSummary(Optional<Tls> tlsToSummarize) {
         var tls = tlsToSummarize.map(t -> Optional.ofNullable(t.trust())
                 .map(TrustProvider::trustOptions)
                 .map(TrustOptions::toString).orElse("-"))
