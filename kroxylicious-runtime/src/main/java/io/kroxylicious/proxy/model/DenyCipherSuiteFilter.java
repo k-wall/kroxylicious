@@ -41,18 +41,17 @@ public final class DenyCipherSuiteFilter implements CipherSuiteFilter {
         var actualCiphers = (ciphers == null || !ciphers.iterator().hasNext()) ? defaultCiphers : ciphers;
 
         StreamSupport.stream(actualCiphers.spliterator(), false)
-                .filter(Predicate.not(actualCipher -> supportedCiphers.contains(actualCipher)))
+                .filter(Predicate.not(supportedCiphers::contains))
                 .forEach(unsupportedCipher -> LOGGER.warn("Ignoring allowed cipher '{}' as it is not recognized by this platform (supported ciphers: {})",
                         unsupportedCipher, supportedCiphers));
 
-        StreamSupport.stream(deniedCiphers.spliterator(), false)
-                .filter(Predicate.not(deniedCipher -> supportedCiphers.contains(deniedCipher)))
-                .forEach(unsupportedCipher -> LOGGER.warn("Ignoring denied cipher '{}' as it is not recognized by this platform (supported ciphers: {}",
-                        unsupportedCipher));
+        deniedCiphers.stream()
+                .filter(Predicate.not(supportedCiphers::contains))
+                .forEach(unsupportedCipher -> LOGGER.warn("Ignoring denied cipher '{}' as it is not recognized by this platform (supported ciphers: {})", unsupportedCipher, supportedCiphers));
 
         return StreamSupport.stream(actualCiphers.spliterator(), false)
                 .filter(supportedCiphers::contains)
-                .filter(Predicate.not(c -> deniedCiphers.contains(c)))
+                .filter(Predicate.not(deniedCiphers::contains))
                 .toList()
                 .toArray(new String[]{});
     }

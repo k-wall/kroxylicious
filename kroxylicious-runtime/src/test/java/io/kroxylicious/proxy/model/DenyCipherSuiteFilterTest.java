@@ -6,10 +6,12 @@
 
 package io.kroxylicious.proxy.model;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import com.google.common.collect.Streams;
 
 import org.junit.jupiter.api.Test;
 
@@ -17,56 +19,92 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DenyCipherSuiteFilterTest {
 
-    List<String> defaultCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
-    Set<String> supportedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4"));
+    private final List<String> defaultCiphers = List.of("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
+
+    // Test platform supports the default ciphers plus a deprecated one.
+    private final Set<String> supportedCiphers = Streams.concat(defaultCiphers.stream(), Stream.of("DEPRECATED_CIPHER_SUITE_1")).collect(Collectors.toSet());
 
     @Test
-    void emptyCiphersDefaultsToDefaultCiphers() {
-        List<String> defaultAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3", "CIPHER_SUITE_4");
-
-        String[] filtered = new DenyCipherSuiteFilter(null)
+    void defaultsToDefaultCiphers()  {
+        var filtered = new DenyCipherSuiteFilter(null)
                 .filterCipherSuites(null, defaultCiphers, supportedCiphers);
-        assertThat(filtered).containsExactlyElementsOf(defaultAllowedCiphers);
+        assertThat(filtered).containsExactlyElementsOf(defaultCiphers);
     }
 
     @Test
-    void emptyCiphersDefaultsToDefaultCiphersMinusDenied() {
-        Set<String> deniedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_2", "CIPHER_SUITE_4"));
-        List<String> defaultAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_3");
+    void emptyCiphersGivesDefault()  {
+        var filtered = new DenyCipherSuiteFilter(null)
+                .filterCipherSuites(List.of(), defaultCiphers, supportedCiphers);
+        assertThat(filtered).containsExactlyElementsOf(defaultCiphers);
+    }
 
-        String[] filtered = new DenyCipherSuiteFilter(deniedCiphers)
+    @Test
+    void denyCiphers() {
+        var deniedCiphers = Set.of("CIPHER_SUITE_2", "CIPHER_SUITE_4");
+        var expectedAllowedCiphers = List.of("CIPHER_SUITE_1", "CIPHER_SUITE_3");
+
+        var filtered = new DenyCipherSuiteFilter(deniedCiphers)
                 .filterCipherSuites(null, defaultCiphers, supportedCiphers);
-        assertThat(filtered).containsExactlyElementsOf(defaultAllowedCiphers);
+        assertThat(filtered).containsExactlyElementsOf(expectedAllowedCiphers);
     }
 
     @Test
-    void specificCiphersInstanceImplementsWithRequestedCiphers() {
-        List<String> requestedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2");
+    void allowCiphers() {
+        var allowedCiphers = List.of("CIPHER_SUITE_1", "CIPHER_SUITE_2");
 
-        String[] filtered = new DenyCipherSuiteFilter(null)
-                .filterCipherSuites(requestedCiphers, defaultCiphers, supportedCiphers);
-        assertThat(filtered).containsExactlyElementsOf(requestedCiphers);
+        var filtered = new DenyCipherSuiteFilter(null)
+                .filterCipherSuites(allowedCiphers, defaultCiphers, supportedCiphers);
+        assertThat(filtered).containsExactlyElementsOf(allowedCiphers);
     }
 
     @Test
-    void specificCiphersInstanceImplementsWithRequestedCiphersMinusUnsupported() {
-        List<String> requestedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_8");
-        List<String> requestedSupportedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2");
+    void allowAndDenyCiphers() {
+        var allowedCiphers = List.of("CIPHER_SUITE_3", "CIPHER_SUITE_1", "CIPHER_SUITE_2");
+        var deniedCiphers = Set.of("CIPHER_SUITE_1");
+        var expectedAllowedCiphers = List.of("CIPHER_SUITE_3", "CIPHER_SUITE_2");
 
-        String[] filtered = new DenyCipherSuiteFilter(null)
-                .filterCipherSuites(requestedCiphers, defaultCiphers, supportedCiphers);
-        assertThat(filtered).containsExactlyElementsOf(requestedSupportedCiphers);
+        var filtered = new DenyCipherSuiteFilter(deniedCiphers)
+                .filterCipherSuites(allowedCiphers, defaultCiphers, supportedCiphers);
+        assertThat(filtered).containsExactlyElementsOf(expectedAllowedCiphers);
     }
 
     @Test
-    void specificCiphersInstanceImplementsWithRequestedCiphersMinusDenied() {
-        List<String> requestedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_2", "CIPHER_SUITE_3");
-        Set<String> deniedCiphers = new HashSet<>(Arrays.asList("CIPHER_SUITE_2"));
-        List<String> requestedAllowedCiphers = Arrays.asList("CIPHER_SUITE_1", "CIPHER_SUITE_3");
+    void allowRespectsReordering() {
+        var allowedCiphers = List.of("CIPHER_SUITE_3", "CIPHER_SUITE_1", "CIPHER_SUITE_2");
 
-        String[] filtered = new DenyCipherSuiteFilter(deniedCiphers)
-                .filterCipherSuites(requestedCiphers, defaultCiphers, supportedCiphers);
-        assertThat(filtered).containsExactlyElementsOf(requestedAllowedCiphers);
+        var filtered = new DenyCipherSuiteFilter(null)
+                .filterCipherSuites(allowedCiphers, defaultCiphers, supportedCiphers);
+        assertThat(filtered).containsExactlyElementsOf(allowedCiphers);
+    }
+
+    @Test
+    void allowsSupportedCipherToBeEnabled() {
+        var allowedCiphers = List.of("DEPRECATED_CIPHER_SUITE_1", "CIPHER_SUITE_1");
+
+        var filtered = new DenyCipherSuiteFilter(null)
+                .filterCipherSuites(allowedCiphers, defaultCiphers, supportedCiphers);
+        assertThat(filtered).containsExactlyElementsOf(allowedCiphers);
+    }
+
+
+    @Test
+    void ignoresUnrecognizedAllowCipher() {
+        var allowedCiphers = List.of("CIPHER_SUITE_1", "CIPHER_SUITE_2", "UNKNOWN_CIPHER");
+        var expectedAllowedCiphers = List.of("CIPHER_SUITE_1", "CIPHER_SUITE_2");
+
+        var filtered = new DenyCipherSuiteFilter(null)
+                .filterCipherSuites(allowedCiphers, defaultCiphers, supportedCiphers);
+        assertThat(filtered).containsExactlyElementsOf(expectedAllowedCiphers);
+    }
+
+    @Test
+    void ignoresUnrecognizedDenyCipher() {
+        var deniedCipher = Set.of("CIPHER_SUITE_2", "CIPHER_SUITE_3", "UNKNOWN_CIPHER");
+        var expectedAllowedCiphers = List.of("CIPHER_SUITE_1", "CIPHER_SUITE_4");
+
+        var filtered = new DenyCipherSuiteFilter(deniedCipher)
+                .filterCipherSuites(null, defaultCiphers, supportedCiphers);
+        assertThat(filtered).containsExactlyElementsOf(expectedAllowedCiphers);
     }
 
 }
