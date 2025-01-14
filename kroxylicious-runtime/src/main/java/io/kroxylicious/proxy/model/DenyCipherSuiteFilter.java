@@ -47,7 +47,7 @@ public final class DenyCipherSuiteFilter implements CipherSuiteFilter {
 
         StreamSupport.stream(deniedCiphers.spliterator(), false)
                 .filter(Predicate.not(deniedCipher -> supportedCiphers.contains(deniedCipher)))
-                .forEach(unsupportedCipher -> LOGGER.warn("Denied Cipher {}, not in Supported Ciphers", unsupportedCipher));
+                .forEach(unsupportedCipher -> LOGGER.warn("Ignoring denied cipher '{}' as it is not recognized by this platform (supported ciphers: {}", unsupportedCipher));
 
         return StreamSupport.stream(actualCiphers.spliterator(), false)
                 .filter(supportedCiphers::contains)
