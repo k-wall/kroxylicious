@@ -19,6 +19,8 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 
+import io.kroxylicious.proxy.config.IllegalConfigurationException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -289,7 +291,7 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
                 sslContextBuilder.protocols(protocolsToUse);
             }
             else {
-                throw new IllegalStateException(
+                throw new IllegalConfigurationException(
                         "The protocols configuration you have in place has resulted in no protocols being set. Allowed: " + allowedProtocols + ", Denied: "
                                 + deniedProtocols);
             }

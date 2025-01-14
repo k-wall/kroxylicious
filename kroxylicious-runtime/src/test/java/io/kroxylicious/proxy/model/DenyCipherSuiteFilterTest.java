@@ -11,9 +11,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.google.common.collect.Streams;
-
 import org.junit.jupiter.api.Test;
+
+import com.google.common.collect.Streams;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,14 +25,14 @@ class DenyCipherSuiteFilterTest {
     private final Set<String> supportedCiphers = Streams.concat(defaultCiphers.stream(), Stream.of("DEPRECATED_CIPHER_SUITE_1")).collect(Collectors.toSet());
 
     @Test
-    void defaultsToDefaultCiphers()  {
+    void defaultsToDefaultCiphers() {
         var filtered = new DenyCipherSuiteFilter(null)
                 .filterCipherSuites(null, defaultCiphers, supportedCiphers);
         assertThat(filtered).containsExactlyElementsOf(defaultCiphers);
     }
 
     @Test
-    void emptyCiphersGivesDefault()  {
+    void emptyCiphersGivesDefault() {
         var filtered = new DenyCipherSuiteFilter(null)
                 .filterCipherSuites(List.of(), defaultCiphers, supportedCiphers);
         assertThat(filtered).containsExactlyElementsOf(defaultCiphers);
@@ -85,7 +85,6 @@ class DenyCipherSuiteFilterTest {
                 .filterCipherSuites(allowedCiphers, defaultCiphers, supportedCiphers);
         assertThat(filtered).containsExactlyElementsOf(allowedCiphers);
     }
-
 
     @Test
     void ignoresUnrecognizedAllowCipher() {
