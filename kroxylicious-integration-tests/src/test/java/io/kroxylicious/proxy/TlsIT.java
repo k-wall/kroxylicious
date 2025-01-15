@@ -26,14 +26,20 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLSession;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.assertj.core.api.Condition;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -66,6 +72,7 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import static io.kroxylicious.test.tester.KroxyliciousTesters.kroxyliciousTester;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.list;
 
 /**
  * Integration tests focused on Kroxylicious ability to use TLS for both the upstream and downstream.
@@ -385,9 +392,26 @@ class TlsIT extends BaseIT {
                                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, downstreamCertificateGenerator.getPassword(),
                                 // Accepted Protocol matches what we want to use
                                 SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, TlsProtocol.TLS_V_1_2.getTlsProtocol()))) {
+
             // do some work to ensure connection is opened
             final CreateTopicsResult createTopicsResult = createTopic(admin, TOPIC, 1);
             assertThat(createTopicsResult.all()).isDone();
+
+            // verify that the admin is actually using the intended protocol
+            assertThat(admin)
+                    .extracting("instance")
+                    .extracting("client")
+                    .extracting("selector")
+                    .extracting("channels", InstanceOfAssertFactories.map(String.class, Object.class))
+                    .anySatisfy((id, channel) -> {
+                        assertThat(channel)
+                                .extracting("transportLayer")
+                                .extracting("sslEngine", InstanceOfAssertFactories.type(SSLEngine.class))
+                                .extracting(SSLEngine::getSession)
+                                .extracting(SSLSession::getProtocol)
+                                .isEqualTo("TLSv1.2");
+                    });
+
         }
     }
 
