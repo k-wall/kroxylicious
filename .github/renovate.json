@@ -5,7 +5,8 @@
   "automergeStrategy": "merge-commit",
   "ignoreTests": true,
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":gitSignOff"
   ],
   "enabledManagers": [
     "custom.regex"
