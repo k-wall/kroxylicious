@@ -22,7 +22,7 @@
     },
     {
       "customType": "regex",
-      "fileMatch": ["kroxylicious/kroxylicious-systemtests/src/main/java/io/kroxylicious/systemtests/Constants.java"],
+      "fileMatch": ["kroxylicious-systemtests/src/main/java/io/kroxylicious/systemtests/Constants.java"],
       "matchStrings": [
         "kroxylicious/kcat:(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
