@@ -20,6 +20,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import io.netty.buffer.ByteBufAllocator;
 
+import io.kroxylicious.proxy.config.IllegalConfigurationException;
 import io.kroxylicious.proxy.config.TargetCluster;
 import io.kroxylicious.proxy.config.secret.InlinePassword;
 import io.kroxylicious.proxy.config.tls.InsecureTls;
@@ -146,7 +147,7 @@ class VirtualClusterTest {
         // When/Then
         assertThatThrownBy(() -> new VirtualCluster("wibble", targetCluster, clusterNetworkAddressConfigProvider, Optional.empty(), false,
                 false))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("Cannot apply trust options");
     }
 

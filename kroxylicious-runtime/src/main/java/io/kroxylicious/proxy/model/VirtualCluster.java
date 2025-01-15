@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLParameters;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 
+import io.kroxylicious.proxy.config.IllegalConfigurationException;
 import io.kroxylicious.proxy.config.TargetCluster;
 import io.kroxylicious.proxy.config.tls.AllowDeny;
 import io.kroxylicious.proxy.config.tls.NettyKeyProvider;
@@ -240,7 +242,7 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
                         .map(TrustProvider::trustOptions)
                         .filter(Predicate.not(TrustOptions::forClient))
                         .ifPresent(to -> {
-                            throw new IllegalStateException("Cannot apply trust options " + to + " to upstream (client) TLS.)");
+                            throw new IllegalConfigurationException("Cannot apply trust options " + to + " to upstream (client) TLS.)");
                         });
 
                 var withTrust = configureTrustProvider(targetClusterTls).apply(sslContextBuilder);
@@ -261,46 +263,38 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
 
     private static void configureCipherSuites(SslContextBuilder sslContextBuilder, Tls tlsConfiguration) {
         Optional.ofNullable(tlsConfiguration.cipherSuites())
-                .map(ciphers -> sslContextBuilder.ciphers(
+                .ifPresent(ciphers -> sslContextBuilder.ciphers(
                         tlsConfiguration.cipherSuites().allowed(),
                         new DenyCipherSuiteFilter(tlsConfiguration.cipherSuites().denied())));
     }
 
     private static void configureEnabledProtocols(SslContextBuilder sslContextBuilder, Tls tlsConfiguration) {
+        var protocols = Optional.ofNullable(tlsConfiguration.protocols());
 
-        try {
-            var protocols = Optional.ofNullable(tlsConfiguration.protocols());
+        if (protocols.isPresent()) {
+            var allowedProtocols = Optional.ofNullable(protocols.get().allowed())
+                    .orElse(Arrays.stream(getDefaultSSLParameters().getProtocols())
+                            .map(TlsProtocol::getProtocolName)
+                            .filter(Optional::isPresent)
+                            .map(Optional::get)
+                            .toList());
+            var deniedProtocols = Optional.ofNullable(protocols.get().denied())
+                    .orElse(Set.of());
 
-            if (protocols.isPresent()) {
-                var allowedProtocols = Optional.ofNullable(protocols.get().allowed())
-                        .orElse(Arrays.stream(SSLContext.getDefault().getSupportedSSLParameters().getProtocols())
-                                .map(TlsProtocol::getProtocolName)
-                                .filter(Optional::isPresent)
-                                .map(Optional::get)
-                                .toList());
-                var deniedProtocols = Optional.ofNullable(protocols.get().denied())
-                        .orElse(Set.of());
+            var protocolsToUse = allowedProtocols.stream()
+                    .filter(Predicate.not(deniedProtocols::contains))
+                    .map(TlsProtocol::getTlsProtocol)
+                    .toList();
 
-                var protocolsToUse = allowedProtocols.stream()
-                        .filter(Predicate.not(deniedProtocols::contains))
-                        .map(TlsProtocol::getTlsProtocol)
-                        .toList();
-
-                if (!protocolsToUse.isEmpty()) {
-                    sslContextBuilder.protocols(protocolsToUse);
-                }
-                else {
-                    throw new IllegalStateException(
-                            "The protocols configuration you have in place has resulted in no protocols being set. Allowed: " + allowedProtocols + ", Denied: "
-                                    + deniedProtocols);
-                }
+            if (!protocolsToUse.isEmpty()) {
+                sslContextBuilder.protocols(protocolsToUse);
             }
-
+            else {
+                throw new IllegalStateException(
+                        "The protocols configuration you have in place has resulted in no protocols being set. Allowed: " + allowedProtocols + ", Denied: "
+                                + deniedProtocols);
+            }
         }
-        catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
-
     }
 
     private static void validatePortUsage(ClusterNetworkAddressConfigProvider clusterNetworkAddressConfigProvider) {
@@ -315,6 +309,15 @@ public class VirtualCluster implements ClusterNetworkAddressConfigProvider {
     private static void validateTLsSettings(ClusterNetworkAddressConfigProvider clusterNetworkAddressConfigProvider, Optional<Tls> tls) {
         if (clusterNetworkAddressConfigProvider.requiresTls() && (tls.isEmpty() || !tls.get().definesKey())) {
             throw new IllegalStateException("Cluster endpoint provider requires server TLS, but this virtual cluster does not define it.");
+        }
+    }
+
+    private static SSLParameters getDefaultSSLParameters() {
+        try {
+            return SSLContext.getDefault().getDefaultSSLParameters();
+        }
+        catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
         }
     }
 }
