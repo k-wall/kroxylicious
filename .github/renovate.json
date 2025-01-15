@@ -27,7 +27,7 @@
       "matchStrings": [
         "kroxylicious/kcat:(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
-      "depNameTemplate": "kroxylicious/kcat",
+      "depNameTemplate": "quay.io/kroxylicious/kcat",
       "datasourceTemplate": "docker"
     }
   ]
