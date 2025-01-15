@@ -23,6 +23,24 @@
     },
     {
       "customType": "regex",
+      "fileMatch": ["kroxylicious-kms-provider-aws-kms-test-support/src/main/java/io/kroxylicious/kms/provider/aws/kms/AwsKmsTestKmsFacade.java"],
+      "matchStrings": [
+        "DockerImageName\\.parse\\(\"localstack/localstack:(?<currentValue>\\d+\\.\\d+)\"\\)"
+      ],
+      "depNameTemplate": "localstack/localstack",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["io.kroxylicious.proxy.filter.validation.JsonSchemaRecordValidationIT"],
+      "matchStrings": [
+        "quay.io/apicurio/apicurio-registry-mem:(?<currentValue>\\d+\\.\\d+\\.\\d+\\.Final)"
+      ],
+      "depNameTemplate": "quay.io/apicurio/apicurio-registry-mem",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
       "fileMatch": ["kroxylicious-systemtests/src/main/java/io/kroxylicious/systemtests/Constants.java"],
       "matchStrings": [
         "kroxylicious/kcat:(?<currentValue>\\d+\\.\\d+\\.\\d+)"
