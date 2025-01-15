@@ -23,6 +23,15 @@
     },
     {
       "customType": "regex",
+      "fileMatch": ["performance-tests/docker-compose.yaml"],
+      "matchStrings": [
+        "hashicorp/vault:(?<currentValue>\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "hashicorp/vault",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
       "fileMatch": ["kroxylicious-kms-provider-aws-kms-test-support/src/main/java/io/kroxylicious/kms/provider/aws/kms/AwsKmsTestKmsFacade.java"],
       "matchStrings": [
         "DockerImageName\\.parse\\(\"localstack/localstack:(?<currentValue>\\d+\\.\\d+)\"\\)"
@@ -32,9 +41,18 @@
     },
     {
       "customType": "regex",
-      "fileMatch": ["io.kroxylicious.proxy.filter.validation.JsonSchemaRecordValidationIT"],
+      "fileMatch": ["kroxylicious-integration-tests/src/test/java/io/kroxylicious/proxy/filter/oauthbearer/OauthBearerValidationIT.java"],
       "matchStrings": [
-        "quay.io/apicurio/apicurio-registry-mem:(?<currentValue>\\d+\\.\\d+\\.\\d+\\.Final)"
+        "DockerImageName\\.parse\\(\"ghcr.io/navikt/mock-oauth2-server:(?<currentValue>\\d+\\.\\d+)\"\\)"
+      ],
+      "depNameTemplate": "ghcr.io/navikt/mock-oauth2-server",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["kroxylicious-integration-tests/src/test/java/io/kroxylicious/proxy/filter/validation/JsonSchemaRecordValidationIT.java"],
+      "matchStrings": [
+        "DockerImageName\\.parse\\(\"quay.io/apicurio/apicurio-registry-mem:(?<currentValue>\\d+\\.\\d+\\.\\d+\\.Final)"
       ],
       "depNameTemplate": "quay.io/apicurio/apicurio-registry-mem",
       "datasourceTemplate": "docker"
