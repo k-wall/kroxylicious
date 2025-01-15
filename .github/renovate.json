@@ -43,7 +43,7 @@
       "customType": "regex",
       "fileMatch": ["kroxylicious-integration-tests/src/test/java/io/kroxylicious/proxy/filter/oauthbearer/OauthBearerValidationIT.java"],
       "matchStrings": [
-        "DockerImageName\\.parse\\(\"ghcr.io/navikt/mock-oauth2-server:(?<currentValue>\\d+\\.\\d+)\"\\)"
+        "DockerImageName\\.parse\\(\"ghcr.io/navikt/mock-oauth2-server:(?<currentValue>\\d+\\.\\d+.\\d+)\"\\)"
       ],
       "depNameTemplate": "ghcr.io/navikt/mock-oauth2-server",
       "datasourceTemplate": "docker"
