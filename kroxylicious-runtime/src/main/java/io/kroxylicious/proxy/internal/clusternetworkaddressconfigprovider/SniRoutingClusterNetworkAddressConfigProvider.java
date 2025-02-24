@@ -137,6 +137,7 @@ public class SniRoutingClusterNetworkAddressConfigProvider implements
         private final Pattern brokerAddressNodeIdCapturingRegex;
         @JsonIgnore
         private final Integer advertisedPort;
+
         // present for serialize/deserialize fidelity
         @SuppressWarnings("unused")
         private final String brokerAddressPattern;
@@ -198,6 +199,10 @@ public class SniRoutingClusterNetworkAddressConfigProvider implements
 
         public HostPort getBootstrapAddress() {
             return bootstrapAddress;
+        }
+
+        public String getBrokerAddressPattern() {
+            return brokerAddressPattern;
         }
 
         public int getAdvertisedPort() {
