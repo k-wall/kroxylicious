@@ -40,6 +40,7 @@ import io.kroxylicious.proxy.internal.filter.FieldInjectionConfig;
 import io.kroxylicious.proxy.internal.filter.NestedPluginConfigFactory;
 import io.kroxylicious.proxy.internal.filter.RecordConfig;
 import io.kroxylicious.proxy.internal.filter.SetterInjectionConfig;
+import io.kroxylicious.proxy.model.VirtualClusterModel;
 import io.kroxylicious.proxy.plugin.UnknownPluginInstanceException;
 import io.kroxylicious.proxy.service.HostPort;
 
@@ -62,7 +63,7 @@ class ConfigParserTest {
                 """),
                 Arguments.argumentSet("Virtual cluster (portIdentifiesNode - minimal)", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                             gateways:
@@ -72,7 +73,7 @@ class ConfigParserTest {
                         """),
                 Arguments.argumentSet("Virtual cluster (portIdentifiesNode with start port)", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                             gateways:
@@ -84,7 +85,7 @@ class ConfigParserTest {
                         """),
                 Arguments.argumentSet("Virtual cluster (portIdentifiesNode with ranges)", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                             gateways:
@@ -101,7 +102,7 @@ class ConfigParserTest {
                         """),
                 Arguments.argumentSet("Virtual cluster (portIdentifiesNode with range and start port)", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                             gateways:
@@ -117,7 +118,7 @@ class ConfigParserTest {
                         """),
                 Arguments.argumentSet("Virtual cluster (sniHostIdentifiesNode)", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                             gateways:
@@ -134,7 +135,7 @@ class ConfigParserTest {
                         """),
                 Arguments.argumentSet("Downstream/Upstream TLS with inline passwords", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                               tls:
@@ -157,7 +158,7 @@ class ConfigParserTest {
                         """),
                 Arguments.argumentSet("Downstream/Upstream TLS with password files", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                               tls:
@@ -180,7 +181,7 @@ class ConfigParserTest {
                         """),
                 Arguments.argumentSet("Virtual cluster (PortPerBroker - deprecated)", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                             clusterNetworkAddressConfigProvider:
@@ -199,7 +200,7 @@ class ConfigParserTest {
                         """),
                 Arguments.argumentSet("Virtual cluster (RangeAwarePortPerNode - deprecated)", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                             clusterNetworkAddressConfigProvider:
@@ -216,7 +217,7 @@ class ConfigParserTest {
                         """),
                 Arguments.argumentSet("Virtual cluster (SniRouting - deprecated)", """
                         virtualClusters:
-                          demo1:
+                          - name: demo1
                             targetCluster:
                               bootstrapServers: kafka.example:1234
                             clusterNetworkAddressConfigProvider:
@@ -277,23 +278,25 @@ class ConfigParserTest {
                     assertThat(ahc.endpoints().maybePrometheus()).isPresent();
                 });
 
-        assertThat(configuration.virtualClusters()).hasSize(1);
-        assertThat(configuration.virtualClusters().keySet()).containsExactly("demo");
-        VirtualCluster cluster = configuration.virtualClusters().values().iterator().next();
-        assertThat(cluster.logFrames()).isTrue();
-        assertThat(cluster.logNetwork()).isTrue();
-        assertThat(cluster.targetCluster()).isNotNull();
-        assertThat(cluster.targetCluster().bootstrapServers()).isEqualTo("localhost:9092");
-
-        assertThat(cluster.gateways())
+        assertThat(configuration.virtualClusters())
                 .singleElement()
-                .satisfies(vcl -> {
-                    assertThat(vcl.name()).isEqualTo("mygateway");
-                    assertThat(vcl.clusterNetworkAddressConfigProvider())
-                            .extracting(ClusterNetworkAddressConfigProviderDefinition::config)
-                            .asInstanceOf(InstanceOfAssertFactories.type(RangeAwarePortPerNodeClusterNetworkAddressConfigProviderConfig.class))
-                            .satisfies(c -> assertThat(c.getBootstrapAddress())
-                                    .isEqualTo(HostPort.parse("localhost:9192")));
+                .satisfies(cluster -> {
+                    assertThat(cluster.name()).isEqualTo("demo");
+                    assertThat(cluster.logFrames()).isTrue();
+                    assertThat(cluster.logNetwork()).isTrue();
+                    assertThat(cluster.targetCluster()).isNotNull();
+                    assertThat(cluster.targetCluster().bootstrapServers()).isEqualTo("localhost:9092");
+
+                    assertThat(cluster.gateways())
+                            .singleElement()
+                            .satisfies(vcl -> {
+                                assertThat(vcl.name()).isEqualTo("mygateway");
+                                assertThat(vcl.clusterNetworkAddressConfigProvider())
+                                        .extracting(ClusterNetworkAddressConfigProviderDefinition::config)
+                                        .asInstanceOf(InstanceOfAssertFactories.type(RangeAwarePortPerNodeClusterNetworkAddressConfigProviderConfig.class))
+                                        .satisfies(c -> assertThat(c.getBootstrapAddress())
+                                                .isEqualTo(HostPort.parse("localhost:9192")));
+                            });
                 });
     }
 
@@ -322,16 +325,13 @@ class ConfigParserTest {
     void shouldConfigureClusterNameFromNodeName() {
         final Configuration configurationModel = configParser.parseConfiguration("""
                 virtualClusters:
-                  myAwesomeCluster:
+                  - name: myAwesomeCluster
                     targetCluster:
                       bootstrapServers: kafka.example:1234
-                    clusterNetworkAddressConfigProvider:
-                      type: PortPerBrokerClusterNetworkAddressConfigProvider
-                      config:
+                    gateways:
+                    - name: default
+                      portIdentifiesNode:
                         bootstrapAddress: cluster1:9192
-                        numberOfBrokerPorts: 1
-                        brokerAddressPattern: localhost
-                        brokerStartPort: 9193
                 """);
         // When
         var actualValidClusters = configurationModel.virtualClusterModel(new ServiceBasedPluginFactoryRegistry());
@@ -341,20 +341,50 @@ class ConfigParserTest {
     }
 
     @Test
+    void shouldSupportDeprecatedVirtualClusterMap() {
+        final Configuration configurationModel = configParser.parseConfiguration("""
+                virtualClusters:
+                  myAwesomeCluster1:
+                    targetCluster:
+                      bootstrapServers: kafka1.example:1234
+                    gateways:
+                    - name: default
+                      portIdentifiesNode:
+                        bootstrapAddress: cluster1:9192
+                  myAwesomeCluster2:
+                    targetCluster:
+                      bootstrapServers: kafka2.example:1234
+                    gateways:
+                    - name: default
+                      portIdentifiesNode:
+                        bootstrapAddress: cluster2:9192
+                """);
+        // When
+        var actualValidClusters = configurationModel.virtualClusterModel(new ServiceBasedPluginFactoryRegistry());
+
+        // Then
+        assertThat(actualValidClusters)
+                .map(VirtualClusterModel::getClusterName)
+                .containsExactly("myAwesomeCluster1", "myAwesomeCluster2");
+
+        // KW FIX ME
+    }
+
+    @Test
     void shouldDetectDuplicateClusterNodeNames() {
         // Given
         assertThatThrownBy(() ->
         // When
         configParser.parseConfiguration("""
                 virtualClusters:
-                  demo1:
+                  - name: demo1
                     targetCluster:
                       bootstrapServers: kafka.example:1234
                     gateways:
                     - name: default
                       portIdentifiesNode:
                         bootstrapAddress: cluster1:9192
-                  demo1:
+                  - name: demo1
                     targetCluster:
                       bootstrapServers: magic-kafka.example:1234
                     gateways:
@@ -366,7 +396,7 @@ class ConfigParserTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasCauseInstanceOf(JsonMappingException.class) // Debatable to enforce the wrapped JsonMappingException
                 .cause()
-                .hasMessageStartingWith("Duplicate field 'demo1'");
+                .hasMessageContaining("Virtual cluster must be unique. The following virtual cluster names are duplicated: [demo1]");
 
     }
 
@@ -520,7 +550,9 @@ class ConfigParserTest {
         Files.writeString(file.toPath(), password);
         final Configuration configurationModel = configParser.parseConfiguration("""
                         virtualClusters:
-                          demo1:
+                          - name: demo1
+                            targetCluster:
+                              bootstrapServers: magic-kafka.example:1234
                             gateways:
                             - name: mygateway
                               tls:
@@ -532,7 +564,7 @@ class ConfigParserTest {
                                 bootstrapAddress: cluster1:9192
                 """.formatted(file.getAbsolutePath()));
         // When
-        final var virtualCluster = configurationModel.virtualClusters().values().iterator().next();
+        final var virtualCluster = configurationModel.virtualClusters().iterator().next();
 
         // Then
         assertThat(virtualCluster.gateways())

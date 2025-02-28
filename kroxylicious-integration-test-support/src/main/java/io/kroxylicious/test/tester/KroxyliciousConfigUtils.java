@@ -12,6 +12,8 @@ import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
+
 import io.kroxylicious.proxy.config.Configuration;
 import io.kroxylicious.proxy.config.ConfigurationBuilder;
 import io.kroxylicious.proxy.config.NamedRange;
@@ -64,13 +66,14 @@ public class KroxyliciousConfigUtils {
         for (int i = 0; i < virtualClusterNames.length; i++) {
             String virtualClusterName = virtualClusterNames[i];
             var vcb = new VirtualClusterBuilder()
+                    .withName(virtualClusterName)
                     .withNewTargetCluster()
                     .withBootstrapServers(clusterBootstrapServers)
                     .endTargetCluster()
                     .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(new HostPort(DEFAULT_PROXY_BOOTSTRAP.host(), DEFAULT_PROXY_BOOTSTRAP.port() + i * 10))
                             .build());
             configurationBuilder
-                    .addToVirtualClusters(virtualClusterName, vcb.build());
+                    .addToVirtualClusters(vcb.build());
         }
         return configurationBuilder;
     }
@@ -95,11 +98,11 @@ public class KroxyliciousConfigUtils {
      * @throws IllegalArgumentException if the virtualCluster is not in the kroxylicious config
      */
     static String bootstrapServersFor(String virtualCluster, Configuration config, String gateway) {
-        var cluster = config.virtualClusters().get(virtualCluster);
-        if (cluster == null) {
+        var cluster = config.virtualClusters().stream().filter(v -> v.name().equals(virtualCluster)).findFirst();
+        if (cluster.isEmpty()) {
             throw new IllegalArgumentException("virtualCluster " + virtualCluster + " not found in config: " + config);
         }
-        var first = getVirtualClusterGatewayStream(cluster).filter(l -> l.name().equals(gateway)).map(VirtualClusterGateway::clusterNetworkAddressConfigProvider)
+        var first = getVirtualClusterGatewayStream(cluster.get()).filter(l -> l.name().equals(gateway)).map(VirtualClusterGateway::clusterNetworkAddressConfigProvider)
                 .findFirst();
         var provider = first.orElseThrow(() -> new IllegalArgumentException(virtualCluster + " does not have gateway named " + gateway));
 
@@ -184,5 +187,14 @@ public class KroxyliciousConfigUtils {
                     }
                     throw new UnsupportedOperationException(providerDefinition.type() + " is unrecognised");
                 });
+    }
+
+    @NonNull
+    public static VirtualClusterBuilder baseVirtualClusterBuilder(KafkaCluster cluster, String clusterName) {
+        return new VirtualClusterBuilder()
+                .withNewTargetCluster()
+                .withBootstrapServers(cluster.getBootstrapServers())
+                .endTargetCluster()
+                .withName(clusterName);
     }
 }

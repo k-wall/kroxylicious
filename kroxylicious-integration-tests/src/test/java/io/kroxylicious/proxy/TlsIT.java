@@ -30,6 +30,8 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLSession;
 
+import io.kroxylicious.test.tester.KroxyliciousConfigUtils;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
@@ -62,6 +64,7 @@ import io.kroxylicious.testing.kafka.junit5ext.KafkaClusterExtension;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
 
+import static io.kroxylicious.test.tester.KroxyliciousConfigUtils.baseVirtualClusterBuilder;
 import static io.kroxylicious.test.tester.KroxyliciousConfigUtils.defaultPortIdentifiesNodeGatewayBuilder;
 import static io.kroxylicious.test.tester.KroxyliciousTesters.kroxyliciousTester;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -109,7 +112,8 @@ class TlsIT extends BaseIT {
         assertThat(brokerTruststorePassword).isNotEmpty();
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .withNewTls()
@@ -139,7 +143,8 @@ class TlsIT extends BaseIT {
         assertThat(brokerTruststorePassword).isNotEmpty();
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers.replace("localhost", "127.0.0.1"))
                         // 127.0.0.1 is not included as Subject Alternate Name (SAN) so hostname validation will fail.
@@ -184,7 +189,8 @@ class TlsIT extends BaseIT {
         var file = writeTrustToTemporaryFile(certificates);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .withNewTls()
@@ -210,7 +216,8 @@ class TlsIT extends BaseIT {
         var bootstrapServers = cluster.getBootstrapServers();
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .withNewTls()
@@ -262,7 +269,8 @@ class TlsIT extends BaseIT {
             assertUnsuccessfulDirectClientAuthConnectionWithoutClientCert(cluster);
 
             var builder = new ConfigurationBuilder()
-                    .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                    .addToVirtualClusters(new VirtualClusterBuilder()
+                            .withName("demo")
                             .withNewTargetCluster()
                             .withBootstrapServers(cluster.getBootstrapServers())
                             .withNewTls()
@@ -324,7 +332,8 @@ class TlsIT extends BaseIT {
         var proxyKeystorePasswordProvider = constructPasswordProvider(providerClazz, proxyKeystorePassword);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .withNewTls()
@@ -363,10 +372,7 @@ class TlsIT extends BaseIT {
         AllowDeny<String> protocols = new AllowDeny<>(List.of("TLSv1.2"), null);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
-                        .withNewTargetCluster()
-                        .withBootstrapServers(bootstrapServers)
-                        .endTargetCluster()
+                .addToVirtualClusters(baseVirtualClusterBuilder(cluster, "demo")
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                 .withNewKeyStoreKey()
@@ -417,10 +423,7 @@ class TlsIT extends BaseIT {
         AllowDeny<String> protocols = new AllowDeny<>(List.of("TLSv1.2"), null);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
-                        .withNewTargetCluster()
-                        .withBootstrapServers(bootstrapServers)
-                        .endTargetCluster()
+                .addToVirtualClusters(baseVirtualClusterBuilder(cluster, "demo")
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                 .withNewKeyStoreKey()
@@ -454,10 +457,7 @@ class TlsIT extends BaseIT {
         AllowDeny<String> protocols = new AllowDeny<>(null, Set.of("TLSv1.2"));
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
-                        .withNewTargetCluster()
-                        .withBootstrapServers(bootstrapServers)
-                        .endTargetCluster()
+                .addToVirtualClusters(baseVirtualClusterBuilder(cluster, "demo")
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                 .withNewKeyStoreKey()
@@ -497,7 +497,8 @@ class TlsIT extends BaseIT {
         AllowDeny<String> protocols = new AllowDeny<>(List.of("TLSv1.2"), null);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .withNewTls()
@@ -533,7 +534,8 @@ class TlsIT extends BaseIT {
         AllowDeny<String> protocols = new AllowDeny<>(List.of("TLSv1.1"), null);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .withNewTls()
@@ -567,10 +569,7 @@ class TlsIT extends BaseIT {
         AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_CHACHA20_POLY1305_SHA256"), null);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
-                        .withNewTargetCluster()
-                        .withBootstrapServers(bootstrapServers)
-                        .endTargetCluster()
+                .addToVirtualClusters(baseVirtualClusterBuilder(cluster, "demo")
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                 .withNewKeyStoreKey()
@@ -620,10 +619,7 @@ class TlsIT extends BaseIT {
         AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_AES_128_GCM_SHA256"), null);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
-                        .withNewTargetCluster()
-                        .withBootstrapServers(bootstrapServers)
-                        .endTargetCluster()
+                .addToVirtualClusters(baseVirtualClusterBuilder(cluster, "demo")
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                 .withNewKeyStoreKey()
@@ -657,10 +653,7 @@ class TlsIT extends BaseIT {
         AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_CHACHA20_POLY1305_SHA256"), Set.of("TLS_AES_128_GCM_SHA256"));
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
-                        .withNewTargetCluster()
-                        .withBootstrapServers(bootstrapServers)
-                        .endTargetCluster()
+                .addToVirtualClusters(baseVirtualClusterBuilder(cluster, "demo")
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                 .withNewKeyStoreKey()
@@ -700,7 +693,8 @@ class TlsIT extends BaseIT {
         AllowDeny<String> cipherSuites = new AllowDeny<>(List.of("TLS_CHACHA20_POLY1305_SHA256"), null);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .withNewTls()
@@ -736,7 +730,8 @@ class TlsIT extends BaseIT {
         AllowDeny<String> upstreamCipherSuites = new AllowDeny<>(List.of("TLS_AES_128_WRONG_CIPHER"), null);
 
         var builder = new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
+                .addToVirtualClusters(new VirtualClusterBuilder()
+                        .withName("demo")
                         .withNewTargetCluster()
                         .withBootstrapServers(bootstrapServers)
                         .withNewTls()
@@ -853,13 +848,9 @@ class TlsIT extends BaseIT {
     }
 
     private ConfigurationBuilder constructMutualTlsBuilder(KafkaCluster cluster, TlsClientAuth tlsClientAuth) throws Exception {
-        var bootstrapServers = cluster.getBootstrapServers();
 
         return new ConfigurationBuilder()
-                .addToVirtualClusters("demo", new VirtualClusterBuilder()
-                        .withNewTargetCluster()
-                        .withBootstrapServers(bootstrapServers)
-                        .endTargetCluster()
+                .addToVirtualClusters(baseVirtualClusterBuilder(cluster, "demo")
                         .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(PROXY_ADDRESS)
                                 .withNewTls()
                                 .withNewKeyStoreKey()

@@ -10,13 +10,11 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -119,16 +117,12 @@ public class ProxyConfigSecret
     }
 
     @NonNull
-    private static LinkedHashMap<String, VirtualCluster> buildVirtualClusters(KafkaProxy primary, Context<KafkaProxy> context, List<VirtualKafkaCluster> clusters) {
+    private static List<VirtualCluster> buildVirtualClusters(KafkaProxy primary, Context<KafkaProxy> context, List<VirtualKafkaCluster> clusters) {
         AtomicInteger clusterNum = new AtomicInteger(0);
-        var virtualClusters = clusters.stream()
+        return clusters.stream()
                 .filter(cluster -> !SharedKafkaProxyContext.isBroken(context, cluster))
-                .collect(Collectors.toMap(
-                        (cluster) -> cluster.getMetadata().getName(),
-                        cluster -> getVirtualCluster(primary, cluster, clusterNum.getAndIncrement()),
-                        (v1, v2) -> v1, // Dupes handled below
-                        LinkedHashMap::new));
-        return virtualClusters;
+                .map(cluster -> getVirtualCluster(primary, cluster, clusterNum.getAndIncrement()))
+                .toList();
     }
 
     @NonNull
@@ -213,7 +207,7 @@ public class ProxyConfigSecret
                                                     int clusterNum) {
         String bootstrap = cluster.getSpec().getTargetCluster().getBootstrapping().getBootstrapAddress();
         return new VirtualCluster(
-                new TargetCluster(bootstrap, Optional.empty()),
+                cluster.getMetadata().getName(), new TargetCluster(bootstrap, Optional.empty()),
                 null,
                 Optional.empty(),
                 List.of(new VirtualClusterGateway("default",

@@ -5,6 +5,7 @@
  */
 package io.kroxylicious.proxy.config;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -15,14 +16,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JacksonException;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import com.fasterxml.jackson.databind.type.TypeFactory;
 
 import io.kroxylicious.proxy.config.tls.Tls;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import edu.umd.cs.findbugs.annotations.Nullable;
 
 /**
  * A virtual cluster.
  *
+ * @param name virtual cluster name
  * @param targetCluster the cluster being proxied
  * @param clusterNetworkAddressConfigProvider virtual cluster network config - deprecated - use a named gateway
  * @param tls deprecated - tls settings for the virtual cluster - deprecated - use a named gateway
@@ -32,7 +44,8 @@ import edu.umd.cs.findbugs.annotations.Nullable;
  * @param filters filers.
  */
 @SuppressWarnings("java:S1123") // suppressing the spurious warning about missing @deprecated in javadoc. It is the field that is deprecated, not the class.
-public record VirtualCluster(TargetCluster targetCluster,
+public record VirtualCluster(@NonNull @JsonProperty(required = true) String name,
+                             @NonNull @JsonProperty(required = true) TargetCluster targetCluster,
                              @Deprecated(forRemoval = true, since = "0.11.0") ClusterNetworkAddressConfigProviderDefinition clusterNetworkAddressConfigProvider,
                              @Deprecated(forRemoval = true, since = "0.11.0") @JsonProperty() Optional<Tls> tls,
 
@@ -51,6 +64,9 @@ public record VirtualCluster(TargetCluster targetCluster,
 
     @SuppressWarnings({ "removal", "java:S2789" }) // S2789 - checking for null tls is the intent
     public VirtualCluster {
+        Objects.requireNonNull(name);
+        Objects.requireNonNull(targetCluster);
+
         if (clusterNetworkAddressConfigProvider != null || (tls != null && tls.isPresent())) {
             if (clusterNetworkAddressConfigProvider == null) {
                 throw new IllegalConfigurationException("Deprecated virtualCluster property 'tls' supplied, but 'clusterNetworkAddressConfigProvider' is null");
@@ -99,5 +115,37 @@ public record VirtualCluster(TargetCluster targetCluster,
     @SuppressWarnings("java:S6207") // overriding the method to add the deprecated annotation
     public Optional<Tls> tls() {
         return tls;
+    }
+
+    public static class VirtualClusterContainerDeserializer extends StdDeserializer<List<VirtualCluster>> {
+        public VirtualClusterContainerDeserializer() {
+            super(TypeFactory.defaultInstance().constructParametricType(List.class, VirtualCluster.class));
+        }
+
+        @Override
+        public List<VirtualCluster> deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException, JacksonException {
+            JsonNode node = jp.getCodec().readTree(jp);
+            if (node instanceof ObjectNode clusterMap) {
+                var clusterArrays = new ArrayNode(ctxt.getNodeFactory());
+                var clusterNames = clusterMap.fieldNames();
+                clusterNames.forEachRemaining(clusterName -> {
+                    JsonNode value = clusterMap.get(clusterName);
+                    if (value instanceof ObjectNode cluster) {
+                        var currentName = cluster.get("name");
+                        if (currentName == null) {
+                            cluster.set("name", new TextNode(clusterName));
+                        }
+                        else if (!currentName.asText().equals(clusterName)) {
+                            LOGGER.warn("cluster name in body disagrees with map key");
+                        }
+                        clusterArrays.add(cluster);
+                    }
+                });
+                return ctxt.readTreeAsValue(clusterArrays, _valueType);
+            }
+            else {
+                return ctxt.readTreeAsValue(node, getValueType(ctxt));
+            }
+        }
     }
 }
