@@ -10,6 +10,11 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+
+import io.fabric8.kubernetes.api.model.ConfigMapVolumeSource;
+import io.fabric8.kubernetes.api.model.SecretVolumeSource;
 
 import org.assertj.core.api.AbstractStringAssert;
 import org.assertj.core.api.InstanceOfAssertFactories;
@@ -20,6 +25,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,6 +75,9 @@ class KafkaProxyReconcilerIT {
     private static final String CLUSTER_BAR_CLUSTERIP_INGRESS = "bar-cluster-ip";
     private static final String CLUSTER_BAR_BOOTSTRAP = "my-cluster-kafka-bootstrap.bar.svc.cluster.local:9092";
     private static final String NEW_BOOTSTRAP = "new-bootstrap:9092";
+
+    private static final String FILTER_BAR = "barfilter";
+    private static final String BAR_TYPE = "BarType";
 
     private KubernetesClient client;
     private final ConditionFactory AWAIT = await().timeout(Duration.ofSeconds(60));
@@ -121,7 +132,7 @@ class KafkaProxyReconcilerIT {
 
     CreatedResources doCreate() {
         KafkaProxy proxy = extension.create(kafkaProxy(PROXY_A));
-        KafkaProtocolFilter filter = extension.create(filter(FILTER_NAME));
+        KafkaProtocolFilter filter = extension.create(filter(FILTER_NAME, "foo", Map.of()));
         KafkaService barClusterRef = extension.create(clusterRef(CLUSTER_BAR_REF, CLUSTER_BAR_BOOTSTRAP));
         KafkaProxyIngress ingressBar = extension.create(clusterIpIngress(CLUSTER_BAR_CLUSTERIP_INGRESS, proxy));
         Set<KafkaService> clusterRefs = Set.of(barClusterRef);
@@ -277,7 +288,7 @@ class KafkaProxyReconcilerIT {
 
         KafkaService fooClusterRef = extension.create(clusterRef(CLUSTER_FOO_REF, CLUSTER_FOO_BOOTSTRAP));
         KafkaService barClusterRef = extension.create(clusterRef(CLUSTER_BAR_REF, CLUSTER_BAR_BOOTSTRAP));
-        KafkaProtocolFilter filter = extension.create(filter(FILTER_NAME));
+        KafkaProtocolFilter filter = extension.create(filter(FILTER_NAME, FILTER_BAR, Map.of()));
 
         VirtualKafkaCluster clusterFoo = extension.create(virtualKafkaCluster(CLUSTER_FOO, proxyA, fooClusterRef, ingressFoo, filter));
         VirtualKafkaCluster barCluster = extension.create(virtualKafkaCluster(CLUSTER_BAR, proxyB, barClusterRef, ingressBar, filter));
@@ -306,6 +317,46 @@ class KafkaProxyReconcilerIT {
         assertServiceTargetsProxyInstances(proxyB, clusterFoo, ingressFoo);
     }
 
+    static Stream<Arguments> deploymentForProxyWithFilterUsingSecretInterpolationMountsSecret() {
+        return Stream.of(
+                Arguments.argumentSet("secret interpolation", "${secret:my-secret:filter-one}",
+                        (Consumer<Volume>) volume -> assertThat(volume)
+                                .extracting(Volume::getSecret)
+                                .extracting(SecretVolumeSource::getSecretName)
+                                .isEqualTo("my-secret")
+                ),
+                Arguments.argumentSet("configmap interpolation", "${configmap:my-configmap:filter-one}",
+                        (Consumer<Volume>) volume -> assertThat(volume)
+                                .extracting(Volume::getConfigMap)
+                                .extracting(ConfigMapVolumeSource::getName)
+                                .isEqualTo("my-configmap")
+                ));
+    }
+
+    @ParameterizedTest
+    @MethodSource
+    void deploymentForProxyWithFilterUsingSecretInterpolationMountsSecret(String interpolation, Consumer<Volume> volumeAssertion) {
+        KafkaProxy proxy = extension.create(kafkaProxy(PROXY_A));
+        KafkaService barClusterRef = extension.create(clusterRef(CLUSTER_BAR_REF, CLUSTER_BAR_BOOTSTRAP));
+        KafkaProxyIngress ingress = clusterIpIngress(CLUSTER_BAR_CLUSTERIP_INGRESS, proxy);
+        extension.create(ingress);
+
+        var filter = extension.create(filter(FILTER_BAR, BAR_TYPE, Map.of("mysecretthing", interpolation)));
+
+        extension.create(virtualKafkaCluster(CLUSTER_BAR, proxy, barClusterRef, ingress, filter));
+
+        assertDeploymentMountsInterpolationVolume(proxy, volumeAssertion);
+    }
+
+    private void assertDeploymentMountsInterpolationVolume(KafkaProxy proxy, Consumer<Volume> volumeAssertion) {
+        AWAIT.alias("User secret mounted as expected").untilAsserted(() -> {
+            var deployment = extension.get(Deployment.class, ProxyDeployment.deploymentName(proxy));
+            assertThat(deployment).isNotNull()
+                    .extracting(dep -> dep.getSpec().getTemplate().getSpec().getVolumes(), InstanceOfAssertFactories.list(Volume.class))
+                    .describedAs("Deployment template should mount the user secret")
+                    .satisfiesOnlyOnce(volumeAssertion);
+        });
+    }
     private AbstractStringAssert<?> assertThatProxyConfigFor(KafkaProxy proxy) {
         var configMap = extension.get(ConfigMap.class, ProxyConfigConfigMap.configMapName(proxy));
         return assertThat(configMap)
@@ -333,11 +384,25 @@ class KafkaProxyReconcilerIT {
                 .endSpec().build();
     }
 
-    private static KafkaProtocolFilter filter(String name) {
-        return new KafkaProtocolFilterBuilder().withNewMetadata().withName(name).endMetadata()
-                .withNewSpec().withType("RecordValidation").withConfigTemplate(Map.of("rules", List.of(Map.of("allowNulls", false))))
-                .endSpec().build();
+    private KafkaProtocolFilter filter(String name, String type, Map<String, Object> config) {
+        // @formatter:off
+        return new KafkaProtocolFilterBuilder()
+                .withNewMetadata()
+                    .withName(name)
+                .endMetadata()
+                .withNewSpec()
+                    .withType(type)
+                    .withConfigTemplate(config)
+                .endSpec()
+                .build();
+        // @formatter:on
     }
+
+//    private static KafkaProtocolFilter filter(String name) {
+//        return new KafkaProtocolFilterBuilder().withNewMetadata().withName(name).endMetadata()
+//                .withNewSpec().withType("RecordValidation").withConfigTemplate(Map.of("rules", List.of(Map.of("allowNulls", false))))
+//                .endSpec().build();
+//    }
 
     KafkaProxy kafkaProxy(String name) {
         // @formatter:off

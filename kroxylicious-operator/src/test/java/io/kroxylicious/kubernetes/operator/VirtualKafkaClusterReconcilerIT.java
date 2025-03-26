@@ -211,6 +211,7 @@ class VirtualKafkaClusterReconcilerIT {
         assertClusterStatusResolvedRefs(clusterBar, Condition.Status.FALSE);
     }
 
+
     private VirtualKafkaCluster cluster(String clusterName, String proxyName, String ingressName, String serviceName, @Nullable String filterName) {
         // @formatter:off
         var specBuilder = new VirtualKafkaClusterBuilder()
