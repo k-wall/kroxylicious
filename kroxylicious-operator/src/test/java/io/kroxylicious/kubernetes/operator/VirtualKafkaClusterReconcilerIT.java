@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.awaitility.core.ConditionFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -21,6 +22,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.fabric8.kubernetes.api.model.HasMetadata;
+import io.fabric8.kubernetes.api.model.Service;
+import io.fabric8.kubernetes.api.model.ServiceBuilder;
+import io.fabric8.kubernetes.api.model.ServicePortBuilder;
 import io.javaoperatorsdk.operator.junit.LocallyRunOperatorExtension;
 
 import io.kroxylicious.kubernetes.api.common.Condition;
@@ -33,6 +37,8 @@ import io.kroxylicious.kubernetes.api.v1alpha1.KafkaService;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaServiceBuilder;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaClusterBuilder;
+import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaClusterStatus;
+import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterstatus.Ingresses;
 import io.kroxylicious.kubernetes.filter.api.v1alpha1.KafkaProtocolFilter;
 import io.kroxylicious.kubernetes.filter.api.v1alpha1.KafkaProtocolFilterBuilder;
 import io.kroxylicious.kubernetes.operator.assertj.ConditionListAssert;
@@ -41,6 +47,7 @@ import io.kroxylicious.kubernetes.operator.assertj.VirtualKafkaClusterStatusAsse
 import edu.umd.cs.findbugs.annotations.Nullable;
 
 import static io.kroxylicious.kubernetes.api.v1alpha1.kafkaproxyingressspec.ClusterIP.Protocol.TCP;
+import static io.kroxylicious.kubernetes.operator.model.ingress.ClusterIPIngressDefinition.serviceName;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -259,6 +266,35 @@ class VirtualKafkaClusterReconcilerIT {
         assertAllConditionsTrue(clusterBar);
     }
 
+    @Test
+    void shouldReportIngressClusterIpBootstrap() {
+        // Given
+        var clusterIP = "10.103.71.128";
+        testActor.create(kafkaProxy(PROXY_A));
+        testActor.create(kafkaService(SERVICE_H));
+        var cluster = cluster(CLUSTER_BAR, PROXY_A, INGRESS_D, SERVICE_H, null);
+        var ingress = testActor.create(clusterIpIngress(INGRESS_D, PROXY_A));
+        testActor.create(kubernetesServiceClusterIp(cluster, ingress, clusterIP));
+
+        // When
+        VirtualKafkaCluster clusterBar = testActor.create(cluster);
+
+        // Then
+        AWAIT.alias("ClusterStatusBootstrap").untilAsserted(() -> {
+            var vkc = testActor.resources(VirtualKafkaCluster.class)
+                    .withName(ResourcesUtil.name(clusterBar)).get();
+            VirtualKafkaClusterStatus status = vkc.getStatus();
+            assertThat(status)
+                    .isNotNull()
+                    .extracting(VirtualKafkaClusterStatus::getIngresses, InstanceOfAssertFactories.list(Ingresses.class))
+                    .singleElement()
+                    .satisfies(i -> {
+                        assertThat(i.getName()).isEqualTo(INGRESS_D);
+                        assertThat(i.getBootstrap()).isEqualTo(clusterIP);
+                    });
+        });
+    }
+
     private VirtualKafkaCluster cluster(String clusterName, String proxyName, String ingressName, String serviceName, @Nullable String filterName) {
         return cluster(clusterName, proxyName, List.of(ingressName), serviceName, filterName);
     }
@@ -388,6 +424,21 @@ class VirtualKafkaClusterReconcilerIT {
                 .editOrNewSpec()
                 .withType("com.example.Filter")
                 .withConfigTemplate(Map.of())
+                .endSpec()
+                .build();
+        // @formatter:on
+    }
+
+    private Service kubernetesServiceClusterIp(VirtualKafkaCluster clusterName, KafkaProxyIngress ingressName, String clusterIP) {
+        // @formatter:off
+        var unused = new ServicePortBuilder().withName("unused").withPort(666).build();
+        return new ServiceBuilder()
+                .withNewMetadata()
+                    .withName(serviceName(clusterName, ingressName))
+                .endMetadata()
+                .withNewSpec()
+                    .withClusterIP(clusterIP)
+                .addToPorts(unused)
                 .endSpec()
                 .build();
         // @formatter:on

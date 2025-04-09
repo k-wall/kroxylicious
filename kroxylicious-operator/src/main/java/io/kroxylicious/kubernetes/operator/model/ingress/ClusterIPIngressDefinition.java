@@ -26,12 +26,13 @@ import io.kroxylicious.proxy.config.NamedRange;
 import io.kroxylicious.proxy.config.PortIdentifiesNodeIdentificationStrategy;
 import io.kroxylicious.proxy.config.VirtualClusterGateway;
 import io.kroxylicious.proxy.service.HostPort;
+import io.kroxylicious.proxy.tag.VisibleForTesting;
 
 import static io.kroxylicious.kubernetes.operator.Labels.standardLabels;
 import static io.kroxylicious.kubernetes.operator.ResourcesUtil.name;
 import static io.kroxylicious.kubernetes.operator.ResourcesUtil.namespace;
 
-record ClusterIPIngressDefinition(KafkaProxyIngress resource, VirtualKafkaCluster cluster, KafkaProxy primary) implements IngressDefinition {
+public record ClusterIPIngressDefinition(KafkaProxyIngress resource, VirtualKafkaCluster cluster, KafkaProxy primary) implements IngressDefinition {
     private record ClusterIPIngressInstance(ClusterIPIngressDefinition definition, int firstIdentifyingPort, int lastIdentifyingPort)
             implements IngressInstance {
         ClusterIPIngressInstance {
@@ -99,7 +100,8 @@ record ClusterIPIngressDefinition(KafkaProxyIngress resource, VirtualKafkaCluste
     // TODO replace with nodeid declaration in CRD
     private static final int NUM_BROKERS = 3;
 
-    private static String serviceName(VirtualKafkaCluster cluster, KafkaProxyIngress resource) {
+    @VisibleForTesting
+    public static String serviceName(VirtualKafkaCluster cluster, KafkaProxyIngress resource) {
         Objects.requireNonNull(cluster);
         Objects.requireNonNull(resource);
         return name(cluster) + "-" + name(resource);

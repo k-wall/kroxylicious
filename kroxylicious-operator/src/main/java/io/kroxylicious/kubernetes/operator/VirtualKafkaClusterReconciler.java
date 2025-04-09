@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.fabric8.kubernetes.api.model.ConfigMap;
+import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.client.CustomResource;
 import io.javaoperatorsdk.operator.api.config.informer.InformerEventSourceConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
@@ -61,13 +62,14 @@ public final class VirtualKafkaClusterReconciler implements
         Reconciler<VirtualKafkaCluster> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(VirtualKafkaClusterReconciler.class);
-    public static final String PROXY_EVENT_SOURCE_NAME = "proxy";
-    public static final String PROXY_CONFIG_STATE_SOURCE_NAME = "proxy-config-state";
-    public static final String SERVICES_EVENT_SOURCE_NAME = "services";
-    public static final String INGRESSES_EVENT_SOURCE_NAME = "ingresses";
-    public static final String FILTERS_EVENT_SOURCE_NAME = "filters";
-    public static final String TRANSITIVELY_REFERENCED_RESOURCES_NOT_FOUND = "TransitivelyReferencedResourcesNotFound";
-    public static final String REFERENCED_RESOURCES_NOT_FOUND = "ReferencedResourcesNotFound";
+    static final String PROXY_EVENT_SOURCE_NAME = "proxy";
+    static final String PROXY_CONFIG_STATE_SOURCE_NAME = "proxy-config-state";
+    static final String SERVICES_EVENT_SOURCE_NAME = "services";
+    static final String INGRESSES_EVENT_SOURCE_NAME = "ingresses";
+    static final String FILTERS_EVENT_SOURCE_NAME = "filters";
+    static final String KUBERNETES_SERVICES_EVENT_SOURCE_NAME = "kubernetesServices";
+    static final String TRANSITIVELY_REFERENCED_RESOURCES_NOT_FOUND = "TransitivelyReferencedResourcesNotFound";
+    static final String REFERENCED_RESOURCES_NOT_FOUND = "ReferencedResourcesNotFound";
 
     private final VirtualKafkaClusterStatusFactory statusFactory;
 
@@ -141,6 +143,7 @@ public final class VirtualKafkaClusterReconciler implements
                     && unresolvedIngresses.isEmpty()
                     && unresolvedFilters.isEmpty()
                     && mismatchedIngressProxyRef.isEmpty()) {
+
                 uc = context
                         .getSecondaryResource(ConfigMap.class, PROXY_CONFIG_STATE_SOURCE_NAME)
                         .flatMap(cm -> Optional.ofNullable(cm.getData()))
@@ -265,6 +268,23 @@ public final class VirtualKafkaClusterReconciler implements
                         filter,
                         VirtualKafkaCluster.class,
                         cluster -> cluster.getSpec().getFilterRefs()))
+                .build();
+
+        InformerEventSourceConfiguration<Service> clusterToKubeService = InformerEventSourceConfiguration.from(
+                Service.class,
+                VirtualKafkaCluster.class)
+                .withName(KUBERNETES_SERVICES_EVENT_SOURCE_NAME)
+                .withPrimaryToSecondaryMapper((VirtualKafkaCluster cluster) -> {
+                    var name = cluster.getMetadata().getName();
+                    return cluster.getSpec().getIngressRefs()
+                            .stream()
+                            .flatMap(ir -> ResourcesUtil.localRefAsResourceId(cluster, new AnyLocalRefBuilder().withName(name + "-" + ir.getName()).build()).stream())
+                            .collect(Collectors.toSet());
+                })
+                .withSecondaryToPrimaryMapper(kubenetesService -> Optional.ofNullable(kubenetesService.getMetadata().getAnnotations())
+                        .map(annotations -> annotations.get("io.kroxylicious.operator.ingress.virtualcluster-name"))
+                        .map(name -> new ResourceID(name, kubenetesService.getMetadata().getNamespace()))
+                        .map(Set::of).orElse(Set.of()))
                 .build();
 
         return List.of(
