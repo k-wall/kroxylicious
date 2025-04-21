@@ -6,7 +6,13 @@
 
 package io.kroxylicious.kubernetes.operator.model.ingress;
 
+import java.util.Optional;
+import java.util.function.Function;
+
+import io.kroxylicious.kubernetes.api.common.AnyLocalRef;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxyIngress;
+import io.kroxylicious.kubernetes.operator.ConfigurationFragment;
+import io.kroxylicious.proxy.config.tls.KeyProvider;
 
 /**
  * Stateless Ingress model that:
@@ -25,14 +31,15 @@ public interface IngressDefinition {
 
     /**
      * Create an instance of the Ingress with identifying ports allocated to it. Identifying meaning that
-     * the port on the container is expected to unambigiously identify which node the client is connecting to.
+     * the port on the container is expected to unambiguously identify which node the client is connecting to.
      * I.e. using a port-per-broker strategy at the proxy.
      *
      * @param firstIdentifyingPort the first identifying port allocated to this ingress instance
      * @param lastIdentifyingPort the last identifying port (inclusive) allocated to this ingress instance
+     * @param keyFunction function providing configuration fragment for TLS key
      * @return a non-null ingress instance
      */
-    IngressInstance createInstance(int firstIdentifyingPort, int lastIdentifyingPort);
+    IngressInstance createInstance(int firstIdentifyingPort, int lastIdentifyingPort, Function<AnyLocalRef, ConfigurationFragment<Optional<KeyProvider>>> keyFunction);
 
     /**
      * Some Ingress strategies require a set of ports in the proxy pod to be unique and exclusive so that the Proxy

@@ -361,6 +361,9 @@
                         <io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.tls.CertificateRef>
                             io.kroxylicious.kubernetes.api.common.AnyLocalRef
                         </io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.tls.CertificateRef>
+                        <io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.ingresses.tls.CertificateRef>
+                            io.kroxylicious.kubernetes.api.common.AnyLocalRef
+                        </io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.ingresses.tls.CertificateRef>
                         <io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.FilterRefs>
                             io.kroxylicious.kubernetes.api.common.FilterRef
                         </io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.FilterRefs>

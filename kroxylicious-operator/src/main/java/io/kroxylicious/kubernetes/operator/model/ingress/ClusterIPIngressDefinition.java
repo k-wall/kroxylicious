@@ -9,6 +9,8 @@ package io.kroxylicious.kubernetes.operator.model.ingress;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -17,15 +19,20 @@ import io.fabric8.kubernetes.api.model.ContainerPortBuilder;
 import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.ServiceBuilder;
 
+import io.kroxylicious.kubernetes.api.common.AnyLocalRef;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxy;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxyIngress;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
 import io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.NodeIdRanges;
+import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.Ingresses;
+import io.kroxylicious.kubernetes.operator.ConfigurationFragment;
 import io.kroxylicious.kubernetes.operator.ProxyDeploymentDependentResource;
 import io.kroxylicious.kubernetes.operator.ResourcesUtil;
 import io.kroxylicious.proxy.config.NamedRange;
 import io.kroxylicious.proxy.config.PortIdentifiesNodeIdentificationStrategy;
 import io.kroxylicious.proxy.config.VirtualClusterGateway;
+import io.kroxylicious.proxy.config.tls.KeyProvider;
+import io.kroxylicious.proxy.config.tls.Tls;
 import io.kroxylicious.proxy.service.HostPort;
 import io.kroxylicious.proxy.tag.VisibleForTesting;
 
@@ -34,7 +41,8 @@ import static io.kroxylicious.kubernetes.operator.ResourcesUtil.name;
 import static io.kroxylicious.kubernetes.operator.ResourcesUtil.namespace;
 import static java.lang.Math.toIntExact;
 
-public record ClusterIPIngressDefinition(KafkaProxyIngress resource,
+public record ClusterIPIngressDefinition(
+                                         KafkaProxyIngress resource,
                                          VirtualKafkaCluster cluster,
                                          KafkaProxy primary,
                                          List<NodeIdRanges> nodeIdRanges)
@@ -50,7 +58,8 @@ public record ClusterIPIngressDefinition(KafkaProxyIngress resource,
         }
     }
 
-    private record ClusterIPIngressInstance(ClusterIPIngressDefinition definition, int firstIdentifyingPort, int lastIdentifyingPort)
+    private record ClusterIPIngressInstance(ClusterIPIngressDefinition definition, int firstIdentifyingPort, int lastIdentifyingPort,
+                                            Function<AnyLocalRef, ConfigurationFragment<Optional<KeyProvider>>> keyFunction)
             implements IngressInstance {
         ClusterIPIngressInstance {
             Objects.requireNonNull(definition);
@@ -58,18 +67,33 @@ public record ClusterIPIngressDefinition(KafkaProxyIngress resource,
         }
 
         @Override
-        public VirtualClusterGateway gatewayConfig() {
+        public ConfigurationFragment<VirtualClusterGateway> gatewayConfig() {
             List<NamedRange> portRanges = IntStream.range(0, definition.nodeIdRanges.size()).mapToObj(i -> {
                 NodeIdRanges range = definition.nodeIdRanges.get(i);
                 String name = Optional.ofNullable(range.getName()).orElse("range-" + i);
                 return new NamedRange(name, toIntExact(range.getStart()), toIntExact(range.getEnd()));
             }).toList();
-            return new VirtualClusterGateway("default",
+
+            var ingressName = definition().resource.getMetadata().getName();
+            var clusterWithTls = definition().cluster().getSpec().getIngresses().stream()
+                    .filter(i -> ingressName.equals(i.getIngressRef().getName()))
+                    .map(Ingresses::getTls)
+                    .filter(Objects::nonNull)
+                    .findFirst();
+
+            var keyCf = clusterWithTls.map(cwt -> keyFunction.apply(cwt.getCertificateRef()));
+
+            var tls = keyCf.flatMap(ConfigurationFragment::fragment)
+                    .map(kp -> new Tls(kp, null, null, null));
+            var volumes = keyCf.map(ConfigurationFragment::volumes).orElse(Set.of());
+            var mounts = keyCf.map(ConfigurationFragment::mounts).orElse(Set.of());
+
+            return new ConfigurationFragment<>(new VirtualClusterGateway("default",
                     new PortIdentifiesNodeIdentificationStrategy(new HostPort("localhost", firstIdentifyingPort),
                             qualifiedServiceHost(), null,
                             portRanges),
                     null,
-                    Optional.empty());
+                    tls), volumes, mounts);
         }
 
         @Override
@@ -130,8 +154,9 @@ public record ClusterIPIngressDefinition(KafkaProxyIngress resource,
     }
 
     @Override
-    public IngressInstance createInstance(int firstIdentifyingPort, int lastIdentifyingPort) {
-        return new ClusterIPIngressInstance(this, firstIdentifyingPort, lastIdentifyingPort);
+    public IngressInstance createInstance(int firstIdentifyingPort, int lastIdentifyingPort,
+                                          Function<AnyLocalRef, ConfigurationFragment<Optional<KeyProvider>>> keyFunction) {
+        return new ClusterIPIngressInstance(this, firstIdentifyingPort, lastIdentifyingPort, keyFunction);
     }
 
     @Override

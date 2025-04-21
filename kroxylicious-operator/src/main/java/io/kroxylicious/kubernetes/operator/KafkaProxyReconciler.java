@@ -120,7 +120,12 @@ public class KafkaProxyReconciler implements
     public static final String CONFIG_DEP = "config";
     public static final String DEPLOYMENT_DEP = "deployment";
     public static final String CLUSTERS_DEP = "clusters";
-    public static final Path TARGET_CLUSTER_MOUNTS_BASE_DIR = Path.of("/opt/kroxylicious/target-cluster");
+    public static final Path MOUNTS_BASE_DIR = Path.of("/opt/kroxylicious/");
+    private static final Path TARGET_CLUSTER_MOUNTS_BASE = MOUNTS_BASE_DIR.resolve("target-cluster");
+    private static final Path CLIENT_CERTS_BASE_DIR = TARGET_CLUSTER_MOUNTS_BASE.resolve("client-certs");
+    private static final Path CLIENT_TRUSTED_CERTS_BASE_DIR = TARGET_CLUSTER_MOUNTS_BASE.resolve("trusted-certs");
+    private static final Path VIRTUAL_CLUSTER_MOUNTS_BASE = MOUNTS_BASE_DIR.resolve("virtual-cluster");
+    private static final Path SERVER_CERTS_BASE_DIR = VIRTUAL_CLUSTER_MOUNTS_BASE.resolve("server-certs");
 
     private final Clock clock;
     private final SecureConfigInterpolator secureConfigInterpolator;
@@ -137,7 +142,7 @@ public class KafkaProxyReconciler implements
                             KafkaProxy proxy,
                             Context<KafkaProxy> context) {
         ProxyModelBuilder proxyModelBuilder = ProxyModelBuilder.contextBuilder();
-        ProxyModel model = proxyModelBuilder.build(proxy, context);
+        ProxyModel model = proxyModelBuilder.build(proxy, context, certificateRef -> buildKeyProvider(certificateRef, SERVER_CERTS_BASE_DIR));
         ConfigurationFragment<Configuration> fragment;
         try {
             fragment = generateProxyConfig(model);
@@ -150,6 +155,7 @@ public class KafkaProxyReconciler implements
                 new VirtualKafkaClusterStatusFactory(clock),
                 model,
                 fragment);
+
     }
 
     private ConfigurationFragment<Configuration> generateProxyConfig(ProxyModel model) {
@@ -173,6 +179,7 @@ public class KafkaProxyReconciler implements
 
         var allMounts = Stream.concat(allFilterDefinitions.stream(), virtualClusters.stream())
                 .flatMap(fd -> fd.mounts().stream())
+
                 .collect(Collectors.toCollection(() -> new TreeSet<>(Comparator.comparing(VolumeMount::getMountPath).reversed())));
 
         return new ConfigurationFragment<>(
@@ -251,13 +258,14 @@ public class KafkaProxyReconciler implements
                                                                              ProxyIngressModel ingressModel) {
 
         ProxyIngressModel.VirtualClusterIngressModel virtualClusterIngressModel = ingressModel.clusterIngressModel(cluster).orElseThrow();
+        var clusters = virtualClusterIngressModel.gateways().stream().map(ConfigurationFragment::fragment).toList();
 
         return buildTargetCluster(kafkaServiceRef).map(targetCluster -> new VirtualCluster(
                 ResourcesUtil.name(cluster),
                 targetCluster,
                 null,
                 Optional.empty(),
-                virtualClusterIngressModel.gateways(),
+                clusters,
                 false,
                 false,
                 filterNamesForCluster(cluster)));
@@ -272,7 +280,7 @@ public class KafkaProxyReconciler implements
         return Optional.ofNullable(kafkaServiceRef.getSpec())
                 .map(KafkaServiceSpec::getTls)
                 .map(serviceTls -> ConfigurationFragment.combine(
-                        buildKeyProvider(serviceTls.getCertificateRef()),
+                        buildKeyProvider(serviceTls.getCertificateRef(), CLIENT_CERTS_BASE_DIR),
                         buildTrustProvider(serviceTls.getTrustAnchorRef()),
                         (keyProviderOpt, trustProvider) -> Optional.of(
                                 new Tls(keyProviderOpt.orElse(null),
@@ -286,7 +294,7 @@ public class KafkaProxyReconciler implements
                 .orElse(ConfigurationFragment.empty());
     }
 
-    private static ConfigurationFragment<Optional<KeyProvider>> buildKeyProvider(@Nullable AnyLocalRef certificateRef) {
+    public static ConfigurationFragment<Optional<KeyProvider>> buildKeyProvider(@Nullable AnyLocalRef certificateRef, Path parent) {
         return Optional.ofNullable(certificateRef)
                 .filter(ResourcesUtil::isSecret)
                 .map(ref -> {
@@ -296,7 +304,7 @@ public class KafkaProxyReconciler implements
                             .withSecretName(ref.getName())
                             .endSecret()
                             .build();
-                    Path mountPath = TARGET_CLUSTER_MOUNTS_BASE_DIR.resolve("client-certs").resolve(ref.getName());
+                    Path mountPath = parent.resolve(ref.getName());
                     var mount = new VolumeMountBuilder()
                             .withName(ResourcesUtil.volumeName("", "secrets", ref.getName()))
                             .withMountPath(mountPath.toString())
@@ -321,7 +329,7 @@ public class KafkaProxyReconciler implements
                             .withName(ref.getName())
                             .endConfigMap()
                             .build();
-                    Path mountPath = TARGET_CLUSTER_MOUNTS_BASE_DIR.resolve("trusted-certs").resolve(ref.getName());
+                    Path mountPath = CLIENT_TRUSTED_CERTS_BASE_DIR.resolve(ref.getName());
                     var mount = new VolumeMountBuilder()
                             .withName(ResourcesUtil.volumeName("", "configmaps", ref.getName()))
                             .withMountPath(mountPath.toString())

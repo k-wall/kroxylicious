@@ -17,7 +17,10 @@ import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceBuilder;
 
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
+import io.kroxylicious.kubernetes.operator.ConfigurationFragment;
 import io.kroxylicious.proxy.config.VirtualClusterGateway;
+
+import edu.umd.cs.findbugs.annotations.Nullable;
 
 import static io.kroxylicious.kubernetes.operator.ResourcesUtil.name;
 
@@ -40,7 +43,7 @@ public record ProxyIngressModel(List<VirtualClusterIngressModel> clusters) {
     }
 
     public record VirtualClusterIngressModel(VirtualKafkaCluster cluster, List<IngressModel> ingressModels) {
-        public List<VirtualClusterGateway> gateways() {
+        public List<ConfigurationFragment<VirtualClusterGateway>> gateways() {
             return ingressModels.stream().map(ingressModel -> ingressModel.ingressInstance.gatewayConfig()).toList();
         }
 
@@ -53,7 +56,7 @@ public record ProxyIngressModel(List<VirtualClusterIngressModel> clusters) {
         }
     }
 
-    public record IngressModel(IngressInstance ingressInstance, IngressConflictException exception) {
+    public record IngressModel(IngressInstance ingressInstance, @Nullable IngressConflictException exception) {
 
         public Stream<ContainerPort> proxyContainerPorts() {
             return ingressInstance.proxyContainerPorts();
