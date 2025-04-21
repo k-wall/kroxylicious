@@ -67,6 +67,7 @@ import io.kroxylicious.proxy.config.IllegalConfigurationException;
 import io.kroxylicious.proxy.config.NamedFilterDefinition;
 import io.kroxylicious.proxy.config.TargetCluster;
 import io.kroxylicious.proxy.config.VirtualCluster;
+import io.kroxylicious.proxy.config.VirtualClusterGateway;
 import io.kroxylicious.proxy.config.admin.EndpointsConfiguration;
 import io.kroxylicious.proxy.config.admin.ManagementConfiguration;
 import io.kroxylicious.proxy.config.admin.PrometheusMetricsConfig;
@@ -258,17 +259,28 @@ public class KafkaProxyReconciler implements
                                                                              ProxyIngressModel ingressModel) {
 
         ProxyIngressModel.VirtualClusterIngressModel virtualClusterIngressModel = ingressModel.clusterIngressModel(cluster).orElseThrow();
-        var clusters = virtualClusterIngressModel.gateways().stream().map(ConfigurationFragment::fragment).toList();
 
-        return buildTargetCluster(kafkaServiceRef).map(targetCluster -> new VirtualCluster(
-                ResourcesUtil.name(cluster),
+        var clusterCfs = virtualClusterIngressModel.gateways().stream().toList();
+
+        var all = new ConfigurationFragment<>(clusterCfs,
+                clusterCfs.stream().flatMap(cfs -> cfs.volumes().stream()).collect(Collectors.toSet()),
+                clusterCfs.stream().flatMap(cfs -> cfs.mounts().stream()).collect(Collectors.toSet()));
+
+        return ConfigurationFragment.combine(buildTargetCluster(kafkaServiceRef).map(targetCluster -> new VirtualCluster(
+                name(cluster),
                 targetCluster,
                 null,
                 Optional.empty(),
-                clusters,
+                clusterCfs.stream().map(ConfigurationFragment::fragment).toList(),
                 false,
                 false,
-                filterNamesForCluster(cluster)));
+                filterNamesForCluster(cluster))),
+                ConfigurationFragment.zip(clusterCfs),
+                (virtualCluster, gateways) -> virtualCluster);
+    }
+
+    private static void foo(List<ConfigurationFragment<VirtualClusterGateway>> clusterCfs) {
+
     }
 
     private static ConfigurationFragment<TargetCluster> buildTargetCluster(KafkaService kafkaServiceRef) {

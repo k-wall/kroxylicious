@@ -6,6 +6,7 @@
 
 package io.kroxylicious.kubernetes.operator;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -58,6 +59,13 @@ public record ConfigurationFragment<F>(F fragment, Set<Volume> volumes, Set<Volu
      */
     public <G> ConfigurationFragment<G> map(Function<F, G> mapper) {
         return new ConfigurationFragment<>(mapper.apply(fragment), volumes, mounts);
+    }
+
+    public static <F> ConfigurationFragment<List<F>> zip(List<ConfigurationFragment<F>> fragments) {
+        var list = fragments.stream().map(ConfigurationFragment::fragment).toList();
+        return new ConfigurationFragment<>(list,
+                fragments.stream().flatMap(cfs -> cfs.volumes().stream()).collect(Collectors.toSet()),
+                fragments.stream().flatMap(cfs -> cfs.mounts().stream()).collect(Collectors.toSet()));
     }
 
 }
