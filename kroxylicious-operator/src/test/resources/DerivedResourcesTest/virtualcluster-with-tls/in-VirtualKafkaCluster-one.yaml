@@ -16,8 +16,9 @@ spec:
     name: minimal
   targetKafkaServiceRef:
     name: kafka
-  ingressRefs:
-    - name: cluster-ip
+  ingresses:
+    - ingressRef:
+        name: cluster-ip
       tls:
         certificateRef:
           name: downstream-tls-cert

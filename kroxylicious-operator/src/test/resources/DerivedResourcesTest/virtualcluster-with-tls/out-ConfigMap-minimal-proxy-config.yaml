@@ -26,30 +26,10 @@ data:
     management:
       endpoints:
         prometheus: {}
-    filterDefinitions:
-    - name: "filter-one.KafkaProtocolFilter.filter.kroxylicious.io"
-      type: "org.example.some.java.Class"
-      config:
-        filterOneConfig: true
-        cert: "/opt/kroxylicious/secure/secret/upstream-tls-cert/tls.crt"
-        key: "/opt/kroxylicious/secure/secret/upstream-tls-cert/tls.key"
     virtualClusters:
     - name: "one"
       targetCluster:
         bootstrapServers: "my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
-        tls:
-          key:
-            privateKeyFile: "/opt/kroxylicious/target-cluster/client-certs/upstream-tls-cert/tls.key"
-            certificateFile: "/opt/kroxylicious/target-cluster/client-certs/upstream-tls-cert/tls.crt"
-          trust:
-            storeFile: "/opt/kroxylicious/target-cluster/trusted-certs/upstream-ca/cas.pem"
-            storeType: "PEM"
-          cipherSuites:
-            allowed:
-            - "foobar"
-          protocols:
-            denied:
-            - "TLS1.2"
       gateways:
       - name: "default"
         portIdentifiesNode:
@@ -59,5 +39,3 @@ data:
           - name: "default"
             start: 0
             end: 2
-      filters:
-      - "filter-one.KafkaProtocolFilter.filter.kroxylicious.io"

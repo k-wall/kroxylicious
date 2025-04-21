@@ -40,6 +40,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.KafkaService;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaServiceBuilder;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaClusterBuilder;
+import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.IngressesBuilder;
 import io.kroxylicious.kubernetes.filter.api.v1alpha1.KafkaProtocolFilter;
 import io.kroxylicious.kubernetes.filter.api.v1alpha1.KafkaProtocolFilterBuilder;
 import io.kroxylicious.kubernetes.operator.ResourcesUtil;
@@ -888,9 +889,10 @@ class DependencyResolverTest {
     }
 
     private static VirtualKafkaCluster virtualCluster(List<FilterRef> filterRefs, String clusterRef, List<IngressRef> ingressRefs, ProxyRef proxyRef) {
+        var ingresses = ingressRefs.stream().map(ir -> new IngressesBuilder().withIngressRef(ir).build()).toList();
         return new VirtualKafkaClusterBuilder()
                 .withNewSpec()
-                .withIngressRefs(ingressRefs)
+                .withIngresses(ingresses)
                 .withNewTargetKafkaServiceRef().withName(clusterRef).endTargetKafkaServiceRef()
                 .withProxyRef(proxyRef)
                 .withFilterRefs(filterRefs)

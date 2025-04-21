@@ -40,6 +40,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxyIngress;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaService;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaClusterSpec;
+import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.Ingresses;
 import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterstatus.IngressesBuilder;
 import io.kroxylicious.kubernetes.filter.api.v1alpha1.KafkaProtocolFilter;
 import io.kroxylicious.kubernetes.operator.resolver.ClusterResolutionResult;
@@ -111,8 +112,9 @@ public final class VirtualKafkaClusterReconciler implements
                     return new IngressRefBuilder().withName(kubeServiceIngressOwner.getName()).build();
                 }, Function.identity()));
 
-        var ingresses = cluster.getSpec().getIngressRefs()
+        var ingresses = cluster.getSpec().getIngresses()
                 .stream()
+                .map(Ingresses::getIngressRef)
                 .filter(existingKubernetesServices::containsKey)
                 .map(ingressRef -> {
                     var kubenetesService = existingKubernetesServices.get(ingressRef);
@@ -252,11 +254,14 @@ public final class VirtualKafkaClusterReconciler implements
                 VirtualKafkaCluster.class)
                 .withName(INGRESSES_EVENT_SOURCE_NAME)
                 .withPrimaryToSecondaryMapper((VirtualKafkaCluster cluster) -> ResourcesUtil.localRefsAsResourceIds(cluster,
-                        Optional.ofNullable(cluster.getSpec()).map(VirtualKafkaClusterSpec::getIngressRefs).orElse(List.of())))
+                        Optional.ofNullable(cluster.getSpec())
+                                .map(VirtualKafkaClusterSpec::getIngresses)
+                                .stream().flatMap(List::stream)
+                                .map(Ingresses::getIngressRef).toList()))
                 .withSecondaryToPrimaryMapper(ingress -> ResourcesUtil.findReferrersMulti(context,
                         ingress,
                         VirtualKafkaCluster.class,
-                        cluster -> cluster.getSpec().getIngressRefs()))
+                        cluster -> cluster.getSpec().getIngresses().stream().map(Ingresses::getIngressRef).toList()))
                 .build();
 
         InformerEventSourceConfiguration<KafkaProtocolFilter> clusterToFilters = InformerEventSourceConfiguration.from(
@@ -277,8 +282,9 @@ public final class VirtualKafkaClusterReconciler implements
                 .withName(KUBERNETES_SERVICES_EVENT_SOURCE_NAME)
                 .withPrimaryToSecondaryMapper((VirtualKafkaCluster cluster) -> {
                     var name = cluster.getMetadata().getName();
-                    return cluster.getSpec().getIngressRefs()
+                    return cluster.getSpec().getIngresses()
                             .stream()
+                            .map(Ingresses::getIngressRef)
                             .flatMap(ir -> ResourcesUtil.localRefAsResourceId(cluster, new AnyLocalRefBuilder().withName(name + "-" + ir.getName()).build()).stream())
                             .collect(Collectors.toSet());
                 })

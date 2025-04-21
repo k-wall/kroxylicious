@@ -625,7 +625,9 @@ class KafkaProxyReconcilerIT {
                 .withNewSpec()
                 .withTargetKafkaServiceRef(new KafkaServiceRefBuilder().withName(name(service)).build())
                 .withNewProxyRef().withName(name(proxy)).endProxyRef()
-                .addNewIngressRef().withName(name(ingress)).endIngressRef()
+                .addNewIngress()
+                .withNewIngressRef().withName(name(ingress)).endIngressRef()
+                .endIngress()
                 .withFilterRefs().addNewFilterRef().withName(name(filter)).endFilterRef()
                 .endSpec().build();
     }

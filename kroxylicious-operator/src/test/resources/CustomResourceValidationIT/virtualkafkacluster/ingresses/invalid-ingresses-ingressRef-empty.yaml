@@ -18,6 +18,6 @@ resource:
       name: serviceName
     filterRefs:
       - name: filter-one
-    ingressRefs: null
+    ingresses: []
 expectFailureMessageToContain: |
-  spec.ingressRefs: Required value
+  spec.ingresses: Invalid value: 0

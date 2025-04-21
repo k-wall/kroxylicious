@@ -83,12 +83,12 @@ class DerivedResourcesTest {
     private static <T extends HasMetadata> List<T> resourcesFromFiles(Set<Path> paths, Class<T> valueType) {
         // TODO should validate against the CRD schema, because the DependentResource
         // should never see an invalid resource in production
-        List<T> resources = paths.stream().map(path -> {
+        List<T> resources = paths.stream().map(Path::toFile).map(file -> {
             try {
-                return YAML_MAPPER.readValue(path.toFile(), valueType);
+                return YAML_MAPPER.readValue(file, valueType);
             }
             catch (IOException e) {
-                throw new UncheckedIOException(e);
+                throw new UncheckedIOException("Error reading " + file, e);
             }
         }).sorted(Comparator.comparing(ResourcesUtil::name)).toList();
         long uniqueResources = resources.stream().map(s -> namespace(s) + ":" + name(s)).distinct().count();

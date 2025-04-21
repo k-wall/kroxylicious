@@ -37,7 +37,7 @@ spec:
               type: object
             spec:
               type: object
-              required: ["proxyRef", "targetKafkaServiceRef", "ingressRefs"]
+              required: ["proxyRef", "targetKafkaServiceRef", "ingresses"]
               properties:
                 proxyRef:
                   type: object
@@ -61,26 +61,32 @@ spec:
                       maxLength: 253
                       minLength: 1
                       type: string
-                ingressRefs:
+                ingresses:
                   type: array
                   minItems: 1
                   description: -|
-                    IngressRefs specifies an array of references to KafkaProxyIngresses. It must contain at
-                    least one element.
+                    Ingresses describes the ingresses of this virtual kafka cluster.
+                    It must contain at least one element.
                   items:
                     type: object
-                    required: [ "name" ]
+                    required: [ "ingressRef" ]
                     properties:
-                      name:
-                        description: Name is the name of the referent
-                        maxLength: 253
-                        minLength: 1
-                        type: string
+                      ingressRef:
+                        description: A reference to a KafkaProxyIngresses.
+                        type: object
+                        required: [ "name" ]
+                        properties:
+                          name:
+                            description: -|
+                                The name of the KafkaProxyIngresses.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
                       tls:
                         description: |
                           TLS is the TLS configuration for the Ingress. This field is required if
                           the Ingress definition has Protocol set to "TLS". It is invalid to set this field
-                          if the Protocol field is "TCP".
+                          if the Protocol field of the Ingress definition is "TCP".
                         required: [ "certificateRef" ]
                         type: object
                         properties:

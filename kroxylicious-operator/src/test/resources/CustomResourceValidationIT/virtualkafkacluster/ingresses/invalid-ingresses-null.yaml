@@ -13,13 +13,11 @@ resource:
     namespace: proxy-ns
   spec:
     proxyRef:
-      name: null
+      name: proxy
     targetKafkaServiceRef:
-      name: barref
+      name: serviceName
     filterRefs:
       - name: filter-one
-    ingresses:
-      - ingressRef:
-          name: cluster-ip
+    ingresses: null
 expectFailureMessageToContain: |
-  spec.proxyRef.name: Required value
+  spec.ingresses: Required value
