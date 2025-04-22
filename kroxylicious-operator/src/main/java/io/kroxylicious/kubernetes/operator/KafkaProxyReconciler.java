@@ -60,6 +60,7 @@ import io.kroxylicious.kubernetes.filter.api.v1alpha1.KafkaProtocolFilter;
 import io.kroxylicious.kubernetes.filter.api.v1alpha1.KafkaProtocolFilterSpec;
 import io.kroxylicious.kubernetes.operator.model.ProxyModel;
 import io.kroxylicious.kubernetes.operator.model.ProxyModelBuilder;
+import io.kroxylicious.kubernetes.operator.model.ingress.ClusterIPIngressDefinition.ClusterIPIngressInstance;
 import io.kroxylicious.kubernetes.operator.model.ingress.ProxyIngressModel;
 import io.kroxylicious.kubernetes.operator.resolver.ProxyResolutionResult;
 import io.kroxylicious.proxy.config.Configuration;
@@ -143,7 +144,7 @@ public class KafkaProxyReconciler implements
                             KafkaProxy proxy,
                             Context<KafkaProxy> context) {
         ProxyModelBuilder proxyModelBuilder = ProxyModelBuilder.contextBuilder();
-        ProxyModel model = proxyModelBuilder.build(proxy, context, certificateRef -> buildKeyProvider(certificateRef, SERVER_CERTS_BASE_DIR));
+        ProxyModel model = proxyModelBuilder.build(proxy, context);
         ConfigurationFragment<Configuration> fragment;
         try {
             fragment = generateProxyConfig(model);
@@ -259,12 +260,12 @@ public class KafkaProxyReconciler implements
                                                                              ProxyIngressModel ingressModel) {
 
         ProxyIngressModel.VirtualClusterIngressModel virtualClusterIngressModel = ingressModel.clusterIngressModel(cluster).orElseThrow();
-
-        var clusterCfs = virtualClusterIngressModel.gateways().stream().toList();
-
-        var all = new ConfigurationFragment<>(clusterCfs,
-                clusterCfs.stream().flatMap(cfs -> cfs.volumes().stream()).collect(Collectors.toSet()),
-                clusterCfs.stream().flatMap(cfs -> cfs.mounts().stream()).collect(Collectors.toSet()));
+        var clusterCfs = virtualClusterIngressModel.ingressModels().stream()
+                .map(ProxyIngressModel.IngressModel::ingressInstance)
+                .map(ingressInstance -> {
+                    var instance = ((ClusterIPIngressInstance) ingressInstance);
+                    return ClusterIPIngressInstance.gatewayConfig(instance, certificateRef -> buildKeyProvider(certificateRef, SERVER_CERTS_BASE_DIR));
+                }).toList();
 
         return ConfigurationFragment.combine(buildTargetCluster(kafkaServiceRef).map(targetCluster -> new VirtualCluster(
                 name(cluster),

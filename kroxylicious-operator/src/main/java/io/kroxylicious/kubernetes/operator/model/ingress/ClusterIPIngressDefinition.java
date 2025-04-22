@@ -58,24 +58,23 @@ public record ClusterIPIngressDefinition(
         }
     }
 
-    private record ClusterIPIngressInstance(ClusterIPIngressDefinition definition, int firstIdentifyingPort, int lastIdentifyingPort,
-                                            Function<AnyLocalRef, ConfigurationFragment<Optional<KeyProvider>>> keyFunction)
+    public record ClusterIPIngressInstance(ClusterIPIngressDefinition definition, int firstIdentifyingPort, int lastIdentifyingPort)
             implements IngressInstance {
-        ClusterIPIngressInstance {
+        public ClusterIPIngressInstance {
             Objects.requireNonNull(definition);
             sanityCheckPortRange(definition, firstIdentifyingPort, lastIdentifyingPort);
         }
 
-        @Override
-        public ConfigurationFragment<VirtualClusterGateway> gatewayConfig() {
-            List<NamedRange> portRanges = IntStream.range(0, definition.nodeIdRanges.size()).mapToObj(i -> {
-                NodeIdRanges range = definition.nodeIdRanges.get(i);
+        public static ConfigurationFragment<VirtualClusterGateway> gatewayConfig(ClusterIPIngressInstance instance,
+                                                                                 Function<AnyLocalRef, ConfigurationFragment<Optional<KeyProvider>>> keyFunction) {
+            List<NamedRange> portRanges = IntStream.range(0, instance.definition().nodeIdRanges.size()).mapToObj(i -> {
+                NodeIdRanges range = instance.definition().nodeIdRanges.get(i);
                 String name = Optional.ofNullable(range.getName()).orElse("range-" + i);
                 return new NamedRange(name, toIntExact(range.getStart()), toIntExact(range.getEnd()));
             }).toList();
 
-            var ingressName = definition().resource.getMetadata().getName();
-            var clusterWithTls = definition().cluster().getSpec().getIngresses().stream()
+            var ingressName = instance.definition().resource.getMetadata().getName();
+            var clusterWithTls = instance.definition().cluster().getSpec().getIngresses().stream()
                     .filter(i -> ingressName.equals(i.getIngressRef().getName()))
                     .map(Ingresses::getTls)
                     .filter(Objects::nonNull)
@@ -89,8 +88,8 @@ public record ClusterIPIngressDefinition(
             var mounts = keyCf.map(ConfigurationFragment::mounts).orElse(Set.of());
 
             return new ConfigurationFragment<>(new VirtualClusterGateway("default",
-                    new PortIdentifiesNodeIdentificationStrategy(new HostPort("localhost", firstIdentifyingPort),
-                            qualifiedServiceHost(), null,
+                    new PortIdentifiesNodeIdentificationStrategy(new HostPort("localhost", instance.firstIdentifyingPort),
+                            instance.qualifiedServiceHost(), null,
                             portRanges),
                     null,
                     tls), volumes, mounts);
@@ -154,9 +153,8 @@ public record ClusterIPIngressDefinition(
     }
 
     @Override
-    public IngressInstance createInstance(int firstIdentifyingPort, int lastIdentifyingPort,
-                                          Function<AnyLocalRef, ConfigurationFragment<Optional<KeyProvider>>> keyFunction) {
-        return new ClusterIPIngressInstance(this, firstIdentifyingPort, lastIdentifyingPort, keyFunction);
+    public ClusterIPIngressInstance createInstance(int firstIdentifyingPort, int lastIdentifyingPort) {
+        return new ClusterIPIngressInstance(this, firstIdentifyingPort, lastIdentifyingPort);
     }
 
     @Override

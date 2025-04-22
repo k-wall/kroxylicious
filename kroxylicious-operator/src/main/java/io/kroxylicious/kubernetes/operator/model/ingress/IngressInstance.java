@@ -11,9 +11,6 @@ import java.util.stream.Stream;
 import io.fabric8.kubernetes.api.model.ContainerPort;
 import io.fabric8.kubernetes.api.model.ServiceBuilder;
 
-import io.kroxylicious.kubernetes.operator.ConfigurationFragment;
-import io.kroxylicious.proxy.config.VirtualClusterGateway;
-
 /**
  * Stateful Ingress model that provides:
  * <ol>
@@ -30,12 +27,6 @@ import io.kroxylicious.proxy.config.VirtualClusterGateway;
  * </ol>
  */
 public interface IngressInstance {
-
-    /**
-     * The GatewayConfig to be added to the Virtual Cluster Config added to the proxy config YAML
-     * @return Virtual Cluster Gateway
-     */
-    ConfigurationFragment<VirtualClusterGateway> gatewayConfig();
 
     /**
      * Services to be created for this ingress

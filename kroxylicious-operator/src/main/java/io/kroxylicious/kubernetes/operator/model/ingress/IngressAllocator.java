@@ -7,17 +7,12 @@
 package io.kroxylicious.kubernetes.operator.model.ingress;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
-import io.kroxylicious.kubernetes.api.common.AnyLocalRef;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxy;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
-import io.kroxylicious.kubernetes.operator.ConfigurationFragment;
 import io.kroxylicious.kubernetes.operator.resolver.ProxyResolutionResult;
-import io.kroxylicious.proxy.config.tls.KeyProvider;
 
 import static io.kroxylicious.kubernetes.operator.ProxyDeploymentDependentResource.PROXY_PORT_START;
 import static io.kroxylicious.kubernetes.operator.ResourcesUtil.name;
@@ -41,25 +36,22 @@ public class IngressAllocator {
      *
      * @param primary primary being reconciled
      * @param resolutionResult
-     * @param keyFunction
      * @return non-null ProxyIngressModel
      */
     public static ProxyIngressModel allocateProxyIngressModel(KafkaProxy primary,
-                                                              ProxyResolutionResult resolutionResult,
-                                                              Function<AnyLocalRef, ConfigurationFragment<Optional<KeyProvider>>> keyFunction) {
+                                                              ProxyResolutionResult resolutionResult) {
         AtomicInteger exclusivePorts = new AtomicInteger(PROXY_PORT_START);
         // include broken clusters in the model, so that if they are healed the ports will stay the same
         Stream<VirtualKafkaCluster> virtualKafkaClusterStream = resolutionResult.allClustersInNameOrder().stream();
         List<ProxyIngressModel.VirtualClusterIngressModel> list = virtualKafkaClusterStream
                 .map(it -> new ProxyIngressModel.VirtualClusterIngressModel(it, allocateIngressModel(primary, it, exclusivePorts,
-                        resolutionResult, keyFunction)))
+                        resolutionResult)))
                 .toList();
         return new ProxyIngressModel(list);
     }
 
     private static List<ProxyIngressModel.IngressModel> allocateIngressModel(KafkaProxy primary, VirtualKafkaCluster it, AtomicInteger ports,
-                                                                             ProxyResolutionResult resolutionResult,
-                                                                             Function<AnyLocalRef, ConfigurationFragment<Optional<KeyProvider>>> keyFunction) {
+                                                                             ProxyResolutionResult resolutionResult) {
         Stream<IngressDefinition> ingressStream = Ingresses.ingressesFor(primary, it, resolutionResult);
         return ingressStream.map(resource -> {
             int toAllocate = resource.numIdentifyingPortsRequired();
@@ -72,7 +64,7 @@ public class IngressAllocator {
             int firstIdentifyingPort = ports.get();
             int lastIdentifyingPort = ports.addAndGet(toAllocate) - 1;
 
-            return new ProxyIngressModel.IngressModel(resource.createInstance(firstIdentifyingPort, lastIdentifyingPort, keyFunction), exception);
+            return new ProxyIngressModel.IngressModel(resource.createInstance(firstIdentifyingPort, lastIdentifyingPort), exception);
         }).toList();
     }
 }

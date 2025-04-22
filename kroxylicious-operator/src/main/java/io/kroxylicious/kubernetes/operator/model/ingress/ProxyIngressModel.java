@@ -17,8 +17,6 @@ import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceBuilder;
 
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
-import io.kroxylicious.kubernetes.operator.ConfigurationFragment;
-import io.kroxylicious.proxy.config.VirtualClusterGateway;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
 
@@ -43,9 +41,6 @@ public record ProxyIngressModel(List<VirtualClusterIngressModel> clusters) {
     }
 
     public record VirtualClusterIngressModel(VirtualKafkaCluster cluster, List<IngressModel> ingressModels) {
-        public List<ConfigurationFragment<VirtualClusterGateway>> gateways() {
-            return ingressModels.stream().map(ingressModel -> ingressModel.ingressInstance.gatewayConfig()).toList();
-        }
 
         public Stream<Service> services() {
             return ingressModels.stream().flatMap(it -> it.ingressInstance().services()).map(ServiceBuilder::build);
