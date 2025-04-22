@@ -33,6 +33,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaClusterBuilder;
 import io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.NodeIdRanges;
 import io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.NodeIdRangesBuilder;
+import io.kroxylicious.kubernetes.operator.KafkaProxyReconciler;
 import io.kroxylicious.kubernetes.operator.model.ingress.ClusterIPIngressDefinition.ClusterIPIngressInstance;
 import io.kroxylicious.proxy.config.NamedRange;
 import io.kroxylicious.proxy.config.VirtualClusterGateway;
@@ -137,7 +138,7 @@ class ClusterIPIngressDefinitionTest {
         assertThat(instance).isNotNull();
 
         // when
-        VirtualClusterGateway gateway = ClusterIPIngressInstance.gatewayConfig(instance, ref -> null).fragment();
+        VirtualClusterGateway gateway = KafkaProxyReconciler.buildVirtualClusterGateway(instance).fragment();
 
         // then
         assertThat(gateway).isNotNull();
@@ -290,7 +291,7 @@ class ClusterIPIngressDefinitionTest {
         assertThat(instance).isNotNull();
 
         // when
-        VirtualClusterGateway gateway = ClusterIPIngressInstance.gatewayConfig(instance, ref -> null).fragment();
+        VirtualClusterGateway gateway = KafkaProxyReconciler.buildVirtualClusterGateway(instance).fragment();
 
         // then
         assertThat(gateway).isNotNull();
@@ -325,7 +326,7 @@ class ClusterIPIngressDefinitionTest {
         assertThat(instance).isNotNull();
 
         // when
-        VirtualClusterGateway gateway = ClusterIPIngressInstance.gatewayConfig(instance, ref -> null).fragment();
+        VirtualClusterGateway gateway = KafkaProxyReconciler.buildVirtualClusterGateway(instance).fragment();
 
         // then
         assertThat(gateway).isNotNull();

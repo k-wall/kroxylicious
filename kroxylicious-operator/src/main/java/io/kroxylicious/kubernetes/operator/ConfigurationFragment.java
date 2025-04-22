@@ -61,6 +61,13 @@ public record ConfigurationFragment<F>(F fragment, Set<Volume> volumes, Set<Volu
         return new ConfigurationFragment<>(mapper.apply(fragment), volumes, mounts);
     }
 
+    public <G> ConfigurationFragment<G> flatMap(Function<F, ConfigurationFragment<G>> mapper) {
+        ConfigurationFragment<G> apply = mapper.apply(fragment);
+        return new ConfigurationFragment<>(apply.fragment(),
+                Stream.concat(volumes.stream(), apply.volumes.stream()).collect(Collectors.toSet()),
+                Stream.concat(mounts.stream(), apply.mounts.stream()).collect(Collectors.toSet()));
+    }
+
     public static <F> ConfigurationFragment<List<F>> zip(List<ConfigurationFragment<F>> fragments) {
         var list = fragments.stream().map(ConfigurationFragment::fragment).toList();
         return new ConfigurationFragment<>(list,
