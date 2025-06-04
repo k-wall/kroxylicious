@@ -14,11 +14,12 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
-import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
@@ -49,7 +50,7 @@ import io.kroxylicious.proxy.internal.util.Metrics;
 import io.kroxylicious.proxy.model.VirtualClusterModel;
 import io.kroxylicious.proxy.tag.VisibleForTesting;
 
-public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
+public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaProxyInitializer.class);
 
@@ -85,15 +86,17 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
     }
 
     @Override
-    public void initChannel(SocketChannel ch) {
+    public void initChannel(Channel ch) {
 
         LOGGER.trace("Connection from {} to my address {}", ch.remoteAddress(), ch.localAddress());
 
         ChannelPipeline pipeline = ch.pipeline();
 
-        int targetPort = ch.localAddress().getPort();
-        var bindingAddress = ch.parent().localAddress().getAddress().isAnyLocalAddress() ? Optional.<String> empty()
-                : Optional.of(ch.localAddress().getAddress().getHostAddress());
+        var serverSocketChannel = (ServerSocketChannel) ch.parent();
+        var serverSocketAddress = serverSocketChannel.localAddress();
+        int targetPort = serverSocketAddress.getPort();
+        var bindingAddress = serverSocketAddress.getAddress().isAnyLocalAddress() ? Optional.<String> empty()
+                : Optional.of(serverSocketAddress.getAddress().getHostAddress());
         if (tls) {
             initTlsChannel(ch, pipeline, bindingAddress, targetPort);
         }
@@ -104,7 +107,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
     }
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
-    private void initPlainChannel(SocketChannel ch, ChannelPipeline pipeline, Optional<String> bindingAddress, int targetPort) {
+    private void initPlainChannel(Channel ch, ChannelPipeline pipeline, Optional<String> bindingAddress, int targetPort) {
         pipeline.addLast("plainResolver", new ChannelInboundHandlerAdapter() {
             @Override
             public void channelActive(ChannelHandlerContext ctx) {
@@ -133,7 +136,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
 
     // deep inheritance tree of SniHandler not something we can fix
     @SuppressWarnings({ "OptionalUsedAsFieldOrParameterType", "java:S110" })
-    private void initTlsChannel(SocketChannel ch, ChannelPipeline pipeline, Optional<String> bindingAddress, int targetPort) {
+    private void initTlsChannel(Channel ch, ChannelPipeline pipeline, Optional<String> bindingAddress, int targetPort) {
         LOGGER.debug("Adding SSL/SNI handler");
         pipeline.addLast("sniResolver", new SniHandler((sniHostname, promise) -> {
             try {
@@ -187,7 +190,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
     }
 
     @VisibleForTesting
-    void addHandlers(SocketChannel ch, EndpointBinding binding) {
+    void addHandlers(Channel ch, EndpointBinding binding) {
         var virtualCluster = binding.endpointGateway().virtualCluster();
         ChannelPipeline pipeline = ch.pipeline();
         pipeline.remove(LOGGING_INBOUND_ERROR_HANDLER_NAME);
@@ -255,7 +258,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
     static class InitalizerNetFilter implements NetFilter {
 
         private final SaslDecodePredicate decodePredicate;
-        private final SocketChannel ch;
+        private final Channel ch;
         private final EndpointGateway gateway;
         private final EndpointBinding binding;
         private final PluginFactoryRegistry pfr;
@@ -266,7 +269,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<SocketChannel> {
         private final ApiVersionsDowngradeFilter apiVersionsDowngradeFilter;
 
         InitalizerNetFilter(SaslDecodePredicate decodePredicate,
-                            SocketChannel ch,
+                            Channel ch,
                             EndpointBinding binding,
                             PluginFactoryRegistry pfr,
                             FilterChainFactory filterChainFactory,
