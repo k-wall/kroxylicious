@@ -14,6 +14,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.micrometer.core.instrument.Counter;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -50,6 +51,8 @@ import io.kroxylicious.proxy.internal.util.Metrics;
 import io.kroxylicious.proxy.model.VirtualClusterModel;
 import io.kroxylicious.proxy.tag.VisibleForTesting;
 
+import static io.kroxylicious.proxy.internal.util.Metrics.KROXYLICIOUS_CLIENT_TO_PROXY_ERROR_TOTAL_METER_PROVIDER;
+
 public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaProxyInitializer.class);
@@ -66,6 +69,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
     private final PluginFactoryRegistry pfr;
     private final FilterChainFactory filterChainFactory;
     private final ApiVersionsServiceImpl apiVersionsService;
+    private final Counter clientToProxyErrorCounter;
 
     public KafkaProxyInitializer(FilterChainFactory filterChainFactory,
                                  PluginFactoryRegistry pfr,
@@ -83,6 +87,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
         this.bindingResolver = bindingResolver;
         this.filterChainFactory = filterChainFactory;
         this.apiVersionsService = apiVersionsService;
+        clientToProxyErrorCounter = KROXYLICIOUS_CLIENT_TO_PROXY_ERROR_TOTAL_METER_PROVIDER.create("", null).withTags();
     }
 
     @Override
@@ -182,6 +187,7 @@ public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
                     // We've failed to look up the SslContext - this indicates that the SNI hostname was unrecognized
                     // or that the virtual cluster is somehow not configured for TLS. All we can do is close the
                     // connection.
+                    clientToProxyErrorCounter.increment();
                     ctx.close();
                 }
 
