@@ -6,6 +6,8 @@
 
 package io.kroxylicious.proxy.internal.net;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -21,8 +23,22 @@ public record Endpoint(Optional<String> bindingAddress, int port, boolean tls) {
         Objects.requireNonNull(bindingAddress);
     }
 
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public static Endpoint createEndpoint(Optional<String> bindingAddress, int port, boolean tls) {
         return new Endpoint(bindingAddress, port, tls);
+    }
+
+    public static Endpoint createEndpoint(SocketAddress bindingSocketAddress, boolean tls) {
+        if (bindingSocketAddress instanceof InetSocketAddress inetSocketAddress) {
+            int targetPort = inetSocketAddress.getPort();
+            var bindingAddress = inetSocketAddress.getAddress().isAnyLocalAddress() ? Optional.<String> empty()
+                    : Optional.of(inetSocketAddress.getAddress().getHostAddress());
+            return new Endpoint(bindingAddress, targetPort, tls);
+        }
+        /* else if (bindingSocketAddress instanceof DomainSocketAddress) {
+            // TODO generalise end point to support domain sockets
+        }*/
+        throw new UnsupportedOperationException("Endpoints only support InetSocketAddress");
     }
 
     public static Endpoint createEndpoint(int port, boolean tls) {
