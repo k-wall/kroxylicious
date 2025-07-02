@@ -5,7 +5,7 @@ For changes that effect a public API, the [deprecation policy](./DEV_GUIDE.md#de
 
 Format `<github issue/pr number>: <short description>`.
 
-## SNAPSHOT
+## 0.14.0
 
 * [#2385](https://github.com/kroxylicious/kroxylicious/issues/2385) fix: Prevent existing proxy pod(s) rolling if number of replicas is changed.
 
