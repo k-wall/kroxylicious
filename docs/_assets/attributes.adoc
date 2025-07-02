@@ -14,7 +14,7 @@
 :icons: font
 
 //Latest version
-:KroxyliciousVersion: 0.13
+:KroxyliciousVersion: 0.14
 :gitRef: tree/main
 :ApicurioVersion: 2.6.x
 :KubernetesVersionMinimum: 1.31
