@@ -7,11 +7,15 @@
 
 set -euo pipefail
 
+echo KWTODO
+exit 0
+
 usage() {
       1>&2 cat << EOF
 usage: $0 <-a|-s (close|drop|release)|-h>
  -a asserts that no staging repos exist
- -s desired state to move the staging repository (close|drop|release)
+ -d Central Publishing Portal distribution id
+ -s desired state to move the staging repository (drop|release)
  -h this help message
 EOF
 exit 1
@@ -22,11 +26,13 @@ MVN_ARGS=("--batch-mode" "--no-transfer-progress" "-DnexusUrl=https://s01.oss.so
 
 ASSERT_NO_STAGING_REPOS="false"
 STATE=""
-while getopts ":s:ah" opt; do
+while getopts ":d:s:ah" opt; do
   case $opt in
     a) ASSERT_NO_STAGING_REPOS="true"
     ;;
     s) STATE="${OPTARG}"
+    ;;
+    d) ="${DEPLOYMENT_ID}"
     ;;
     h) usage
     ;;
