@@ -18,7 +18,7 @@ exit 1
 }
 
 PLUGIN=org.sonatype.plugins:nexus-staging-maven-plugin:1.6.13
-MVN_ARGS=("--batch-mode" "--no-transfer-progress" "-DnexusUrl=https://s01.oss.sonatype.org/" "-DserverId=ossrh")
+MVN_ARGS=("--batch-mode" "--no-transfer-progress" "-DnexusUrl=https://s01.oss.sonatype.org/" "-DserverId=central")
 
 ASSERT_NO_STAGING_REPOS="false"
 STATE=""

@@ -164,7 +164,7 @@ jobs:
         with:
           java-version: 21
           distribution: temurin
-          server-id: ossrh
+          server-id: central
           server-username: SONATYPE_TOKEN_USERNAME # env variable for Sonatype username
           server-password: SONATYPE_TOKEN_PASSWORD # env variable for Sonatype password
           overwrite-settings: true
