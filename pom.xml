@@ -1187,7 +1187,7 @@
                                             <banRelease>true</banRelease>
                                             <banSnapshots>false</banSnapshots>
                                             <phases>clean,deploy</phases>
-                                            <unCheckedPluginList>org.apache.maven.plugins:maven-site-plugin</unCheckedPluginList>
+                                            <unCheckedPluginList>org.apache.maven.plugins:maven-site-plugin,org.apache.maven.plugins:maven-deploy-plugin</unCheckedPluginList>
                                         </requirePluginVersions>
                                     </rules>
                                 </configuration>
