@@ -57,7 +57,7 @@ on:
         default: false
 
 jobs:
-  build:
+  stage-release:
     runs-on: ubuntu-latest
 
     steps:
@@ -133,18 +133,25 @@ jobs:
                                      -i ${{ github.run_id }} \
                                      ${{ github.event.inputs.skip-tests == 'true' && '-s' || '' }}
           
-          echo "DEPLOYMENT_ID=$(cat DEPLOYMENT_ID)" >> $GITHUB_ENV
         env:
           SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
           SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.KROXYLICIOUS_RELEASE_PRIVATE_KEY_PASSPHRASE }}
           GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }} # For the gh cmd line tool used by stage-release.sh
 
-      - name: Archive deployment.id number for use by promote
+      - name: 'Build release state'
+        run: |
+          jq -n --arg deploymentId "$(cat DEPLOYMENT_ID)" \
+                --arg releaseVersion "${{ github.event.inputs.release-version }}" \ 
+                --arg developmentVersion "${{ github.event.inputs.development-version }}" \ 
+                --arg workBranch "${{ env.WORK_BRANCH }}"
+              '$ARGS.named' >> RELEASE_STATE.json
+
+      - name: 'Archive release state (used by the promote workflow)'
         uses: actions/upload-artifact@v4
         with:
-          name: DEPLOYMENT.ID
-          path: DEPLOYMENT.ID
+          name: RELEASE_STATE.json
+          path: RELEASE_STATE.json
 
       - name: 'Stage release docs'
         if: ${{ success() }}

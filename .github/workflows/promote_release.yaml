@@ -125,6 +125,24 @@ jobs:
           # Get PR's view of where main ought to be.  This is two commits behind PR's head.
           echo "PR_MAIN_REF=$(git rev-list -n 1 origin/${PR_BRANCH}^^)" >> $GITHUB_ENV
 
+      - name: 'Get run id of stage release'
+        run: |
+          STAGE_RUN_ID=$(gh issue view ${{ github.event.issue.number }} --json labels | jq  --raw-output --exit-status '[.labels.[] | select(.name | startswith("__run_id-"))][0] | .name | sub("__run_id-"; "")')
+          echo "STAGE_RUN_ID=${STAGE_RUN_ID}" >> $GITHUB_ENV
+
+      - name: Download release state artefact
+        uses: dawidd6/action-download-artifact@v11
+        with:
+          workflow: stage-release
+          run_id: ${{ env.STAGE_RUN_ID }}
+          name: RELEASE_STATE.json
+
+      - name: 'Dump release state'
+        run: |
+          cat RELEASE_STATE.json
+          # KW TODO
+          exit 1
+
       - name: 'Check for PR/main divergence'
         if: ${{ inputs.command == 'promote-release' }}
         env:

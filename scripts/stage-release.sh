@@ -229,5 +229,5 @@ gh pr create --head "${PREPARE_DEVELOPMENT_BRANCH}" \
              --title "Kroxylicious release version ${RELEASE_VERSION} development version ${NEXT_VERSION}" \
              --body "${BODY}" \
              --repo "$(gh repo set-default -v)" \
-             --label "__run_id_${GITHUB_WORKFLOW_RUN_ID}"
+             --label "__run_id-${GITHUB_WORKFLOW_RUN_ID}"
 
