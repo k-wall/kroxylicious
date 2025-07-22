@@ -163,8 +163,8 @@ git push "${REPOSITORY}" "${RELEASE_TAG}"
 echo "Deploying release"
 
 MVN_DEPLOY_OUTPUT=$(mktemp)
-mvn -q -Prelease,dist -DskipTests=true -DskipDocs=true -DskipKTs=true -DreleaseSigningKey="${GPG_KEY}" -DprocessAllModules=true deploy | tee ${MVN_DEPLOY_OUTPUT}
-DEPLOYMENT_ID=$(awk -F'[ \.]' '/Uploaded bundle successfully/ {print $9}' < ${MVN_DEPLOY_OUTPUT})
+mvn -Prelease,dist -DskipTests=true -DskipDocs=true -DskipKTs=true -DreleaseSigningKey="${GPG_KEY}" -DprocessAllModules=true deploy | tee ${MVN_DEPLOY_OUTPUT}
+DEPLOYMENT_ID=$(awk -F'[ .]' '/Uploaded bundle successfully/ {print $9}' < ${MVN_DEPLOY_OUTPUT})
 
 if [[ -z "${DEPLOYMENT_ID}" ]]; then
      echo "Failed to find Central Publishing Portal deployment id in Maven deploy output" 1>&2

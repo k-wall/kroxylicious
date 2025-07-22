@@ -259,8 +259,9 @@
                     <skipPublishing>true</skipPublishing>
                 </configuration>
             </plugin>
-            <!--
-            central-publishing-maven-plugin seems to insist that javadoc is present.
+            <!-- We don't actually care about javadoc for this module, but it needs to be present for
+                 central-publishing-maven-plugin's validatios to pass. so inspired by
+                 https://stackoverflow.com/a/59073656 we skip javadoc generation and attach an empty jar -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
@@ -268,7 +269,22 @@
                     <skip>true</skip>
                 </configuration>
             </plugin>
-            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>javadoc</classifier>
+                            <classesDirectory>${project.basedir}/src/main/javadoc</classesDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
         <resources>
             <resource>
