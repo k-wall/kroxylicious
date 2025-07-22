@@ -151,8 +151,8 @@ jobs:
       - name: 'Build release state'
         run: |
           jq -n --arg deploymentId "$(cat DEPLOYMENT.ID)" \
-                --arg releaseVersion "${{ github.event.inputs.release-version }}" \ 
-                --arg developmentVersion "${{ github.event.inputs.development-version }}" \ 
+                --arg releaseVersion "${{ github.event.inputs.release-version }}" \
+                --arg developmentVersion "${{ github.event.inputs.development-version }}" \
                 --arg workBranch "${{ env.WORK_BRANCH }}" \
               '$ARGS.named' > RELEASE_STATE.json
 
