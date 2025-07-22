@@ -118,11 +118,16 @@ jobs:
           GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }} # For the gh cmd line tool used by transition-github-release-note-state.sh
         run: ./scripts/transition-github-release-note-state.sh -v ${{ github.event.inputs.release-version }} -a
 
-      - name: 'Create git work branch name'
+      - name: 'Prepare Environment'
         run: |
           echo "WORK_BRANCH=release-work-${{ github.event.inputs.release-version }}-$(openssl rand -hex 12)" >> $GITHUB_ENV
           RUN_ID_LABEL="__run_id-${{ github.event.inputs.release-version }}"
           echo "RUN_ID_LABEL=${RUN_ID_LABEL}" >> $GITHUB_ENV
+
+      - name: 'Create run label used to tag release PRs'
+        env:
+          GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }}
+        run: |
           gh label create ${RUN_ID_LABEL} --force
 
       - name: 'Stage Release'
@@ -172,6 +177,13 @@ jobs:
           SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
           SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
         run: ./scripts/transition-staging-repository-state.sh -s drop -i ${DEPLOYMENT_ID}
+
+      - name: 'Drop run label used to tag release PRs, if failed'
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }}
+        run: |
+          gh label delete ${RUN_ID_LABEL} --force || true
 
       - name: 'Add pending status to block the merge'
         env:
