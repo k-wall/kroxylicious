@@ -121,6 +121,9 @@ jobs:
       - name: 'Create git work branch name'
         run: |
           echo "WORK_BRANCH=release-work-${{ github.event.inputs.release-version }}-$(openssl rand -hex 12)" >> $GITHUB_ENV
+          RUN_ID_LABEL="__run_id-${{ github.event.inputs.release-version }}"
+          echo "RUN_ID_LABEL=${RUN_ID_LABEL}" >> $GITHUB_ENV
+          gh label create ${RUN_ID_LABEL} --force
 
       - name: 'Stage Release'
         run: |
@@ -130,7 +133,7 @@ jobs:
                                      -n ${{ github.event.inputs.development-version }} \
                                      -b ${{ github.event.inputs.branch }} \
                                      -w ${{ env.WORK_BRANCH }} \
-                                     -i ${{ github.run_id }} \
+                                     -l ${{ env.RUN_ID_LABEL }} \
                                      ${{ github.event.inputs.skip-tests == 'true' && '-s' || '' }}
           
         env:
@@ -157,6 +160,8 @@ jobs:
         if: ${{ success() }}
         run: |
           ./scripts/stage-docs.sh -v ${{ github.event.inputs.release-version }} \
+                                  -l ${{ env.RUN_ID_LABEL }} \
+                                  -b "prepare-v${{ github.event.inputs.release-version }}-release-docs-${{ github.run_id }}"
                                   -u "https://user:${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }}@${{ github.event.inputs.website-repository }}"
         env:
           GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }} # For the gh cmd line tool used by stage-docs.sh

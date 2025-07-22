@@ -11,22 +11,29 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # Tmp fix - revert the nounset change made by common to match the expectations of this script.
 set +u
 
+RELEASE_DATE=$(date -u '+%Y-%m-%d')
 REPOSITORY="origin"
 BRANCH_FROM="main"
 DRY_RUN="false"
 ORIGINAL_GH_DEFAULT_REPO=""
-while getopts ":v:u:dh" opt; do
+while getopts ":v:b:u:l:dh" opt; do
   case $opt in
     v) RELEASE_VERSION="${OPTARG}"
+    ;;
+    b) RELEASE_DOCS_BRANCH="${OPTARG}"
     ;;
     u) WEBSITE_REPO_URL="${OPTARG}"
     ;;
     d) DRY_RUN="true"
     ;;
+    l) RUN_ID_LABEL="${OPTARG}"
+    ;;
     h)
       1>&2 cat << EOF
-usage: $0 -v version -u url [-b branch] [-r repository] [-d] [-h]
+usage: $0 -v version -u url -b branch -l run-id-label [-r repository] [-d] [-h]
  -v version number e.g. 0.3.0
+ -l run id label
+ -b name of the release branch to create in the website repository
  -u url of the website repository e.g. git@github.com:kroxylicious/kroxylicious.github.io.git
  -d dry-run mode
  -h this help message
@@ -42,6 +49,16 @@ done
 
 if [[ -z ${RELEASE_VERSION} ]]; then
   echo "No version specified, aborting"
+  exit 1
+fi
+
+if [[ -z ${RELEASE_DOCS_BRANCH} ]]; then
+  echo "No release branch specified, aborting"
+  exit 1
+fi
+
+if [[ -z ${RUN_ID_LABEL} ]]; then
+  echo "No run id label specified, aborting"
   exit 1
 fi
 
@@ -83,9 +100,7 @@ trap cleanup EXIT
 
 git stash --all
 
-RELEASE_DATE=$(date -u '+%Y-%m-%d')
 RELEASE_TAG="v${RELEASE_VERSION}"
-RELEASE_DOCS_BRANCH="prepare-${RELEASE_TAG}-release-docs-${RELEASE_DATE}"
 
 WEBSITE_TMP=$(mktemp -d)
 
@@ -172,4 +187,9 @@ gh repo set-default "$(git remote get-url "${REPOSITORY}")"
 echo "Creating pull request to publish release documentation to website."
 # Open PR to merge branch to `main` in `kroxylicious/kroxylicious.github.io`
 BODY="Prepare ${RELEASE_TAG} release documentation for publishing to website"
-gh pr create --head "${RELEASE_DOCS_BRANCH}" --base "${BRANCH_FROM}" --title "Kroxylicious ${RELEASE_TAG} release documentation ${RELEASE_DATE}" --body "${BODY}" --repo "$(gh repo set-default -v)"
+gh pr create --head "${RELEASE_DOCS_BRANCH}" \
+             --base "${BRANCH_FROM}"
+             --title "Kroxylicious ${RELEASE_TAG} release documentation ${RELEASE_DATE}" \
+             --body "${BODY}" \
+             --repo "$(gh repo set-default -v)" \
+             --label "${RUN_ID_LABEL}"

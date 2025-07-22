@@ -16,7 +16,7 @@ BRANCH_FROM="main"
 WORK_BRANCH_NAME="release-work-$(openssl rand -hex 12)"
 SKIP_VALIDATION="false"
 RELEASE_NOTES_DIR=${RELEASE_NOTES_DIR:-.releaseNotes}
-while getopts ":i:v:b:k:r:n:w:sh" opt; do
+while getopts ":l:v:b:k:r:n:w:sh" opt; do
   case $opt in
     v) RELEASE_VERSION="${OPTARG}"
     ;;
@@ -28,7 +28,7 @@ while getopts ":i:v:b:k:r:n:w:sh" opt; do
     ;;
     k) GPG_KEY="${OPTARG}"
     ;;
-    i) GITHUB_WORKFLOW_RUN_ID="${OPTARG}"
+    l) RUN_ID_LABEL="${OPTARG}"
     ;;
     w) WORK_BRANCH_NAME="${OPTARG}"
     ;;
@@ -36,7 +36,7 @@ while getopts ":i:v:b:k:r:n:w:sh" opt; do
     ;;
     h)
       1>&2 cat << EOF
-usage: $0 -k keyid -v version [-b branch] [-r repository] [-s] [-d] [-h]
+usage: $0 -k keyid -v version -i github-workflow runid [-b branch] [-r repository] [-s] [-d] [-h]
  -k short key id used to sign the release
  -v version number e.g. 0.3.0
  -b branch to release from (defaults to 'main')
@@ -55,8 +55,8 @@ EOF
   esac
 done
 
-if [[ -z "${GITHUB_WORKFLOW_RUN_ID}" ]]; then
-    echo "No GitHub Workflow Run id. Please specify -i <GitHub Workflow Run id>" 1>&2
+if [[ -z "${RUN_ID_LABEL}" ]]; then
+    echo "No run id label. Please specify -l <run id label>" 1>&2
     exit 1
 fi
 
@@ -229,5 +229,5 @@ gh pr create --head "${PREPARE_DEVELOPMENT_BRANCH}" \
              --title "Kroxylicious release version ${RELEASE_VERSION} development version ${NEXT_VERSION}" \
              --body "${BODY}" \
              --repo "$(gh repo set-default -v)" \
-             --label "__run_id-${GITHUB_WORKFLOW_RUN_ID}"
+             --label "${RUN_ID_LABEL}"
 
