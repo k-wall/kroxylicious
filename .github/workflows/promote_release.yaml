@@ -78,6 +78,24 @@ jobs:
           gh issue comment  ${{ github.event.issue.number }} --body "${{ github.actor }} is not a member of https://github.com/orgs/kroxylicious/teams/release-engineers)"
           exit -1
 
+      - name: 'Get run id of stage release workflow'
+        run: |
+          STAGE_RUN_ID=$(gh issue view ${{ github.event.issue.number }} --json labels | jq --raw-output --exit-status '[.labels.[] | select(.name | startswith("__run_id-"))][0] | .name | sub("__run_id-"; "")')
+          echo "STAGE_RUN_ID=${STAGE_RUN_ID}" >> $GITHUB_ENV
+
+      - name: Download release state artefact
+        uses: dawidd6/action-download-artifact@v11
+        with:
+          workflow: stage-release
+          run_id: ${{ env.STAGE_RUN_ID }}
+          name: RELEASE_STATE.json
+
+      - name: 'Extract deployment id from the release state'
+        run: |
+          cat RELEASE_STATE.json
+          DEPLOYMENT_ID=$(jq --exit-status --raw-output '.deploymentId')
+          echo "DEPLOYMENT_ID=${DEPLOYMENT_ID}" >> $GITHUB_ENV
+
       - name: 'Stop workflow if PR is not approved'
         if: ${{ github.repository == 'kroxylicious/kroxylicious' }}
         env:
@@ -126,24 +144,6 @@ jobs:
           # Get PR's view of where main ought to be.  This is two commits behind PR's head.
           echo "PR_MAIN_REF=$(git rev-list -n 1 origin/${PR_BRANCH}^^)" >> $GITHUB_ENV
 
-      - name: 'Get run id of stage release'
-        run: |
-          STAGE_RUN_ID=$(gh issue view ${{ github.event.issue.number }} --json labels | jq  --raw-output --exit-status '[.labels.[] | select(.name | startswith("__run_id-"))][0] | .name | sub("__run_id-"; "")')
-          echo "STAGE_RUN_ID=${STAGE_RUN_ID}" >> $GITHUB_ENV
-
-      - name: Download release state artefact
-        uses: dawidd6/action-download-artifact@v11
-        with:
-          workflow: stage-release
-          run_id: ${{ env.STAGE_RUN_ID }}
-          name: RELEASE_STATE.json
-
-      - name: 'Dump release state'
-        run: |
-          cat RELEASE_STATE.json
-          # KW TODO
-          exit 1
-
       - name: 'Check for PR/main divergence'
         if: ${{ inputs.command == 'promote-release' }}
         env:
@@ -171,28 +171,12 @@ jobs:
             exit 1
           fi
 
-      - name: 'Cache Maven packages'
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
-
-      - name: 'Set up Java'
-        uses: actions/setup-java@v4
-        with:
-          java-version: 21
-          distribution: temurin
-          server-id: central
-          server-username: SONATYPE_TOKEN_USERNAME # env variable for Sonatype username
-          server-password: SONATYPE_TOKEN_PASSWORD # env variable for Sonatype password
-          overwrite-settings: true
-
-      - name: 'Transition staging repository to desired state'
+      - name: 'Transition Central Publishing Portal to desired state'
         env:
           SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
           SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
-        run: ./scripts/transition-staging-repository-state.sh -s ${{ inputs.command == 'promote-release' && 'release' || 'drop' }}
+        run: ./scripts/transition-staging-repository-state.sh -d ${{ env.DEPLOYMENT_ID}} \
+                                                              -s ${{ inputs.command == 'promote-release' && 'release' || 'drop' }}
 
       - name: 'Unblock the merge'
         if: ${{ inputs.command == 'promote-release' }}
