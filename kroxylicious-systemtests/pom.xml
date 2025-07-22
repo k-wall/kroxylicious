@@ -259,6 +259,8 @@
                     <skipPublishing>true</skipPublishing>
                 </configuration>
             </plugin>
+            <!--
+            central-publishing-maven-plugin seems to insist that javadoc is present.
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
@@ -266,6 +268,7 @@
                     <skip>true</skip>
                 </configuration>
             </plugin>
+            -->
         </plugins>
         <resources>
             <resource>
