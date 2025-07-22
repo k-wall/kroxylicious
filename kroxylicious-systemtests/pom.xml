@@ -18,6 +18,7 @@
     </parent>
 
     <artifactId>kroxylicious-systemtests</artifactId>
+    <name>Kroxylicious System Tests</name>
     <description>
         The intention of this module is to test Kroxylicious against a kafka instance deployed in a kubernetes cluster/minikube
         using Strimzi, to simulate a real scenario for end-to-end testing treating Kroxylicious as a black box.
@@ -253,6 +254,7 @@
             <plugin>
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
+                <extensions>true</extensions>
                 <configuration>
                     <skipPublishing>true</skipPublishing>
                 </configuration>
