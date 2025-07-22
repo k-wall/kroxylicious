@@ -7,9 +7,6 @@
 
 set -euo pipefail
 
-echo KWTODO
-exit 0
-
 usage() {
       1>&2 cat << "EOF"
 usage: $0 -d <distribution-id> -s (drop|release)|-h
@@ -47,7 +44,7 @@ if [[ -z "${DEPLOYMENT_ID}" ]]; then
     exit 1
 fi
 
-AUTH=$(printf "example_username:example_password" | base64)
+AUTH=$(printf "${SONATYPE_TOKEN_USERNAME}:${SONATYPE_TOKEN_PASSWORD}" | base64)
 
 case ${STATE} in
   drop)

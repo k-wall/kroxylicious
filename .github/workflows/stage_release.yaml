@@ -212,14 +212,14 @@ jobs:
           
           * [ ] Let the CI workflow on this PR complete
           * [ ] [Kick the tyres](https://github.com/kroxylicious/kroxylicious/blob/main/RELEASING.md#making-the-release-public) using the staged Maven artefacts (available at <code>${REPO}</code>).
-                You can use this Maven snippet in your test project's pom.xml to configure Maven to download from the Portal.
+                You can use this Maven snippet in your test project's pom.xml to configure Maven to download from the Portal. You also need to configure [auth](https://central.sonatype.org/publish/publish-portal-api/#maven).
                 <code>
-                  <repositories>
-                    <repository>
-                      <id>centralportal</id>
-                      <url>${REPO}</url>
-                      </repository>
-                  </repositories>
+                  &lt;repositories&gt;
+                    &lt;repository&gt;
+                      &lt;id&gt;central.manual.testing&lt;/id&gt;
+                      &lt;url&gt;${REPO}&lt;/url&gt;
+                      &lt;/repository&gt;
+                  &lt;/repositories&gt;
               </code>
           * [ ] Approve this PR.
           
