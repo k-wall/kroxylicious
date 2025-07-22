@@ -203,19 +203,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }} # For the gh cmd line tool used by stage-release.sh
         run: |
-          gh pr comment ${{ env.WORK_BRANCH }} --body-file - << 'EOF'
+          export REPO="https://central.sonatype.com/api/v1/publisher/deployment/$(cat DEPLOYMENT.ID)/download"
+          envsubst << "EOF" | gh pr comment ${{ env.WORK_BRANCH }} --body-file -
           Hey, that's the ${{ github.event.inputs.release-version }} release prepared and its artefacts successfully staged to Sonatype. This PR contains a commit for ${{ github.event.inputs.release-version }} and a commit for ${{ github.event.inputs.development-version }} which will reopen main for new work.
           
           There are a couple of steps to do before the release is completed.
           
-          * [ ] Let the CI workflow on this PR complete.
-          * [ ] Review the "[Sonatype] iokroxylicious-nnnn repository report" email for unexpected threats.
-          * [ ] [Kick the tyres](https://github.com/kroxylicious/kroxylicious-junit5-extension/blob/main/RELEASING.md#making-the-release-public) on the Maven artefacts.
+          * [ ] Let the CI workflow on this PR complete
+          * [ ] [Kick the tyres](https://github.com/kroxylicious/kroxylicious/blob/main/RELEASING.md#making-the-release-public) using the staged Maven artefacts (available at <code>${REPO}</code>).
+                You can use this Maven snippet in your test project's pom.xml.
+                ```
+                <repositories>
+                  <repository>
+                    <id>centralportal</id>
+                    <url>${REPO}</url>
+                    </repository>
+               </repositories>
+               ```
+          * [ ] Approve this PR.
           
-          Once done:
-          1. Approve this PR
-          2. comment <code>&commat;kroxylicious-robot promote-release</code> on this PR. This will release the artefacts to Maven Central and merge this PR to main.
-          
+          Once the above is done, comment <code>&commat;kroxylicious-robot promote-release</code> on this PR. This will release the artefacts to Maven Central and merge this PR to main.
           If things don't look good, abort the release by saying <code>&commat;kroxylicious-robot drop-release</code>.
           
           Thank you,

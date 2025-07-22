@@ -188,7 +188,7 @@ echo "Creating pull request to publish release documentation to website."
 # Open PR to merge branch to `main` in `kroxylicious/kroxylicious.github.io`
 BODY="Prepare ${RELEASE_TAG} release documentation for publishing to website"
 gh pr create --head "${RELEASE_DOCS_BRANCH}" \
-             --base "${BRANCH_FROM}"
+             --base "${BRANCH_FROM}" \
              --title "Kroxylicious ${RELEASE_TAG} release documentation ${RELEASE_DATE}" \
              --body "${BODY}" \
              --repo "$(gh repo set-default -v)" \
