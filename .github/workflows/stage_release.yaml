@@ -166,7 +166,6 @@ jobs:
         if: ${{ success() }}
         run: |
           ./scripts/stage-docs.sh -v ${{ github.event.inputs.release-version }} \
-                                  -l ${{ env.RUN_ID_LABEL }} \
                                   -b "prepare-v${{ github.event.inputs.release-version }}-release-docs-${{ github.run_id }}" \
                                   -u "https://user:${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }}@${{ github.event.inputs.website-repository }}"
         env:

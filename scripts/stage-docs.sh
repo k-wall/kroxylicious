@@ -16,7 +16,7 @@ REPOSITORY="origin"
 BRANCH_FROM="main"
 DRY_RUN="false"
 ORIGINAL_GH_DEFAULT_REPO=""
-while getopts ":v:b:u:l:dh" opt; do
+while getopts ":v:b:u:dh" opt; do
   case $opt in
     v) RELEASE_VERSION="${OPTARG}"
     ;;
@@ -26,13 +26,10 @@ while getopts ":v:b:u:l:dh" opt; do
     ;;
     d) DRY_RUN="true"
     ;;
-    l) RUN_ID_LABEL="${OPTARG}"
-    ;;
     h)
       1>&2 cat << EOF
-usage: $0 -v version -u url -b branch -l run-id-label [-r repository] [-d] [-h]
+usage: $0 -v version -u url -b branch [-r repository] [-d] [-h]
  -v version number e.g. 0.3.0
- -l run id label
  -b name of the release branch to create in the website repository
  -u url of the website repository e.g. git@github.com:kroxylicious/kroxylicious.github.io.git
  -d dry-run mode
@@ -191,5 +188,4 @@ gh pr create --head "${RELEASE_DOCS_BRANCH}" \
              --base "${BRANCH_FROM}" \
              --title "Kroxylicious ${RELEASE_TAG} release documentation ${RELEASE_DATE}" \
              --body "${BODY}" \
-             --repo "$(gh repo set-default -v)" \
-             --label "${RUN_ID_LABEL}"
+             --repo "$(gh repo set-default -v)"
