@@ -153,8 +153,8 @@ jobs:
           jq -n --arg deploymentId "$(cat DEPLOYMENT.ID)" \
                 --arg releaseVersion "${{ github.event.inputs.release-version }}" \ 
                 --arg developmentVersion "${{ github.event.inputs.development-version }}" \ 
-                --arg workBranch "${{ env.WORK_BRANCH }}"
-              '$ARGS.named' >> RELEASE_STATE.json
+                --arg workBranch "${{ env.WORK_BRANCH }}" \
+              '$ARGS.named' > RELEASE_STATE.json
 
       - name: 'Archive release state (used by the promote workflow)'
         uses: actions/upload-artifact@v4
