@@ -120,9 +120,10 @@ jobs:
 
       - name: 'Prepare Release Environment'
         run: |
-          UNIQUE_ID=$(openssl rand -hex 12)
-          echo "WORK_BRANCH=release-work-${{ github.event.inputs.release-version }}-${UNIQUE_ID}" >> $GITHUB_ENV
-          RUN_ID_LABEL="__run_id-${UNIQUE_ID}"
+          echo "WORK_BRANCH=release-work-${{ github.event.inputs.release-version }}-${{github.run_id}}" >> $GITHUB_ENV
+          # This label will be add to the release PR. The run id embedded in the label allows us to download
+          # the release state file. This allows us to identify the deployment in Central Publishing Portal.
+          RUN_ID_LABEL="__run_id-${{github.run_id}}"
           echo "RUN_ID_LABEL=${RUN_ID_LABEL}" >> $GITHUB_ENV
 
       - name: 'Create run label used to tag release PRs'
@@ -211,15 +212,15 @@ jobs:
           
           * [ ] Let the CI workflow on this PR complete
           * [ ] [Kick the tyres](https://github.com/kroxylicious/kroxylicious/blob/main/RELEASING.md#making-the-release-public) using the staged Maven artefacts (available at <code>${REPO}</code>).
-                You can use this Maven snippet in your test project's pom.xml.
-                ```
-                <repositories>
-                  <repository>
-                    <id>centralportal</id>
-                    <url>${REPO}</url>
-                    </repository>
-               </repositories>
-               ```
+                You can use this Maven snippet in your test project's pom.xml to configure Maven to download from the Portal.
+                <code>
+                  <repositories>
+                    <repository>
+                      <id>centralportal</id>
+                      <url>${REPO}</url>
+                      </repository>
+                  </repositories>
+              </code>
           * [ ] Approve this PR.
           
           Once the above is done, comment <code>&commat;kroxylicious-robot promote-release</code> on this PR. This will release the artefacts to Maven Central and merge this PR to main.
