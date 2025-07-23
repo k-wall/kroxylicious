@@ -178,8 +178,9 @@ jobs:
         env:
           SONATYPE_TOKEN_USERNAME: ${{ vars.KROXYLICIOUS_SONATYPE_TOKEN_USERNAME }}
           SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
-        run: ./scripts/transition-staging-repository-state.sh -d ${{ env.DEPLOYMENT_ID}} \
-                                                              -s ${{ inputs.command == 'promote-release' && 'release' || 'drop' }}
+        run: |
+          ./scripts/transition-staging-repository-state.sh -d "${{ env.DEPLOYMENT_ID}}" \
+                                                           -s "${{ inputs.command == 'promote-release' && 'release' || 'drop' }}"
 
       - name: 'Unblock the merge'
         if: ${{ inputs.command == 'promote-release' }}

@@ -17,9 +17,9 @@ EOF
 exit 1
 }
 
-AUTH=$(printf "${SONATYPE_TOKEN_USERNAME}:${SONATYPE_TOKEN_PASSWORD}" | base64)
 
 STATE=""
+DEPLOYMENT_ID=""
 while getopts ":d:s:h" opt; do
   case $opt in
     s) STATE="${OPTARG}"
