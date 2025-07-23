@@ -46,6 +46,7 @@ fi
 
 AUTH=$(printf "${SONATYPE_TOKEN_USERNAME}:${SONATYPE_TOKEN_PASSWORD}" | base64)
 
+# https://central.sonatype.org/publish/publish-portal-api/#publish-or-drop-the-deployment
 case ${STATE} in
   drop)
       echo Dropping ${DEPLOYMENT_ID}
@@ -55,8 +56,12 @@ case ${STATE} in
            https://central.sonatype.com/api/v1/publisher/deployment/${DEPLOYMENT_ID}
           ;;
   release)
-      echo KWTODO
-      exit -1
+      # Publishing ${DEPLOYMENT_ID}
+      curl --request POST \
+           --verbose \
+           --header "Authorization: Bearer ${AUTH}" \
+           https://central.sonatype.com/api/v1/publisher/deployment/${DEPLOYMENT_ID}
+          ;;
     ;;
   *)
     usage
