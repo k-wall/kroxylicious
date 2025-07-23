@@ -220,7 +220,7 @@ jobs:
                 <url>${REPO}</url>
               </repository>
             </repositories>
-           ```
+            ```
           * [ ] Approve this PR.
           
           Once the above is done, comment <code>&commat;kroxylicious-robot promote-release</code> on this PR. This will release the artefacts to Maven Central and merge this PR to main.
