@@ -185,7 +185,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }}
         run: |
-          gh label delete ${RUN_ID_LABEL} --force || true
+          gh label delete ${RUN_ID_LABEL} --yes || true
 
       - name: 'Add pending status to block the merge'
         env:
