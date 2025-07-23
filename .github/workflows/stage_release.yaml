@@ -180,7 +180,7 @@ jobs:
           SONATYPE_TOKEN_PASSWORD: ${{ secrets.KROXYLICIOUS_SONATYPE_TOKEN_PASSWORD }}
         run: ./scripts/transition-staging-repository-state.sh -s drop -i ${DEPLOYMENT_ID}
 
-      - name: 'Drop run label used to tag release PRs, if failed'
+      - name: 'Drop run label used to tag release PR, if failed'
         if: ${{ failure() }}
         env:
           GH_TOKEN: ${{ secrets.KROXYLICIOUS_RELEASE_TOKEN }}
@@ -211,16 +211,16 @@ jobs:
           There are a couple of steps to do before the release is completed.
           
           * [ ] Let the CI workflow on this PR complete
-          * [ ] [Kick the tyres](https://github.com/kroxylicious/kroxylicious/blob/main/RELEASING.md#making-the-release-public) using the staged Maven artefacts (available at <code>${REPO}</code>).
-                You can use this Maven snippet in your test project's pom.xml to configure Maven to download from the Portal. You also need to configure [auth](https://central.sonatype.org/publish/publish-portal-api/#maven).
-                <code>
-                  &lt;repositories&gt;
-                    &lt;repository&gt;
-                      &lt;id&gt;central.manual.testing&lt;/id&gt;
-                      &lt;url&gt;${REPO}&lt;/url&gt;
-                      &lt;/repository&gt;
-                  &lt;/repositories&gt;
-              </code>
+          * [ ] [Kick the tyres](https://github.com/kroxylicious/kroxylicious/blob/main/RELEASING.md#making-the-release-public) using the staged Maven artefacts (available at `${REPO}`).
+                You can use this Maven snippet in your test project's pom.xml to configure Maven to download from the Portal. You also need to configure Maven to [authenticate](https://central.sonatype.org/publish/publish-portal-api/#maven).
+            ```
+            <repositories>
+              <repository>
+                <id>central.manual.testing</id>
+                <url>${REPO}</url>
+              </repository>
+            </repositories>
+           ```
           * [ ] Approve this PR.
           
           Once the above is done, comment <code>&commat;kroxylicious-robot promote-release</code> on this PR. This will release the artefacts to Maven Central and merge this PR to main.
