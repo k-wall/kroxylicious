@@ -54,15 +54,14 @@ case ${STATE} in
            --verbose \
            --header "Authorization: Bearer ${AUTH}" \
            https://central.sonatype.com/api/v1/publisher/deployment/${DEPLOYMENT_ID}
-          ;;
+      ;;
   release)
       # Publishing ${DEPLOYMENT_ID}
       curl --request POST \
            --verbose \
            --header "Authorization: Bearer ${AUTH}" \
            https://central.sonatype.com/api/v1/publisher/deployment/${DEPLOYMENT_ID}
-          ;;
-    ;;
+      ;;
   *)
     usage
     ;;
