@@ -96,8 +96,7 @@ jobs:
 
       - name: 'Extract deployment id from the release state'
         run: |
-          cat RELEASE_STATE.json
-          DEPLOYMENT_ID=$(jq --exit-status --raw-output '.deploymentId')
+          DEPLOYMENT_ID=$(jq --exit-status --raw-output '.deploymentId' RELEASE_STATE.json)
           echo "DEPLOYMENT_ID=${DEPLOYMENT_ID}" >> $GITHUB_ENV
 
       - name: 'Stop workflow if PR is not approved'
