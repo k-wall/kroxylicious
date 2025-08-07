@@ -1,3 +1,4 @@
+// variants: localstack|vault
 :experimental:
 :kafka-version: 4.0.0
 :vault-chart-version: 0.30.1
