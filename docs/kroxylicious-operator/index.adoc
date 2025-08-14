@@ -11,7 +11,7 @@ include::_modules/con-about-{guide}-guide.adoc[leveloffset=+2]
 
 include::_assemblies/assembly-operator-overview.adoc[leveloffset=+1]
 
-include::_assemblies/assembly-operator-api.adoc[leveloffset=+1]
+//include::_assemblies/assembly-operator-api.adoc[leveloffset=+1]
 
 // installing
 include::_assemblies/assembly-operator-install.adoc[leveloffset=+1]

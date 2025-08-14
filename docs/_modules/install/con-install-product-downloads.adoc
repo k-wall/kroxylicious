@@ -10,6 +10,6 @@ To use YAML manifest files to install Kroxylicious, download  {OperatorAssetZipF
 
 Each of these archives contains:
 
-Installation Files:: In the `install` directory are the YAML manifests needed to install the operator.
+// Installation Files:: In the `install` directory are the YAML manifests needed to install the operator.
 
-Examples:: In the `examples` directory are examples of the custom resources which can be used to deploy a proxy once the operator has been installed.
+// Examples:: In the `examples` directory are examples of the custom resources which can be used to deploy a proxy once the operator has been installed.
