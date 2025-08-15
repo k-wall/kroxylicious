@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.asciidoctor.Asciidoctor;
 import org.asciidoctor.Options;
@@ -39,17 +40,16 @@ public class BlockExtractor implements AutoCloseable {
 //        asciidoctor.javaConverterRegistry().register(PassthroughConverter.class, "passthrough");
     }
 
-    public List<Block> extract(Path asciiDocFile) {
+    public List<Block> extract(Path asciiDocFile, final Predicate<StructuralNode> blockPredicate) {
         List<Block> blocks = new ArrayList<>();
         try (var asciidoctor = Asciidoctor.Factory.create()) {
-            asciidoctor.javaConverterRegistry().register(PassthroughConverter.class, "passthrough");
+            asciidoctor.javaConverterRegistry().register(AdocConverter.class);
             asciidoctor.javaExtensionRegistry().treeprocessor(new Treeprocessor() {
                 @Override
                 public Document process(Document document) {
                     document.getBlocks().stream()
-                            // .filter(b -> filterBlocks(b))
-                            .forEach(sn -> processBlock(sn, blocks::add)
-                            );
+                            .filter(blockPredicate)
+                            .forEach(sn -> processBlock(sn, blocks::add));
                     return document;
                 }
             });
@@ -62,7 +62,7 @@ public class BlockExtractor implements AutoCloseable {
                             .option(Options.SOURCEMAP, "true") // require so source file/line number information is available
                             .option(Options.TO_DIR, tempDirectory.toString()) // don't want the output
                             .safe(SafeMode.UNSAFE) // Required to write the output to temp location
-                            .backend("passthrough") // use our passthrough formatter so we get back the input rather than html
+                            .backend("adoc")
                             .build();
 
                     System.out.println("blocking " + asciiDocFile);
@@ -122,37 +122,61 @@ public class BlockExtractor implements AutoCloseable {
 
         @Override
         public String convert(ContentNode node, String transform, Map<Object, Object> o) {
+
+            if (node instanceof StructuralNode block) {
+                System.out.println("converting " + block.getSourceLocation().getFile() + ":" + block.getSourceLocation().getLineNumber());
+            }
+
+
             if (transform == null) {
                 transform = node.getNodeName();
             }
 
             if (node instanceof Document document) {
+                System.out.println("Document  " + node.getNodeName() );
                 return (String) document.getContent();
             }
             else if (node instanceof Section section) {
+                System.out.println("Section  " + node.getNodeName() );
                 return new StringBuilder()
                         .append("== ").append(section.getTitle()).append(" ==")
                         .append(LINE_SEPARATOR).append(LINE_SEPARATOR)
                         .append(section.getContent()).toString();
             }
             else if (transform.equals("paragraph")) {
+                System.out.println("paragraph  " + node.getNodeName() + " clazz " + node.getClass().getName());
+
                 StructuralNode block = (StructuralNode) node;
                 String content = (String) block.getContent();
                 return new StringBuilder(content.replaceAll(LINE_SEPARATOR, " ")).append(LINE_SEPARATOR).toString();
             }
             else if (node instanceof org.asciidoctor.ast.List list) {
+                System.out.println("org.asciidoctor.ast.List  " + node.getNodeName() );
                 StringBuilder sb = new StringBuilder();
                 for (StructuralNode listItem: list.getItems()) {
                     sb.append(listItem.convert()).append(LINE_SEPARATOR);
                 }
                 return sb.toString();
             }
+            else if (node instanceof org.asciidoctor.ast.DescriptionList list) {
+                System.out.println("org.asciidoctor.ast.DescriptionList  " + node.getNodeName() );
+                StringBuilder sb = new StringBuilder();
+                for (var listItem: list.getItems()) {
+                    sb.append(listItem.getDescription().convert()).append(LINE_SEPARATOR);
+                }
+                return sb.toString();
+            }
             else if (node instanceof ListItem listItem) {
+                System.out.println("ListItem  " + node.getNodeName() );
                 return "-> " + listItem.getText();
             }
             else if (node instanceof StructuralNode block) {
+                System.out.println("StructuralNode " + node.getNodeName() + " content is " + Optional.of(node.getClass()).map(Class::getName).getClass());
                 System.out.println("processing " + block.getSourceLocation().getFile() + ":" + block.getSourceLocation().getLineNumber());
                 return Optional.ofNullable(block.getContent()).map(String::valueOf).orElse(null);
+            }
+            else {
+                System.out.println("Other");
             }
             return null;
         }

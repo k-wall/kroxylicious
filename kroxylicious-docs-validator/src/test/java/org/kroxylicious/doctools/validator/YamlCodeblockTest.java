@@ -6,12 +6,11 @@
 
 package org.kroxylicious.doctools.validator;
 
-import java.nio.file.Path;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Test;
+import org.asciidoctor.ast.StructuralNode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -19,8 +18,6 @@ import org.kroxylicious.doctools.asciidoc.Block;
 import org.kroxylicious.doctools.asciidoc.BlockExtractor;
 import org.yaml.snakeyaml.Yaml;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 
 public class YamlCodeblockTest {
@@ -32,8 +29,7 @@ public class YamlCodeblockTest {
         try (var extractor = new BlockExtractor()) {
             return Utils.allAsciiDocFiles()
                     .sequential()
-                    .peek(x -> System.out.println("visiting file " + count.incrementAndGet() + " " + x))
-                    .flatMap(p -> extractor.extract(p).stream())
+                    .flatMap(p -> extractor.extract(p, sn -> isYamlBlock(sn)).stream())
                     .map(Arguments::of);
         }
         finally {
@@ -41,20 +37,26 @@ public class YamlCodeblockTest {
         }
     }
 
+    private static boolean isYamlBlock(StructuralNode sn) {
+        return Objects.equals(sn.getAttribute("style", null), "source") &&
+                Objects.equals(sn.getAttribute("language", null), "yaml");
+    }
+
     @ParameterizedTest
     @MethodSource("yamlSourceBlocks")
     void yamlAsciiDocCodeblockSyntacticallyCorrect(Block yamlBlock) throws Exception {
 
-        String content = yamlBlock.content();
+        var yaml = yamlBlock.content();
+        try {
 
-        //        assertThatNoException()
-        //                .as("Failed to par")
-        //                .isThrownBy(() -> yaml.load(content));
+            this.yaml.load(yaml);
+        } catch (Exception e) {
+            System.out.println(e);
+        }
+
+        assertThatNoException()
+                .as("Failed to parse yaml at {} line {}", yamlBlock.asciiDocFile(), yamlBlock.lineNumber())
+                .isThrownBy(() -> this.yaml.load(yaml));
     }
 
-    @Test
-    void foo() throws Exception {
-        var s = Utils.allAsciiDocFiles().toList().size();
-        System.out.println("size " + s);
-    }
 }

@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class Utils {
     static Stream<Path> allAsciiDocFiles() {
 
-        var docs = Path.of("").toAbsolutePath().getParent().resolve("docs").resolve("kroxylicious-operator");
+        var docs = Path.of("").toAbsolutePath().getParent().resolve("docs");
         assertThat(docs).isDirectory();
 
         try {
