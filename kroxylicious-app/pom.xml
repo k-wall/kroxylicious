@@ -24,6 +24,9 @@
     <name>Proxy application</name>
     <description>A runnable proxy application. Provides the main() method.</description>
 
+    <properties>
+        <docker.architecture>amd64</docker.architecture>
+    </properties>
     <dependencies>
         <!-- project dependencies - runtime and compile -->
         <dependency>
@@ -212,31 +215,30 @@
                         </executions>
                     </plugin>
                     <plugin>
-                    <groupId>io.fabric8</groupId>
-                    <artifactId>docker-maven-plugin</artifactId>
+                    <groupId>com.google.cloud.tools</groupId>
+                    <artifactId>jib-maven-plugin</artifactId>
+                        <version>3.4.6</version>
                     <executions>
                         <execution>
                             <goals>
-                                <goal>build</goal>
-                                <goal>save</goal>
+                                <goal>buildTar</goal>
                             </goals>
                             <phase>package</phase>
                             <configuration>
                                 <skip>${skipDocker}</skip>
-                                <images>
-                                    <image>
-                                        <name>${io.kroxylicious.proxy.image.name}</name>
-                                        <alias>pxy</alias>
-                                        <build>
-                                            <dockerFile>src/main/docker/proxy.dockerfile</dockerFile>
-                                            <contextDir>${project.basedir}</contextDir>
-                                            <args>
-                                                <KROXYLICIOUS_VERSION>${project.version}</KROXYLICIOUS_VERSION>
-                                            </args>
-                                        </build>
-                                    </image>
-                                </images>
-                                <saveFile>${io.kroxylicious.proxy.image.archive}</saveFile>
+                                <from>
+                                    <image>registry.access.redhat.com/ubi9/ubi-minimal:9.6-1755695350</image>
+                                    <platforms>
+                                        <platform>
+                                            <architecture>${docker.architecture}</architecture>
+                                            <os>linux</os>
+                                        </platform>
+                                    </platforms>
+                                </from>
+                                <outputPaths>
+                                    <tar>${io.kroxylicious.proxy.image.archive}</tar>
+                                </outputPaths>
+                                <to>${io.kroxylicious.proxy.image.name}</to>
                             </configuration>
                         </execution>
                     </executions>
