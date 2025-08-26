@@ -233,6 +233,10 @@
                                             <args>
                                                 <KROXYLICIOUS_VERSION>${project.version}</KROXYLICIOUS_VERSION>
                                             </args>
+                                            <!-- KW Experiment -->
+                                            <createImageOptions>
+                                                <platform>${docker.platform}</platform>
+                                            </createImageOptions>
                                         </build>
                                     </image>
                                 </images>

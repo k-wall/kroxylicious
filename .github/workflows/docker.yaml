@@ -68,27 +68,53 @@ jobs:
           username: ${{ vars.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_TOKEN }}
 
-      - name: Build and maybe push Proxy image
-        uses: docker/build-push-action@v6
+      - name: 'Cache Maven packages'
+        uses: actions/cache@v4
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: ${{ steps.build_configuration.outputs.push_images == 'true' }}
-          build-args: |
-            KROXYLICIOUS_VERSION=${{ steps.build_configuration.outputs.release_version }}
-          tags: ${{ steps.build_configuration.outputs.proxy_tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,compression=zstd
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
 
-      - name: Build and maybe push Operator image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.operator
-          platforms: linux/amd64,linux/arm64
-          push: ${{ steps.build_configuration.outputs.push_images == 'true' }}
-          build-args: |
-            KROXYLICIOUS_VERSION=${{ steps.build_configuration.outputs.release_version }}
-          tags: ${{ steps.build_configuration.outputs.operator_tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,compression=zstd
+      - name: 'Build Kroxylicious Operator/Operand Container Images (amd64)'
+        run: |
+          mvn --batch-mode --activate-profiles dist --also-make --projects :kroxylicious-app,:kroxylicious-operator,:kroxylicious-operator-dist -DskipTests package  -Ddocker.platform=linux/amd64
+
+          cp kroxylicious-app/target/kroxylicious-proxy.img.tar.gz kroxylicious-app/target/kroxylicious-proxy-amd64.img.tar.gz
+          cp kroxylicious-operator/target/kroxylicious-operator.img.tar.gz kroxylicious-operator/target/kroxylicious-operator-amd64.img.tar.gz
+
+      - name: 'Build Kroxylicious Operator/Operand Container Images (arm64)'
+        run: |
+          mvn --batch-mode --activate-profiles dist --also-make --projects :kroxylicious-app,:kroxylicious-operator,:kroxylicious-operator-dist -DskipTests package  -Ddocker.platform=linux/arm64
+
+          cp kroxylicious-app/target/kroxylicious-proxy.img.tar.gz kroxylicious-app/target/kroxylicious-proxy-arm64.img.tar.gz
+          cp kroxylicious-operator/target/kroxylicious-operator.img.tar.gz kroxylicious-operator/target/kroxylicious-operator-arm64.img.tar.gz
+
+      - name: 'Push proxy image'
+        if: ${{ steps.build_configuration.outputs.push_images == 'true' }}
+        run: |
+          KROXYLICIOUS_PROXY_IMAGE="$(mvn --quiet --projects kroxylicious-app --activate-profiles dist org.apache.maven.plugins:maven-help-plugin:3.4.0:evaluate -Dexpression=io.kroxylicious.proxy.image.name -DforceStdout)"
+          KWALL_PROXY_IMAGE=$(echo ${KROXYLICIOUS_PROXY_IMAGE} | sed -e 's/kroxylicious/k_wall/')
+          KWALL_PROXY_IMAGE_AMD64=${KWALL_PROXY_IMAGE}-amd64
+          KWALL_PROXY_IMAGE_ARM64=${KWALL_PROXY_IMAGE}-arm64
+          
+          docker image load -i kroxylicious-app/target/kroxylicious-proxy-amd64.img.tar.gz          
+          docker tag ${KROXYLICIOUS_PROXY_IMAGE} ${KWALL_PROXY_IMAGE_AMD64}
+          
+          docker inspect  ${KWALL_PROXY_IMAGE_AMD64}
+
+          docker image load -i kroxylicious-app/target/kroxylicious-proxy-arm64.img.tar.gz
+          docker tag ${KROXYLICIOUS_PROXY_IMAGE} ${KWALL_PROXY_IMAGE_ARM64}
+
+          docker inspect ${KWALL_PROXY_IMAGE_ARM64}
+          
+          docker push ${KWALL_PROXY_IMAGE_AMD64}
+          docker push ${KWALL_PROXY_IMAGE_ARM64}
+          
+          docker manifest create ${KWALL_PROXY_IMAGE} |  \
+              --amend  ${KWALL_PROXY_IMAGE_AMD64} \
+              --amend  ${KWALL_PROXY_IMAGE_ARM64}
+          
+          docker manifest push ${KWALL_PROXY_IMAGE} 
+
+
+          docker inspect ${KWALL_PROXY_IMAGE} 
