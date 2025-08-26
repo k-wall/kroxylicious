@@ -110,11 +110,11 @@ jobs:
           docker push ${KWALL_PROXY_IMAGE_AMD64}
           docker push ${KWALL_PROXY_IMAGE_ARM64}
           
-          docker manifest create ${KWALL_PROXY_IMAGE} |  \
+          docker manifest create ${KWALL_PROXY_IMAGE} \
               --amend  ${KWALL_PROXY_IMAGE_AMD64} \
               --amend  ${KWALL_PROXY_IMAGE_ARM64}
           
           docker manifest push ${KWALL_PROXY_IMAGE} 
 
 
-          docker inspect ${KWALL_PROXY_IMAGE} 
+          docker manifest inspect ${KWALL_PROXY_IMAGE} 

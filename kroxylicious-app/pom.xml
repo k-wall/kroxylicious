@@ -234,9 +234,14 @@
                                                 <KROXYLICIOUS_VERSION>${project.version}</KROXYLICIOUS_VERSION>
                                             </args>
                                             <!-- KW Experiment -->
+                                            <!--
                                             <createImageOptions>
                                                 <platform>${docker.platform}</platform>
                                             </createImageOptions>
+                                            -->
+                                            <buildx>
+                                                <platforms>${docker.platform}</platforms>
+                                            </buildx>
                                         </build>
                                     </image>
                                 </images>
