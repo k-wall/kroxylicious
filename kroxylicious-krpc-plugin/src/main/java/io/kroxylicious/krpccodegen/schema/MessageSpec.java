@@ -11,7 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -163,17 +165,35 @@ public final class MessageSpec {
         List<FieldSpec> entityFields = fields().stream()
                 .filter(f -> SUPPORTED_ENTITY_TYPES.contains(f.entityType()))
                 .toList();
-        var versions = entityFields.stream()
-                .map(FieldSpec::versions)
-                .map(fsv -> validVersions().intersect(fsv))
+        return buildNode(fields(), validVersions());
+    }
+
+    private Node buildNode(List<FieldSpec> fields, Versions apiVersions) {
+        List<FieldSpec> nodeFields = fields.stream()
+                .filter(f -> EnumSet.of(EntityType.TOPIC_NAME, EntityType.GROUP_ID, EntityType.TRANSACTIONAL_ID).contains(f.entityType()))
+                .toList();
+
+        var containers = fields.stream()
+                .filter(fs -> fs.type().isArray())
+                .filter(Predicate.not(nodeFields::contains))
+                .map(fs -> buildNode(fs.fields(), apiVersions))
+                .toList();
+
+        var versions = nodeFields.stream().map(FieldSpec::versions)
+                .map(apiVersions::intersect)
                 .flatMapToInt(v -> IntStream.rangeClosed(v.lowest(), v.highest()))
                 .distinct()
                 .sorted()
                 .boxed()
                 .map(Integer::shortValue)
-                .toList();
+                .collect(Collectors.toCollection(TreeSet::new));
 
-        return new Node(entityFields, List.of(), versions);
+        containers.forEach(container -> {
+            versions.addAll(container.orderedVersions());
+
+        });
+
+        return new Node(nodeFields, containers, versions.stream().toList());
     }
 
     @Override

@@ -172,9 +172,23 @@ public class UserNamespaceFilter implements RequestFilter, ResponseFilter {
                                 .log("{} for {}: result ${specName?trim}: {}");
                     }
               </#list>
-<#--
-                <@dumpFoo childFoo />
--->
+
+              <#list entityFields.containers as container>
+                   // container
+                  <#list container.entities as entity>
+                  // ${entity.name} ${entity.type} ${container.name}
+                     ${dataVar}.${entity.name}().forEach(e -> {
+
+                  });
+<#--                      @dumpFoo messageSpec entity-->
+                 </#list>
+              </#list>
+
+
+
+                <#--
+                    <@dumpFoo childFoo />
+    -->
             </#macro>
 
 

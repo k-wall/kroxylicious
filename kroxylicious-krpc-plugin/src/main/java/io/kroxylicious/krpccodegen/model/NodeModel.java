@@ -27,6 +27,7 @@ public class NodeModel implements TemplateHashModel {
             case "hasAtLeastOneEntityField" -> wrapper.wrap(node.hasAtLeastOneEntityField());
             case "orderedVersions" -> wrapper.wrap(node.orderedVersions());
             case "entities" -> wrapper.wrap(node.entities());
+            case "containers" -> wrapper.wrap(node.containers());
             default -> throw new TemplateModelException(node.getClass().getSimpleName() + " doesn't have property " + key);
         };
     }

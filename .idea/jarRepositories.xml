@@ -2,6 +2,11 @@
 <project version="4">
   <component name="RemoteRepositoriesConfiguration">
     <remote-repository>
+      <option name="id" value="central.manual.testing" />
+      <option name="name" value="Central Testing repository" />
+      <option name="url" value="https://central.sonatype.com/api/v1/publisher/deployment/37351d70-48d8-4c21-8e68-76af85488f2c/download" />
+    </remote-repository>
+    <remote-repository>
       <option name="id" value="central" />
       <option name="name" value="Central Repository" />
       <option name="url" value="https://repo.maven.apache.org/maven2" />

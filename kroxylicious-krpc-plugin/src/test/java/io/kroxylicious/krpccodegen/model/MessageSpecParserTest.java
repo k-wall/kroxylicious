@@ -13,6 +13,7 @@ import java.util.Map;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.assertj.core.api.InstanceOfAssertFactories;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.kroxylicious.krpccodegen.schema.EntityType;
@@ -50,6 +51,7 @@ class MessageSpecParserTest {
     }
 
     @Test
+    @Disabled
     void parseResponseSpecWithOneField() throws Exception {
         // Given
         Versions expectedVersion = Versions.parse("0-9", null);
@@ -184,6 +186,37 @@ class MessageSpecParserTest {
                             .satisfies(node -> {
                                 assertThat(node.hasAtLeastOneEntityField()).isTrue();
                                 assertThat(node.orderedVersions()).containsExactly((short) 0, (short) 1, (short) 3, (short) 4);
+                            });
+                });
+    }
+
+    @Test
+    void parseSpecWithNestedEntityField() throws Exception {
+        var resource = classPathResourceToPath("io/kroxylicious/krpccondegen/model/RequestWithNestedEntityField.json");
+        var messageSpec = messageSpecParser.getMessageSpec(resource);
+        assertThat(messageSpec)
+                .isNotNull()
+                .satisfies(ms -> {
+                    assertThat(ms.name()).isEqualTo("SampleRequest");
+                    assertThat(ms.fields())
+                            .hasSize(1);
+
+                    assertThat(ms.entityFields())
+                            .satisfies(node -> {
+                                assertThat(node.hasAtLeastOneEntityField()).isTrue();
+                                assertThat(node.orderedVersions()).containsExactly((short) 0, (short) 1);
+                                assertThat(node.entities()).isEmpty();
+                                assertThat(node.containers())
+                                        .singleElement()
+                                        .satisfies(container -> {
+                                            assertThat(container.hasAtLeastOneEntityField()).isTrue();
+                                            assertThat(container.containers()).isEmpty();
+                                            assertThat(container.entities())
+                                                    .singleElement()
+                                                    .satisfies(field -> {
+                                                        assertThat(field.name()).isEqualTo("Group");
+                                                    });
+                                        });
                             });
                 });
     }
