@@ -11,6 +11,8 @@ import java.net.URL;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import edu.umd.cs.findbugs.annotations.Nullable;
+
 /**
  * Configuration for validating a component ByteBuffer of a {@link org.apache.kafka.common.record.Record} is valid using the schema in Apicurio Registry.
  */
@@ -47,7 +49,7 @@ public record SchemaValidationConfig(URL apicurioRegistryUrl, long apicurioId, W
     @JsonCreator
     public SchemaValidationConfig(@JsonProperty(value = "apicurioRegistryUrl", required = true) URL apicurioRegistryUrl,
                                   @JsonProperty(value = "apicurioId", required = true) long apicurioId,
-                                  @JsonProperty(value = "wireFormatVersion", required = false) WireFormatVersion wireFormatVersion) {
+                                  @Nullable @JsonProperty(value = "wireFormatVersion") WireFormatVersion wireFormatVersion) {
         this.apicurioId = apicurioId;
         this.apicurioRegistryUrl = apicurioRegistryUrl;
         this.wireFormatVersion = wireFormatVersion != null ? wireFormatVersion : WireFormatVersion.V3;

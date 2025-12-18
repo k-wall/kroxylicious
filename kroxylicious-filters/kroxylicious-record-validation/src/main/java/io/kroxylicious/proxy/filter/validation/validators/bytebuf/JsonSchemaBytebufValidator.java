@@ -14,6 +14,8 @@ import java.util.concurrent.CompletionStage;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.Record;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.apicurio.registry.resolver.strategy.ArtifactReference;
 import io.apicurio.registry.serde.BaseSerde;
@@ -29,6 +31,8 @@ import io.kroxylicious.proxy.filter.validation.config.SchemaValidationConfig.Wir
 import io.kroxylicious.proxy.filter.validation.validators.Result;
 
 public class JsonSchemaBytebufValidator implements BytebufValidator {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(JsonSchemaBytebufValidator.class);
     private final JsonValidator jsonValidator;
     private final Long schemaId;
     private final WireFormatVersion wireFormatVersion;
@@ -46,6 +50,15 @@ public class JsonSchemaBytebufValidator implements BytebufValidator {
 
         this.valueHeaderHandler = buildHeaderHandler(false);
         this.valueIdHandler = buildIdHandler(false, wireFormatVersion);
+
+        reportUseOfDeprecatedV2(schemaId, wireFormatVersion);
+    }
+
+    @SuppressWarnings("removal")
+    private static void reportUseOfDeprecatedV2(Long schemaId, WireFormatVersion wireFormatVersion) {
+        if (wireFormatVersion.equals(WireFormatVersion.V2)) {
+            LOGGER.warn("Json schema validation configuration for schema id {} uses deprecated wire format.", schemaId);
+        }
     }
 
     @Override

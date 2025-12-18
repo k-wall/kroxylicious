@@ -33,7 +33,7 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMoc
 import static io.kroxylicious.test.record.RecordTestUtils.record;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class JsonSchemaBytebufValidatorTest {
+class JsonSchemaBytebufValidatorTest {
 
     private static final long CONTENT_ID = 1L;
     private static final byte[] VALID_JSON = """
@@ -71,7 +71,7 @@ public class JsonSchemaBytebufValidatorTest {
             """;
 
     @BeforeAll
-    public static void initMockRegistry() {
+    static void initMockRegistry() {
         registryServer = new WireMockServer(
                 wireMockConfig()
                         .dynamicPort());
@@ -94,7 +94,7 @@ public class JsonSchemaBytebufValidatorTest {
     }
 
     @AfterAll
-    public static void shutdownMockRegistry() {
+    static void shutdownMockRegistry() {
         registryServer.shutdown();
     }
 
@@ -251,6 +251,7 @@ public class JsonSchemaBytebufValidatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void v2WireFormatUsesLegacy8ByteIdHandler() {
         // V2 wire format uses 8-byte global IDs
         var value = asV2SchemaIdPrefixBuf(CONTENT_ID, VALID_JSON);
@@ -263,6 +264,7 @@ public class JsonSchemaBytebufValidatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void v2ValueWithCorrectGlobalIdInHeaderPassesValidation() {
         // V2 mode should read globalId from headers (not contentId)
         Header[] headers = new Header[]{ new RecordHeader(KafkaSerdeHeaders.HEADER_VALUE_GLOBAL_ID, toByteArray(CONTENT_ID)) };
@@ -275,6 +277,7 @@ public class JsonSchemaBytebufValidatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void v2ValueWithWrongGlobalIdInHeaderRejected() {
         // V2 mode should reject wrong globalId in headers
         Header[] headers = new Header[]{ new RecordHeader(KafkaSerdeHeaders.HEADER_VALUE_GLOBAL_ID, toByteArray(CONTENT_ID + 1)) };
@@ -287,6 +290,7 @@ public class JsonSchemaBytebufValidatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void v2ValueWithContentIdInHeaderFallsBackToMagicByte() {
         // V2 mode should ignore contentId header (only reads globalId)
         // If contentId header is present but no globalId, it should fall back to magic byte detection
@@ -313,6 +317,7 @@ public class JsonSchemaBytebufValidatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void v2ValidatorRejectsV3WireFormat() {
         // V2 validator should reject V3 format (4-byte content ID)
         var value = asV3SchemaIdPrefixBuf(CONTENT_ID, VALID_JSON);
