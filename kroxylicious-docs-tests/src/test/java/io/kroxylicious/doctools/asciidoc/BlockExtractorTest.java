@@ -36,6 +36,18 @@ class BlockExtractorTest {
 
     public static Stream<Arguments> sourceBlocks() {
         return Stream.of(
+                // asciidoctor parses these as escaped HTML, so we have code to unescape them
+                Arguments.argumentSet("extract special characters",
+                        """
+                                [source,mylang]
+                                ----
+                                <&>
+                                ----
+                                """,
+                        (Predicate<StructuralNode>) sn -> true,
+                        (Consumer<List<Block>>) blocks -> assertThat(blocks)
+                                .singleElement()
+                                .satisfies(b -> assertThat(b.content()).isEqualTo("<&>"))),
                 Arguments.argumentSet("extract single top-level block",
                         """
                                 [source,mylang]
