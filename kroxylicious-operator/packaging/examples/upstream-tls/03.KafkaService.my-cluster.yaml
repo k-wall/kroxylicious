@@ -18,5 +18,5 @@ spec:
   tls:
     trustAnchorRef:
       name: my-cluster-clients-ca-cert
-      kind: ConfigMap
+      kind: Secret
       key: ca.pem
