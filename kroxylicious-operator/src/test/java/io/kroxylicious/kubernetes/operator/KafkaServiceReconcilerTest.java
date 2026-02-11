@@ -119,6 +119,15 @@ class KafkaServiceReconcilerTest {
             .addToData("ca-bundle.pem", "value")
             .build();
 
+    public static final Secret PEM_SECRET = new SecretBuilder()
+            .withNewMetadata()
+                .withName("my-configmap")
+                .withUid("uid")
+                .withResourceVersion("7782")
+            .endMetadata()
+            .addToData("ca-bundle.pem", "value")
+            .build();
+
     public static final Kafka KAFKA = new KafkaBuilder()
             .withNewMetadata()
             .withName("my-cluster")
@@ -588,6 +597,27 @@ class KafkaServiceReconcilerTest {
         mockGetConfigMap(context, Optional.of(PEM_CONFIG_MAP));
         KafkaService service = new KafkaServiceBuilder(SERVICE).editSpec().withStrimziKafkaRef(null).editTls().withCertificateRef(null).editTrustAnchorRef()
                 .withKey("ca-bundle.pem")
+                .endTrustAnchorRef().endTls().endSpec().build();
+        // When
+        final UpdateControl<KafkaService> updateControl = kafkaServiceReconciler.reconcile(service, context);
+
+        // Then
+        assertThat(updateControl).isNotNull();
+        assertThat(updateControl.isPatchResourceAndStatus()).isTrue();
+        assertThat(updateControl.getResource()).isPresent().get().satisfies(kafkaService -> {
+            assertThat(kafkaService.getMetadata().getAnnotations()).containsKey(Annotations.REFERENT_CHECKSUM_ANNOTATION_KEY);
+        });
+    }
+
+    @Test
+    void shouldSetReferentAnnotationWhenTrustAnchorRefSecretPresent() {
+        Context<KafkaService> context = mockContext();
+        mockGetSecret(context, Optional.of(PEM_SECRET));
+        KafkaService service = new KafkaServiceBuilder(SERVICE).editSpec().withStrimziKafkaRef(null).editTls().withCertificateRef(null).editTrustAnchorRef()
+                .withKey("ca-bundle.pem")
+                .editRef()
+                .withKind("secret")
+                .endRef()
                 .endTrustAnchorRef().endTls().endSpec().build();
         // When
         final UpdateControl<KafkaService> updateControl = kafkaServiceReconciler.reconcile(service, context);
