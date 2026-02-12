@@ -14,9 +14,6 @@
     </#compress>
 </#macro>
 
-<#macro fieldVersionSet messageSpec versions>
-VersionRange.of(<#local v = messageSpec.validVersions.intersect(versions)/> (short) ${v.lowest}, (short) ${v.highest})</#macro>
-
 <#macro mapRequestFields messageSpec dataVar fields indent>
     <#local pad = ""?left_pad(4*indent)/>
     <#list fields?filter(field -> filteredEntityTypes?seq_contains(field.entityType))>
@@ -46,7 +43,7 @@ ${pad}// recursively process sub-fields
             </#local>
             <#local getter="${field.name?uncap_first}()"
                     elementVar=field.type?remove_beginning("[]")?uncap_first />
-${pad}if (<@inVersionRange "header.requestApiVersion()", messageSpec.validVersions.intersect(field.versions)/>) {
+${pad}if (<@inVersionRange "header.requestApiVersion()", messageSpec.validVersions.intersect(field.versions)/> && ${dataVar}.${getter} != null) {
 ${pad}    ${dataVar}.${getter}.forEach(${elementVar} -> {
                 <@mapRequestFields messageSpec elementVar field.fields indent + 2 />
 ${pad}    });
@@ -110,25 +107,6 @@ ${pad}}
     </#list>
 </#macro>
 
-<#macro writeFieldConstants messageSpec stem fields>
-    <#list fields?filter(field -> filteredEntityTypes?seq_contains(field.entityType))>
-        <#items as field>
-            <#local snakeFieldName>
-                <@camelNameToSnakeName field.name/>
-            </#local>
-    private static final VersionRange ${snakeFieldName?c_upper_case}_${stem}_${messageSpec.type}_VERSIONS = <@fieldVersionSet messageSpec field.versions/>;
-        </#items>
-    </#list>
-    <#list fields?filter(field -> field.type.isArray && field.fields?size != 0) >
-        <#items as field>
-            <#local snakeFieldName>
-                <@camelNameToSnakeName field.name/>
-            </#local>
-    private static final VersionRange ${snakeFieldName?c_upper_case}_${stem}_${messageSpec.type}_VERSIONS = <@fieldVersionSet messageSpec field.versions/>;
-            <@writeFieldConstants messageSpec "${snakeFieldName?c_upper_case}_${stem}" field.fields />
-        </#items>
-    </#list>
-</#macro>
 
 <#macro inVersionRange varName versions>
 <#compress>
