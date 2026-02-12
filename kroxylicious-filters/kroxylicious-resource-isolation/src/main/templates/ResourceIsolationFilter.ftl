@@ -68,7 +68,7 @@ ${pad}// process entity fields defined at this level
             <#local getter="${field.name?uncap_first}"
                     setter="set${field.name}"
                     fieldVersionsConst="${snakeFieldName?c_upper_case}_${constStem}" />
-${pad}if (shouldMap(ResourceIsolation.ResourceType.${field.entityType}) && inVersion(apiVersion, ${fieldVersionsConst}_${messageSpec.type}_VERSIONS)) {
+${pad}if (shouldMap(ResourceIsolation.ResourceType.${field.entityType}) && <@inVersionRange "apiVersion", messageSpec.validVersions.intersect(field.versions)/>) {
             <#if field.type == 'string'>
 ${pad}    if (inNamespace(mapperContext, ResourceIsolation.ResourceType.${field.entityType}, ${dataVar}.${getter}())) {
 ${pad}        ${dataVar}.${setter}(unmap(mapperContext, ResourceIsolation.ResourceType.${field.entityType}, ${dataVar}.${getter}()));
@@ -103,7 +103,7 @@ ${pad}// recursively process sub-fields
                     collectionIteratorVar=field.name?uncap_first + "Iterator"
                     elementVar=field.type?remove_beginning("[]")?uncap_first
                     fieldVersionsConst="${snakeFieldName?c_upper_case}_${constStem}" />
-${pad}if (inVersion(apiVersion, ${fieldVersionsConst}_${messageSpec.type}_VERSIONS) && ${dataVar}.${getter}() != null) {
+${pad}if (<@inVersionRange "apiVersion", messageSpec.validVersions.intersect(field.versions)/> && ${dataVar}.${getter}() != null) {
 ${pad}    var ${collectionIteratorVar} = ${dataVar}.${getter}().iterator();
 ${pad}    while (${collectionIteratorVar}.hasNext()) {
 ${pad}       var ${elementVar} = ${collectionIteratorVar}.next();
@@ -197,15 +197,6 @@ import io.kroxylicious.proxy.filter.ResponseFilterResult;
 class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ResourceIsolationFilter.class);
-
-    <#list messageSpecs?filter(ms -> (ms.type == 'RESPONSE') && ms.hasAtLeastOneEntityField(filteredEntityTypes) && retrieveApiListener(ms)?seq_contains("BROKER"))>
-        <#items as messageSpec>
-            <#assign key=retrieveApiKey(messageSpec)/>
-    // Constants for ${key}_${messageSpec.type}
-            <@writeFieldConstants messageSpec key messageSpec.fields/>
-
-        </#items>
-    </#list>
 
     private final Set<ResourceIsolation.ResourceType> resourceTypes;
     private final ResourceNameMapper mapper;
