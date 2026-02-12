@@ -257,7 +257,7 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
         log(filterContext, "request", ApiKeys.FIND_COORDINATOR, findCoordinatorRequestData);
         if (resourceTypes.contains(ResourceIsolation.ResourceType.GROUP_ID) && findCoordinatorRequestData.keyType() == 0) {
 
-            if (inVersion(header.requestApiVersion(), VersionRange.of((short) 0, (short) 3))) {
+            if ((short) 0 <= header.requestApiVersion() && header.requestApiVersion() <= (short) 3) {
                 findCoordinatorRequestData.setKey(map(mapperContext, ResourceIsolation.ResourceType.GROUP_ID, findCoordinatorRequestData.key()));
             }
             else {
