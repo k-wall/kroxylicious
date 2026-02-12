@@ -263,10 +263,10 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
         <#assign key=retrieveApiKey(messageSpec)
         dataClass="${messageSpec.dataClassName}"
         namePad=""?left_pad(messageSpec.name?length) />
-    private void on${messageSpec.name}Request(RequestHeaderData header,
-                             ${namePad}${dataClass} request,
-                             ${namePad}FilterContext filterContext,
-                             ${namePad}MapperContext mapperContext) {
+    private void on${messageSpec.name}(RequestHeaderData header,
+                    ${namePad}${dataClass} request,
+                    ${namePad}FilterContext filterContext,
+                    ${namePad}MapperContext mapperContext) {
         log(filterContext, "${messageSpec.type?c_lower_case}", ApiKeys.${key}, request);
     <@mapRequestFields messageSpec=messageSpec dataVar="request" constStem=key fields=messageSpec.fields indent=2/>
         log(filterContext, "${messageSpec.type?c_lower_case} result", ApiKeys.${key}, request);
@@ -290,7 +290,7 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
     <#items as messageSpec>
         <#assign key=retrieveApiKey(messageSpec)
         dataClass="${messageSpec.dataClassName}" />
-            case ${key} -> on${messageSpec.name}Request(header,
+            case ${key} -> on${messageSpec.name}(header,
                         (${dataClass}) request,
                         filterContext,
                         mapperContext);
@@ -316,11 +316,11 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
         <#assign key=retrieveApiKey(messageSpec)
         dataClass="${messageSpec.dataClassName}"
         namePad=""?left_pad(messageSpec.name?length) />
-    private void on${messageSpec.name}Response(short apiVersion,
-                            ${namePad}ResponseHeaderData header,
-                            ${namePad}${messageSpec.dataClassName} response,
-                            ${namePad}FilterContext filterContext,
-                            ${namePad}MapperContext mapperContext) {
+    private void on${messageSpec.name}(short apiVersion,
+                    ${namePad}ResponseHeaderData header,
+                    ${namePad}${messageSpec.dataClassName} response,
+                    ${namePad}FilterContext filterContext,
+                    ${namePad}MapperContext mapperContext) {
         log(filterContext, "${messageSpec.type?c_lower_case}", ApiKeys.${key}, response);
         <@mapAndFilterResponseFields messageSpec=messageSpec
                                      collectionIterator=""
@@ -353,11 +353,11 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
         <#assign key=retrieveApiKey(messageSpec)
                  dataClass="${messageSpec.dataClassName}"
                  dataVar="${messageSpec.dataClassName?uncap_first}" />
-            case ${key} -> on${messageSpec.name}Response(apiVersion,
-                        header,
-                        (${dataClass}) response,
-                        filterContext,
-                        mapperContext);
+            case ${key} -> on${messageSpec.name}(apiVersion,
+                 header,
+                 (${dataClass}) response,
+                 filterContext,
+                 mapperContext);
     </#items>
 </#list>
         }
