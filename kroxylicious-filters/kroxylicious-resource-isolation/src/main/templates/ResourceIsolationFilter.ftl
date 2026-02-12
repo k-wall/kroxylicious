@@ -134,6 +134,15 @@ ${pad}}
     </#list>
 </#macro>
 
+<#macro inVersionRange varName versions>
+<#compress>
+<#local
+minVersion = versions[0]
+maxVersion = versions[versions?size - 1] >
+<#if minVersion == maxVersion>(short) ${minVersion} == ${varName};<#else>(short) ${minVersion} <= ${varName} && ${varName} <= (short) ${maxVersion};</#if>
+</#compress>
+</#macro>
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
@@ -193,7 +202,6 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
         <#items as messageSpec>
             <#assign key=retrieveApiKey(messageSpec)/>
     // Constants for ${key}_${messageSpec.type}
-    private static final VersionRange ${key}_${messageSpec.type}_VERSIONS = VersionRange.of(<#assign v = messageSpec.intersectedVersionsForEntityFields(filteredEntityTypes)>(short) ${v[0]}, (short) ${v[v?size - 1]});
             <@writeFieldConstants messageSpec key messageSpec.fields/>
 
         </#items>
@@ -216,10 +224,11 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
             // TODO *_ACL use a  key type to identity topic/group/transactionalId entities.
         <#list messageSpecs?filter(ms -> ms.type == 'REQUEST' && ms.hasAtLeastOneEntityField(filteredEntityTypes) && ms.listeners?seq_contains("BROKER"))>
             <#items as messageSpec>
-            case ${retrieveApiKey(messageSpec)} -> inVersion(apiVersion,  ${retrieveApiKey(messageSpec)}_REQUEST_VERSIONS);
+            case ${retrieveApiKey(messageSpec)} -> <@inVersionRange "apiVersion" messageSpec.intersectedVersionsForEntityFields(filteredEntityTypes)/>
             </#items>
         </#list>
             default -> false;
+
         };
     }
 
@@ -230,7 +239,7 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
             case FIND_COORDINATOR -> true;
         <#list messageSpecs?filter(ms -> ms.type == 'RESPONSE' && ms.hasAtLeastOneEntityField(filteredEntityTypes) && retrieveApiListener(ms)?seq_contains("BROKER"))>
             <#items as messageSpec>
-            case ${retrieveApiKey(messageSpec)} -> inVersion(apiVersion, ${retrieveApiKey(messageSpec)}_RESPONSE_VERSIONS);
+            case ${retrieveApiKey(messageSpec)} -> <@inVersionRange "apiVersion" messageSpec.intersectedVersionsForEntityFields(filteredEntityTypes)/>
             </#items>
         </#list>
         default -> false;
