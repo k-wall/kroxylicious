@@ -246,7 +246,6 @@ public final class FieldSpec {
         return zeroCopy;
     }
 
-
     /**
      * Returns true if this message spec has at least one field of one of the given entity field types.
      *
