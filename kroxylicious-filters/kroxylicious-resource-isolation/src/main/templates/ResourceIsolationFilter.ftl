@@ -28,7 +28,7 @@ ${pad}// process any entity fields defined at this level
             <#local getter="${field.name?uncap_first}"
                     setter="set${field.name}"
                     fieldVersionsConst="${snakeFieldName?c_upper_case}_${constStem}" />
-${pad}if (shouldMap(ResourceIsolation.ResourceType.${field.entityType}) && inVersion(header.requestApiVersion(), ${fieldVersionsConst}_${messageSpec.type}_VERSIONS)) {
+${pad}if (shouldMap(ResourceIsolation.ResourceType.${field.entityType}) && <@inVersionRange "header.requestApiVersion()", messageSpec.validVersions.intersect(field.versions)/>) {
             <#if field.type == 'string'>
 ${pad}    ${dataVar}.${setter}(map(mapperContext, ResourceIsolation.ResourceType.${field.entityType}, ${dataVar}.${getter}()));
             <#elseif field.type == '[]string'>
@@ -48,7 +48,7 @@ ${pad}// recursively process sub-fields
             <#local getter="${field.name?uncap_first}()"
                     elementVar=field.type?remove_beginning("[]")?uncap_first
                     fieldVersionsConst="${snakeFieldName?c_upper_case}_${constStem}" />
-${pad}if (inVersion(header.requestApiVersion(), ${fieldVersionsConst}_${messageSpec.type}_VERSIONS) && ${dataVar}.${getter} != null) {
+${pad}if (<@inVersionRange "header.requestApiVersion()", messageSpec.validVersions.intersect(field.versions)/>) {
 ${pad}    ${dataVar}.${getter}.forEach(${elementVar} -> {
                 <@mapRequestFields messageSpec elementVar fieldVersionsConst field.fields indent + 2 />
 ${pad}    });
@@ -139,7 +139,7 @@ ${pad}}
 <#local
 minVersion = versions[0]
 maxVersion = versions[versions?size - 1] >
-<#if minVersion == maxVersion>(short) ${minVersion} == ${varName};<#else>(short) ${minVersion} <= ${varName} && ${varName} <= (short) ${maxVersion};</#if>
+<#if minVersion == maxVersion>(short) ${minVersion} == ${varName}<#else>(short) ${minVersion} <= ${varName} && ${varName} <= (short) ${maxVersion}</#if>
 </#compress>
 </#macro>
 
@@ -198,7 +198,7 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ResourceIsolationFilter.class);
 
-    <#list messageSpecs?filter(ms -> (ms.type == 'REQUEST' || ms.type == 'RESPONSE') && ms.hasAtLeastOneEntityField(filteredEntityTypes) && retrieveApiListener(ms)?seq_contains("BROKER"))>
+    <#list messageSpecs?filter(ms -> (ms.type == 'RESPONSE') && ms.hasAtLeastOneEntityField(filteredEntityTypes) && retrieveApiListener(ms)?seq_contains("BROKER"))>
         <#items as messageSpec>
             <#assign key=retrieveApiKey(messageSpec)/>
     // Constants for ${key}_${messageSpec.type}
@@ -224,7 +224,7 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
             // TODO *_ACL use a  key type to identity topic/group/transactionalId entities.
         <#list messageSpecs?filter(ms -> ms.type == 'REQUEST' && ms.hasAtLeastOneEntityField(filteredEntityTypes) && ms.listeners?seq_contains("BROKER"))>
             <#items as messageSpec>
-            case ${retrieveApiKey(messageSpec)} -> <@inVersionRange "apiVersion" messageSpec.intersectedVersionsForEntityFields(filteredEntityTypes)/>
+            case ${retrieveApiKey(messageSpec)} -> <@inVersionRange "apiVersion" messageSpec.intersectedVersionsForEntityFields(filteredEntityTypes)/>;
             </#items>
         </#list>
             default -> false;
@@ -239,7 +239,7 @@ class ResourceIsolationFilter implements RequestFilter, ResponseFilter {
             case FIND_COORDINATOR -> true;
         <#list messageSpecs?filter(ms -> ms.type == 'RESPONSE' && ms.hasAtLeastOneEntityField(filteredEntityTypes) && retrieveApiListener(ms)?seq_contains("BROKER"))>
             <#items as messageSpec>
-            case ${retrieveApiKey(messageSpec)} -> <@inVersionRange "apiVersion" messageSpec.intersectedVersionsForEntityFields(filteredEntityTypes)/>
+            case ${retrieveApiKey(messageSpec)} -> <@inVersionRange "apiVersion" messageSpec.intersectedVersionsForEntityFields(filteredEntityTypes)/>;
             </#items>
         </#list>
         default -> false;
