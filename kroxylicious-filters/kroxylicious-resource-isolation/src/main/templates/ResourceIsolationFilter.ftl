@@ -39,7 +39,7 @@ ${pad}    ${dataVar}.${setter}(${dataVar}.${getter}().stream().map(orig -> map(m
 ${pad}}
         </#items>
     </#list>
-    <#list fields?filter(field -> field.type.isArray && field.fields?size != 0) >
+    <#list fields?filter(field -> field.type.isArray && field.fields?size != 0 && field.hasAtLeastOneEntityField(filteredEntityTypes)) >
 ${pad}// recursively process sub-fields
         <#items as field>
             <#local snakeFieldName>
@@ -50,7 +50,7 @@ ${pad}// recursively process sub-fields
                     fieldVersionsConst="${snakeFieldName?c_upper_case}_${constStem}" />
 ${pad}if (inVersion(header.requestApiVersion(), ${fieldVersionsConst}_${messageSpec.type}_VERSIONS) && ${dataVar}.${getter} != null) {
 ${pad}    ${dataVar}.${getter}.forEach(${elementVar} -> {
-                <@mapRequestFields messageSpec elementVar fieldVersionsConst field.fields indent + 1 />
+                <@mapRequestFields messageSpec elementVar fieldVersionsConst field.fields indent + 2 />
 ${pad}    });
 ${pad}}
         </#items>
@@ -93,7 +93,7 @@ ${pad}    }
 ${pad}}
         </#items>
     </#list>
-    <#list fields?filter(field -> field.type.isArray && field.fields?size != 0) >
+    <#list fields?filter(field -> field.type.isArray && field.fields?size != 0 && field.hasAtLeastOneEntityField(filteredEntityTypes)) >
 ${pad}// recursively process sub-fields
         <#items as field>
             <#local snakeFieldName>
