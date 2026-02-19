@@ -195,6 +195,27 @@ public final class MessageSpec {
         return versions;
     }
 
+    /**
+     * Returns true if this message spec carries a resource list.
+     * This is true if there is an array container containing
+     * a sub-field called ResourceType (of type int8) with a sibling
+     * a field called ResourceName of type string.
+     *
+     * @return true if present, false otherwise
+     */
+    public boolean hasResourceList() {
+        return hasResourceList(fields());
+    }
+
+    private boolean hasResourceList(List<FieldSpec> fields) {
+        var found = fields.stream().anyMatch(f -> entityFieldTypeNames.contains(f.entityType()));
+        if (found) {
+            return true;
+        }
+        return fields.stream().anyMatch(f -> hasAtLeastOneEntityField(f.fields(), entityFieldTypeNames));
+    }
+
+
     @Override
     public String toString() {
         return "MessageSpec{" +
