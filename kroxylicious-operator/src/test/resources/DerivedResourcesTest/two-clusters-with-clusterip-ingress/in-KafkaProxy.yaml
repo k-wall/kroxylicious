@@ -11,3 +11,4 @@ metadata:
   name: twocluster
   namespace: proxy-ns
   generation: 1
+spec: {}
