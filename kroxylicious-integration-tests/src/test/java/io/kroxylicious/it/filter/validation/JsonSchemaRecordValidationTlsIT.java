@@ -87,7 +87,7 @@ class JsonSchemaRecordValidationTlsIT extends RecordValidationBaseIT {
     private static String trustStoreType;
 
     @BeforeAll
-    static void init() throws Exception {
+    static void init() {
         // Generate certificates and keystores using CertificateGenerator
         CertificateGenerator.Keys keys = CertificateGenerator.generate();
 

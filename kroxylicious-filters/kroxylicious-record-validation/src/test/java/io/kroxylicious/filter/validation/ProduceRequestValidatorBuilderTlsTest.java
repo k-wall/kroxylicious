@@ -24,6 +24,8 @@ import io.kroxylicious.proxy.config.tls.PlatformTrustProvider;
 import io.kroxylicious.proxy.config.tls.Tls;
 import io.kroxylicious.proxy.config.tls.TrustStore;
 
+import edu.umd.cs.findbugs.annotations.Nullable;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -144,7 +146,7 @@ class ProduceRequestValidatorBuilderTlsTest {
                 .hasMessageContaining("Unsupported TrustProvider type");
     }
 
-    private SchemaValidationConfig schemaConfig(Tls tls) {
+    private SchemaValidationConfig schemaConfig(@Nullable Tls tls) {
         return new SchemaValidationConfig(registryUrl, 1L, null, tls);
     }
 
