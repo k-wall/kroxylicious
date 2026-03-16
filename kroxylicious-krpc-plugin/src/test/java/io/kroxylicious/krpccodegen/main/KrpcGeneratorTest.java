@@ -192,7 +192,7 @@ class KrpcGeneratorTest {
                 .withMessageSpecDir(getMessageSpecDir())
                 .withMessageSpecFilter("*{Request,Response}.json")
                 .streamProcessingFunction(
-                        "pairStream => pairStream.filter(pair => pair.listeners().contains(RequestListenerType.static.BROKER)).filter(pair => pair.name().startsWith('Alter'))")
+                        "specStream => specStream.filter(spec => spec.listeners().contains(RequestListenerType.static.BROKER)).filter(spec => spec.name().startsWith('Alter'))")
                 .withTemplateDir(getTemplateDir())
                 .withTemplateNames(List.of("Kproxy/ApiSpecs.ftl"))
                 .withOutputPackage("com.foo")
