@@ -183,7 +183,7 @@ class KrpcGeneratorTest {
         gen.generate();
 
         File file = join(tempDir, "com", "foo", "ApiSpecs.txt");
-        assertFileHasExpectedContents(file, "Kproxy/MessageSpecPairs-expected.txt");
+        assertFileHasExpectedContents(file, "Kproxy/ApiSpecs-expected.txt");
     }
 
     @Test
@@ -204,7 +204,7 @@ class KrpcGeneratorTest {
         gen.generate();
 
         File file = join(tempDir, "com", "foo", "ApiSpecs.txt");
-        assertFileHasExpectedContents(file, "Kproxy/MessageSpecPairsFiltered-expected.txt");
+        assertFileHasExpectedContents(file, "Kproxy/ApiSpecsFiltered-expected.txt");
     }
 
     // KWTODO - test cases for mismatched requests/responses
