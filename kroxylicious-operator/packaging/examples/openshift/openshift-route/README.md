@@ -8,6 +8,13 @@ For the purposes of this example we use
 To try this example out:
 1. Install kubectl
 2. `cd` to this directory
+3. Fix up certs
+```shell
+export DOMAIN=$(oc get ingresscontrollers.operator.openshift.io -n openshift-ingress-operator default  -o=jsonpath='{.spec.domain}')
+
+yq e -i '.spec.commonName = "my-cluster-bootstrap." + env(DOMAIN)' 06.Certificate.server-certificate.yaml
+yq e -i '.spec.dnsNames = [ "my-cluster-bootstrap", "my-cluster-0"] | map(env(DOMAIN) + .)' 06.Certificate.server-certificate.yaml
+```
 3. Apply cert-manager
    ```shell
     kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.17.2/cert-manager.yaml
