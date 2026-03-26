@@ -1,0 +1,195 @@
+#
+#  Licensed to the Apache Software Foundation (ASF) under one or more
+#  contributor license agreements. See the NOTICE file distributed with
+#  this work for additional information regarding copyright ownership.
+#  The ASF licenses this file to You under the Apache License, Version 2.0
+#  (the "License"); you may not use this file except in compliance with
+#  the License. You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+
+# .github/workflows/operator-tests-microshift.yml
+#
+# Runs the kroxylicious-operator integration against a
+# MicroShift (single-node OpenShift) cluster, providing confidence that the
+# operator works correctly on the OpenShift API surface.
+#
+# Prerequisites / secrets required in the repository:
+#   REDHAT_PULL_SECRET  – Red Hat pull secret (JSON) downloaded from
+#                         https://console.redhat.com/openshift/downloads#tool-pull-secret
+#                         Required to pull MicroShift's bundled OpenShift images.
+
+name: Operator Tests (MicroShift / OpenShift)
+
+on:
+  # Run on every PR that touches operator or proxy code
+  pull_request:
+    paths:
+      - 'kroxylicious-operator/**'
+      - 'kroxylicious-kubernetes-api/**'
+      - 'kroxylicious-app/**'
+      - '.github/workflows/operator-tests-microshift.yml'
+  # Allow maintainers to trigger manually (e.g. before a release)
+  workflow_dispatch:
+  # Nightly run on main to catch regressions early
+
+# Only one run per branch/PR at a time; cancel the older one when a new
+# commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep image names/tags in one place, so they are easy to update.
+  OPERATOR_IMAGE: quay.io/kroxylicious/operator
+  PROXY_IMAGE:    quay.io/kroxylicious/kroxylicious
+  # The Maven property names that the system-test framework reads.
+  OPERATOR_IMAGE_ENV: KROXYLICIOUS_OPERATOR_IMAGE
+  PROXY_IMAGE_ENV:    KROXYLICIOUS_IMAGE
+
+jobs:
+  operator-tests-microshift:
+    name: Operator integration & system tests on MicroShift
+    # ubuntu-20.04 is required by the container-tools/microshift-action.
+    # Using ubuntu-latest (22.04+) may work but has not been validated by the
+    # upstream action maintainers; pin to 20.04 until that changes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Java
+        uses: ./.github/actions/common/setup-java
+
+      - name: Determine project version
+        id: project-version
+        run: |
+          VERSION=$(mvn --batch-mode help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: 'Set up Docker Buildx'
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+
+      - name: 'Cache Maven packages'
+        uses: ./.github/actions/common/cache-maven-packages
+
+      - name: 'Build Kroxylicious Operator/Operand Container Images'
+        run: |
+          mvn --batch-mode --activate-profiles dist --also-make --projects :kroxylicious-app,:kroxylicious-operator,:kroxylicious-operator-dist -Dquick package
+
+      - name: Start MicroShift cluster
+        uses: container-tools/microshift-action@2e3f1d9ef8b53ef6eab6ea777891265510bc1b72
+        # The REDHAT_PULL_SECRET is required so that CRI-O can pull the
+        # OpenShift-specific images that MicroShift bundles (e.g. ovn-kubernetes,
+        # cluster-dns-operator).  Without it MicroShift will fail to reach a
+        # healthy state.
+        env:
+          PULL_SECRET: ${{ secrets.REDHAT_PULL_SECRET }}
+
+      # -----------------------------------------------------------------------
+      # 7. Smoke-test the cluster
+      # -----------------------------------------------------------------------
+      - name: Verify cluster is healthy
+        run: |
+          echo "==> Node status"
+          kubectl get nodes -o wide
+          echo "==> All system pods"
+          kubectl get pods -A
+          echo "==> API server version"
+          kubectl version
+
+      # -----------------------------------------------------------------------
+      # 8. Load locally-built container images into MicroShift's CRI-O runtime
+      #
+      #    MicroShift uses CRI-O, not the Docker daemon, so we cannot use
+      #    'docker save | docker load' or 'minikube image load'.  Instead we
+      #    use 'skopeo copy' to push from the local Docker daemon directly into
+      #    CRI-O's containers/storage (the same backend that CRI-O uses).
+      #
+      #    Skopeo is pre-installed on ubuntu-20.04 GitHub runners.
+      # -----------------------------------------------------------------------
+      - name: Load operator image into MicroShift (CRI-O)
+        env:
+          VERSION: ${{ steps.project-version.outputs.version }}
+        run: |
+          FULL_TAG="${OPERATOR_IMAGE}:${VERSION}"
+          echo "==> Loading ${FULL_TAG} into CRI-O containers/storage"
+          # containers-storage: prefix targets the CRI-O / Podman shared store,
+          # which is what MicroShift's kubelet reads from.
+          sudo skopeo copy \
+            --dest-tls-verify=false \
+            docker-daemon:"${FULL_TAG}" \
+            containers-storage:"${FULL_TAG}"
+          echo "==> Verifying image is visible to CRI-O"
+          sudo crictl images | grep kroxylicious/operator
+
+      - name: Load proxy image into MicroShift (CRI-O)
+        env:
+          VERSION: ${{ steps.project-version.outputs.version }}
+        run: |
+          FULL_TAG="${PROXY_IMAGE}:${VERSION}"
+          echo "==> Loading ${FULL_TAG} into CRI-O containers/storage"
+          sudo skopeo copy \
+            --dest-tls-verify=false \
+            docker-daemon:"${FULL_TAG}" \
+            containers-storage:"${FULL_TAG}"
+          echo "==> Verifying image is visible to CRI-O"
+          sudo crictl images | grep kroxylicious/kroxylicious
+
+      # -----------------------------------------------------------------------
+      # 9. Run operator integration tests
+      #    These tests use the Maven failsafe plugin and require a live cluster
+      #    whose context is the current kubectl context.
+      # -----------------------------------------------------------------------
+      - name: Run operator integration tests
+        env:
+          VERSION: ${{ steps.project-version.outputs.version }}
+        run: |
+          mvn --batch-mode \
+            -pl kroxylicious-operator \
+            -Dcheckstyle.skip \
+            -Dspotbugs.skip \
+            verify
+
+      - name: Collect cluster diagnostics on failure
+        if: failure()
+        run: |
+          mkdir -p /tmp/cluster-diag
+          kubectl get all -A                        > /tmp/cluster-diag/all-resources.txt  2>&1 || true
+          kubectl get events -A --sort-by=.metadata.creationTimestamp \
+                                                    > /tmp/cluster-diag/events.txt         2>&1 || true
+          kubectl describe nodes                    > /tmp/cluster-diag/nodes.txt          2>&1 || true
+          # Dump logs from any pod that isn't Running/Completed
+          kubectl get pods -A --no-headers \
+            | awk '$4 != "Running" && $4 != "Completed" {print $1, $2}' \
+            | while read ns pod; do
+                kubectl logs -n "$ns" "$pod" --all-containers \
+                  > "/tmp/cluster-diag/pod-${ns}-${pod}.log" 2>&1 || true
+              done
+
+      - name: Upload cluster diagnostics
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: cluster-diagnostics
+          path: /tmp/cluster-diag/
+          retention-days: 7
+
+      - name: Upload Maven surefire / failsafe reports
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: maven-test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+          retention-days: 7

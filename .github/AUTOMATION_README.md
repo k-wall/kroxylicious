@@ -89,3 +89,14 @@ To enable pages on your fork:
    replacing `${yourname}` with your GitHub username.
 8. Push changes to any branch of your fork and then trigger a manual run of `https://github.com/${yourname}/kroxylicious/actions/workflows/publish-snapshot-docs-to-website.yaml`.
    supplying the branch you want to checkout and deploy as a parameter. 
+
+## Microshift for Operator tests
+
+Some of the Kroxylicious Operator features depend on OpenShift.
+For testing purposes, we use Microshift. Microshift needs to dowloaded images from Red Hat Container Registry.
+That needs a pull-secret.
+
+The pull secret belongs to the kroxylicious-robot account (credentials in 1Password).
+https://console.redhat.com/openshift/install/pull-secret
+
+It is installed in GitHub as a secret `REDHAT_PULL_SECRET`
