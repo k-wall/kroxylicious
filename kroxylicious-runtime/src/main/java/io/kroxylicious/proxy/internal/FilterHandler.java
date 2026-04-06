@@ -5,6 +5,7 @@
  */
 package io.kroxylicious.proxy.internal;
 
+import io.kroxylicious.proxy.internal.RuntimeLoggingKeys;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Optional;
@@ -258,21 +259,21 @@ public class FilterHandler extends ChannelDuplexHandler {
         };
         if (ctx != null) {
             builder = builder
-                    .addKeyValue("remoteAddress",
+                    .addKeyValue(RuntimeLoggingKeys.REMOTE_ADDRESS,
                             ctx.channel().remoteAddress().toString())
-                    .addKeyValue("localAddress",
+                    .addKeyValue(RuntimeLoggingKeys.LOCAL_ADDRESS,
                             ctx.channel().localAddress().toString());
         }
-        return builder.addKeyValue("sessionId", proxyChannelStateMachine.sessionId())
-                .addKeyValue("filter", filterDescriptor());
+        return builder.addKeyValue(RuntimeLoggingKeys.SESSION_ID, proxyChannelStateMachine.sessionId())
+                .addKeyValue(RuntimeLoggingKeys.FILTER, filterDescriptor());
     }
 
     private CompletableFuture<ResponseFilterResult> dispatchDecodedResponseFrame(DecodedResponseFrame<?> decodedFrame,
                                                                                  InternalFilterContext filterContext) {
 
         log(DEBUG)
-                .addKeyValue("apiKey", decodedFrame.apiKey())
-                .addKeyValue("frame", decodedFrame)
+                .addKeyValue(RuntimeLoggingKeys.API_KEY, decodedFrame.apiKey())
+                .addKeyValue(RuntimeLoggingKeys.FRAME, decodedFrame)
                 .log("Dispatching upstream response to filter");
         var stage = filterAndInvoker.invoker().onResponse(decodedFrame.apiKey(), decodedFrame.apiVersion(),
                 decodedFrame.header(), decodedFrame.body(), filterContext);
@@ -337,8 +338,8 @@ public class FilterHandler extends ChannelDuplexHandler {
 
     private CompletableFuture<RequestFilterResult> dispatchDecodedRequest(DecodedRequestFrame<?> decodedFrame, InternalFilterContext filterContext) {
         log(DEBUG)
-                .addKeyValue("apiKey", decodedFrame.apiKey())
-                .addKeyValue("frame", decodedFrame)
+                .addKeyValue(RuntimeLoggingKeys.API_KEY, decodedFrame.apiKey())
+                .addKeyValue(RuntimeLoggingKeys.FRAME, decodedFrame)
                 .log("Dispatching downstream request to filter");
         var stage = filterAndInvoker.invoker().onRequest(decodedFrame.apiKey(), decodedFrame.apiVersion(), decodedFrame.header(),
                 decodedFrame.body(), filterContext);
@@ -357,7 +358,7 @@ public class FilterHandler extends ChannelDuplexHandler {
                                                             ChannelPromise promise) {
         if (responseFilterResult.drop()) {
             log(DEBUG)
-                    .addKeyValue("apiKey", decodedFrame.apiKey())
+                    .addKeyValue(RuntimeLoggingKeys.API_KEY, decodedFrame.apiKey())
                     .log("Filter drops response");
             return responseFilterResult;
         }
@@ -382,7 +383,7 @@ public class FilterHandler extends ChannelDuplexHandler {
                                                           RequestFilterResult requestFilterResult) {
         if (requestFilterResult.drop()) {
             log(DEBUG)
-                    .addKeyValue("apiKey", decodedFrame.apiKey())
+                    .addKeyValue(RuntimeLoggingKeys.API_KEY, decodedFrame.apiKey())
                     .log("Filter drops request");
             // When a request is dropped, trigger reading the next request to keep the channel active
             inboundChannel.read();
@@ -412,9 +413,9 @@ public class FilterHandler extends ChannelDuplexHandler {
         if (LOGGER.isWarnEnabled()) {
             var direction = decodedFrame.header() instanceof RequestHeaderData ? "request" : "response";
             log(WARN)
-                    .addKeyValue("direction", direction)
-                    .addKeyValue("apiKey", decodedFrame.apiKey())
-                    .addKeyValue("error", t.getMessage())
+                    .addKeyValue(RuntimeLoggingKeys.DIRECTION, direction)
+                    .addKeyValue(RuntimeLoggingKeys.API_KEY, decodedFrame.apiKey())
+                    .addKeyValue(RuntimeLoggingKeys.ERROR, t.getMessage())
                     .setCause(LOGGER.isDebugEnabled() ? t : null)
                     .log(LOGGER.isDebugEnabled()
                             ? "filter ended exceptionally, closing connection"
@@ -497,7 +498,7 @@ public class FilterHandler extends ChannelDuplexHandler {
         }
 
         log(DEBUG)
-                .addKeyValue("frame", decodedFrame)
+                .addKeyValue(RuntimeLoggingKeys.FRAME, decodedFrame)
                 .log("Filter forwarding request");
 
         ctx.fireChannelRead(decodedFrame);
@@ -552,7 +553,7 @@ public class FilterHandler extends ChannelDuplexHandler {
             throw new AssertionError();
         }
         log(DEBUG)
-                .addKeyValue("message", () -> msgDescriptor(decodedFrame))
+                .addKeyValue(RuntimeLoggingKeys.MESSAGE, () -> msgDescriptor(decodedFrame))
                 .log("Filter forwarding response");
         ctx.write(decodedFrame, promise);
     }
@@ -566,7 +567,7 @@ public class FilterHandler extends ChannelDuplexHandler {
         DecodedResponseFrame<?> responseFrame = decodedRequestFrame.responseFrame(header, message);
         decodedRequestFrame.transferBuffersTo(responseFrame);
         log(DEBUG)
-                .addKeyValue("message", () -> msgDescriptor(decodedRequestFrame))
+                .addKeyValue(RuntimeLoggingKeys.MESSAGE, () -> msgDescriptor(decodedRequestFrame))
                 .log("Filter sending short-circuit response");
         ctx.write(responseFrame, ctx.voidPromise());
         ctx.flush();
@@ -587,7 +588,7 @@ public class FilterHandler extends ChannelDuplexHandler {
         }
         else {
             log(DEBUG)
-                    .addKeyValue("apiKey", decodedFrame.apiKey())
+                    .addKeyValue(RuntimeLoggingKeys.API_KEY, decodedFrame.apiKey())
                     .log("Filter attempted to short-circuit respond to message with no response in Kafka Protocol, dropping response");
         }
     }
@@ -604,14 +605,14 @@ public class FilterHandler extends ChannelDuplexHandler {
         boolean newlyCompleted = p.complete(decodedFrame.body());
         if (newlyCompleted) {
             log(DEBUG)
-                    .addKeyValue("apiKey", decodedFrame.apiKey())
-                    .addKeyValue("frame", decodedFrame)
+                    .addKeyValue(RuntimeLoggingKeys.API_KEY, decodedFrame.apiKey())
+                    .addKeyValue(RuntimeLoggingKeys.FRAME, decodedFrame)
                     .log("Completed response for internal request to filter");
         }
         else {
             log(TRACE)
-                    .addKeyValue("apiKey", decodedFrame.apiKey())
-                    .addKeyValue("frame", decodedFrame)
+                    .addKeyValue(RuntimeLoggingKeys.API_KEY, decodedFrame.apiKey())
+                    .addKeyValue(RuntimeLoggingKeys.FRAME, decodedFrame)
                     .log("Response for internal request to filter was already completed");
         }
     }
@@ -673,7 +674,7 @@ public class FilterHandler extends ChannelDuplexHandler {
                                                     String authorizedId) {
             if (deprecationWarningEmitted.compareAndSet(false, true)) {
                 log(WARN)
-                        .addKeyValue("principalClass", User.class.getName())
+                        .addKeyValue(RuntimeLoggingKeys.PRINCIPAL_CLASS, User.class.getName())
                         .log("Deprecated clientSaslAuthenticationSuccess(String mechanism, String authorizedId) was invoked by filter, "
                                 + "instead call clientSaslAuthenticationSuccess(String mechanism, Subject subject), "
                                 + "ensuring that the Subject contains a User principal with name equal to authorizedId");
@@ -685,8 +686,8 @@ public class FilterHandler extends ChannelDuplexHandler {
         public void clientSaslAuthenticationSuccess(String mechanism,
                                                     Subject subject) {
             log(INFO)
-                    .addKeyValue("mechanism", mechanism)
-                    .addKeyValue("subject", subject)
+                    .addKeyValue(RuntimeLoggingKeys.MECHANISM, mechanism)
+                    .addKeyValue(RuntimeLoggingKeys.SUBJECT, subject)
                     .log("Filter announces client has passed SASL authentication");
 
             proxyChannelStateMachine.onSessionSaslAuthenticated();
@@ -700,9 +701,9 @@ public class FilterHandler extends ChannelDuplexHandler {
                                                     @Nullable String authorizedId,
                                                     Exception exception) {
             log(INFO)
-                    .addKeyValue("mechanism", mechanism)
-                    .addKeyValue("authorizedId", authorizedId)
-                    .addKeyValue("error", exception.toString())
+                    .addKeyValue(RuntimeLoggingKeys.MECHANISM, mechanism)
+                    .addKeyValue(RuntimeLoggingKeys.AUTHORIZED_ID, authorizedId)
+                    .addKeyValue(RuntimeLoggingKeys.ERROR, exception.toString())
                     .setCause(LOGGER.isDebugEnabled() ? exception : null)
                     .log("Filter announces client has failed SASL authentication" +
                             (LOGGER.isDebugEnabled() ? "" : ", increase log level to DEBUG for stacktrace"));
@@ -758,7 +759,7 @@ public class FilterHandler extends ChannelDuplexHandler {
                     filterAndInvoker.filter(), filterPromise, header, request);
 
             log(DEBUG)
-                    .addKeyValue("message", () -> msgDescriptor(frame))
+                    .addKeyValue(RuntimeLoggingKeys.MESSAGE, () -> msgDescriptor(frame))
                     .log("Filter sending request");
             Objects.requireNonNull(ctx).fireChannelRead(frame);
             return filterPromise.minimalCompletionStage();
