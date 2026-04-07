@@ -63,6 +63,7 @@ import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxy;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaProxyIngress;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaService;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaServiceSpec;
+import io.kroxylicious.kubernetes.api.v1alpha1.KafkaServiceStatus;
 import io.kroxylicious.kubernetes.api.v1alpha1.VirtualKafkaCluster;
 import io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicestatus.tls.TrustAnchor;
 import io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.ingresses.Tls.TlsClientAuthentication;
@@ -353,8 +354,34 @@ public class KafkaProxyReconciler implements
     }
 
     private static ConfigurationFragment<Optional<Tls>> buildTargetClusterTls(KafkaService kafkaServiceRef) {
-        return Optional.ofNullable(kafkaServiceRef.getSpec())
-                .map(KafkaServiceSpec::getTls)
+        return Optional.of(kafkaServiceRef)
+                .map(ksr -> {
+                    var builder = new io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.TlsBuilder();
+                    Optional.ofNullable(kafkaServiceRef.getSpec())
+                            .map(KafkaServiceSpec::getTls)
+                            .map(io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.Tls::getCipherSuites)
+                            .ifPresent(builder::withCipherSuites);
+                    Optional.ofNullable(kafkaServiceRef.getSpec())
+                            .map(KafkaServiceSpec::getTls)
+                            .map(io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.Tls::getProtocols)
+                            .ifPresent(builder::withProtocols);
+                    Optional.ofNullable(kafkaServiceRef.getSpec())
+                            .map(KafkaServiceSpec::getTls)
+                            .map(io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicespec.Tls::getCertificateRef)
+                            .ifPresent(builder::withCertificateRef);
+                    Optional.ofNullable(kafkaServiceRef.getStatus())
+                            .map(KafkaServiceStatus::getTls)
+                            .map(io.kroxylicious.kubernetes.api.v1alpha1.kafkaservicestatus.Tls::getTrustAnchor)
+                            .ifPresent(x -> builder.withNewTrustAnchorRef()
+                                    .withNewRef()
+                                    .withName(x.getName())
+                                    .endRef()
+                                    .withStoreType(x.getStoreType())
+                                    .endTrustAnchorRef());
+
+                    return builder.build();
+                })
+                .filter(tls -> tls.getCertificateRef() != null || tls.getTrustAnchorRef() != null)
                 .map(serviceTls -> ConfigurationFragment.combine(
                         buildKeyProvider(serviceTls.getCertificateRef(), CLIENT_CERTS_BASE_DIR),
                         buildTrustProvider(false, kafkaServiceRef, null, CLIENT_TRUSTED_CERTS_BASE_DIR),
@@ -405,7 +432,7 @@ public class KafkaProxyReconciler implements
         TrustResource trustResource = null;
         if (refObj instanceof KafkaService serviceRef) {
             TrustAnchor ref = serviceRef.getStatus().getTls().getTrustAnchor();
-            trustResource = new TrustResource(ref.getName() + "-cluster-ca-cert", ref.getKey(), ref.getStoreType(), true);
+            trustResource = new TrustResource(ref.getName() /*+ "-cluster-ca-cert"*/, ref.getKey(), ref.getStoreType(), true);
         }
         else if (refObj instanceof TrustAnchorRef trustAnchorRef) {
             boolean secret = trustAnchorRef.getRef().getKind() != null && ResourcesUtil.isSecret(trustAnchorRef.getRef());
