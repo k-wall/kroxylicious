@@ -591,6 +591,7 @@ public class ProxyChannelStateMachine {
     private void toClientActive(
                                 ProxyChannelState.ClientActive clientActive,
                                 KafkaProxyFrontendHandler frontendHandler) {
+        Thread currentThread = Thread.currentThread();
         setState(clientActive);
         // we require two events before unblocking (making reads from) the client:
         // 1. the completion of the building of the transport subject
@@ -598,6 +599,11 @@ public class ProxyChannelStateMachine {
         // (completion of the connection to the backend)
         // these can happen in either order
         this.progressionLatch = 2;
+
+        LOGGER.warn("[SYNC-DEBUG] toClientActive on thread {} (id={}), initialized progressionLatch={}, isTlsListener={}",
+                currentThread.getName(), currentThread.getId(),
+                this.progressionLatch, this.isTlsListener());
+
         if (!this.isTlsListener()) {
             this.clientSubjectManager.subjectFromTransport(null, this.transportSubjectBuilder,
                     frontendHandler.eventLoopExecutor(), this::onTransportSubjectBuilt);
@@ -609,6 +615,11 @@ public class ProxyChannelStateMachine {
     }
 
     void onTransportSubjectBuilt() {
+        Thread currentThread = Thread.currentThread();
+        LOGGER.warn("[SYNC-DEBUG] onTransportSubjectBuilt called on thread {} (id={}), subject={}, isAnonymous={}",
+                currentThread.getName(), currentThread.getId(),
+                authenticatedSubject(), authenticatedSubject().isAnonymous());
+
         if (!authenticatedSubject().isAnonymous()) {
             onSessionTransportAuthenticated();
         }
@@ -620,7 +631,16 @@ public class ProxyChannelStateMachine {
     }
 
     private void maybeUnblock() {
-        if (--this.progressionLatch == 0) {
+        Thread currentThread = Thread.currentThread();
+        int latchBefore = this.progressionLatch;
+        int latchAfter = --this.progressionLatch;
+
+        String msg = String.format("[SYNC-DEBUG] maybeUnblock called on thread %s (id=%d), latch %d -> %d, willUnblock=%b",
+                currentThread.getName(), currentThread.getId(), latchBefore, latchAfter, latchAfter == 0);
+        System.err.println(msg);
+        LOGGER.warn(msg);
+
+        if (latchAfter == 0) {
             Objects.requireNonNull(frontendHandler).unblockClient();
         }
     }
@@ -642,6 +662,10 @@ public class ProxyChannelStateMachine {
 
     @SuppressWarnings("java:S5738")
     private void toForwarding(Forwarding forwarding) {
+        Thread currentThread = Thread.currentThread();
+        LOGGER.warn("[SYNC-DEBUG] toForwarding called on thread {} (id={})",
+                currentThread.getName(), currentThread.getId());
+
         setState(forwarding);
         kafkaSession.transitionTo(KafkaSessionState.NOT_AUTHENTICATED);
         // we must wait for the transport subject to be built before forwarding the buffered messages and then enabling autoread on the client

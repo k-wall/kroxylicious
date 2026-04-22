@@ -33,6 +33,12 @@ Configuration:
          AppenderRef:
            - ref: Console
 
+      -  name: io.kroxylicious.proxy.internal.ProxyChannelStateMachine
+         additivity: false
+         level: DEBUG
+         AppenderRef:
+           - ref: Console
+
       -  name: io.kroxylicious.proxy
          additivity: false
          level: WARN
