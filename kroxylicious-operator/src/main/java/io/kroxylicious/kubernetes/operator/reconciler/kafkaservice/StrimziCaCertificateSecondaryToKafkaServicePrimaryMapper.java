@@ -20,10 +20,10 @@ import io.kroxylicious.kubernetes.api.v1alpha1.KafkaService;
 import io.kroxylicious.kubernetes.api.v1alpha1.KafkaServiceSpec;
 import io.kroxylicious.kubernetes.operator.ResourcesUtil;
 
-class StrimziCaCertificateSecondaryToKafkaServicePrimary implements SecondaryToPrimaryMapper<Secret> {
+class StrimziCaCertificateSecondaryToKafkaServicePrimaryMapper implements SecondaryToPrimaryMapper<Secret> {
     private final EventSourceContext<KafkaService> context;
 
-    StrimziCaCertificateSecondaryToKafkaServicePrimary(EventSourceContext<KafkaService> context) {
+    StrimziCaCertificateSecondaryToKafkaServicePrimaryMapper(EventSourceContext<KafkaService> context) {
         this.context = context;
     }
 
