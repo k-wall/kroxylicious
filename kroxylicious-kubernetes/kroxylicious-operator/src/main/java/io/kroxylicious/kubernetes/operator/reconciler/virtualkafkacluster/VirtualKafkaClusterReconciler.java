@@ -451,10 +451,11 @@ public final class VirtualKafkaClusterReconciler implements
                 .build();
 
         // Certificate Secrets - uses shared informer
-        SharedInformerEventSource<Secret, VirtualKafkaCluster> clusterToSecret = new SharedInformerEventSource<>(
+        SharedInformerEventSource<VirtualKafkaCluster, Secret> clusterToSecret = new SharedInformerEventSource<>(
                 Secret.class,
                 SECRETS_EVENT_SOURCE_NAME,
                 sharedSecretInformer,
+                new VirtualKafkaClusterPrimaryToSecretSecondaryJoinedOnIngressCertificateRefMapper(),
                 new SecretSecondaryJoinedOnIngressCertificateRefToVirtualKafkaClusterPrimaryMapper(context),
                 allowedNamespaces);
 
@@ -467,10 +468,11 @@ public final class VirtualKafkaClusterReconciler implements
                 .build();
 
         // Trust anchor Secrets - uses shared informer
-        SharedInformerEventSource<Secret, VirtualKafkaCluster> clusterToSecretTrustAnchorRef = new SharedInformerEventSource<>(
+        SharedInformerEventSource<VirtualKafkaCluster, Secret> clusterToSecretTrustAnchorRef = new SharedInformerEventSource<>(
                 Secret.class,
                 SECRET_TRUST_ANCHOR_REF_EVENT_SOURCE_NAME,
                 sharedSecretInformer,
+                new VirtualKafkaClusterPrimaryToResourceSecondaryJoinedOnIngressTrustAnchorRefMapper(),
                 new ResourceSecondaryJoinedOnIngressTrustAnchorRefToVirtualKafkaClusterPrimaryMapper<>(context),
                 allowedNamespaces);
 
