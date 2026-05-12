@@ -58,7 +58,7 @@ class KafkaServiceBootstrapReconcilerIT {
     static LocallyRunningOperatorRbacHandler rbacHandler = new LocallyRunningOperatorRbacHandler(TestFiles.INSTALL_MANIFESTS_DIR,
             "*.ClusterRole.kroxylicious-operator-watched.yaml");
 
-    static final SharedInformerManager sharedInformerManager = new SharedInformerManager(rbacHandler.operatorClient(), Set.of());
+    final SharedInformerManager sharedInformerManager = new SharedInformerManager(rbacHandler.operatorClient(), Set.of());
 
     @SuppressWarnings("JUnitMalformedDeclaration") // The beforeAll and beforeEach have the same effect so we can use it as an instance field.
     @RegisterExtension
@@ -74,6 +74,7 @@ class KafkaServiceBootstrapReconcilerIT {
     @AfterEach
     void stopOperator() {
         extension.getOperator().stop();
+        sharedInformerManager.stopAll();
         LOGGER.atInfo().log("Test finished");
     }
 
