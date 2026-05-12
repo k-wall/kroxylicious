@@ -62,18 +62,13 @@ public class SharedInformerEventSource<P extends HasMetadata, R extends HasMetad
         this.allowedNamespaces = allowedNamespaces;
     }
 
-    /**
-     * Checks if a resource is in an allowed namespace.
-     *
-     * @param resource the resource to check
-     * @return true if allowed (empty set means all namespaces allowed)
-     */
     private boolean isAllowedNamespace(R resource) {
-        if (allowedNamespaces.isEmpty()) {
-            return true; // All namespaces allowed
-        }
-        String namespace = resource.getMetadata().getNamespace();
-        return allowedNamespaces.contains(namespace);
+        return allowedNamespaces.isEmpty()
+                || allowedNamespaces.contains(resource.getMetadata().getNamespace());
+    }
+
+    private boolean isAllowedNamespace(String namespace) {
+        return allowedNamespaces.isEmpty() || allowedNamespaces.contains(namespace);
     }
 
     @Override
@@ -140,6 +135,9 @@ public class SharedInformerEventSource<P extends HasMetadata, R extends HasMetad
 
     @Override
     public Optional<R> get(ResourceID resourceID) {
+        if (!isAllowedNamespace(resourceID.getNamespace().orElse(""))) {
+            return Optional.empty();
+        }
         String key = resourceID.getNamespace().orElse("") + "/" + resourceID.getName();
         return Optional.ofNullable(sharedInformer.getStore().getByKey(key));
     }
@@ -147,12 +145,14 @@ public class SharedInformerEventSource<P extends HasMetadata, R extends HasMetad
     @Override
     public Stream<ResourceID> keys() {
         return sharedInformer.getStore().list().stream()
+                .filter(this::isAllowedNamespace)
                 .map(ResourceID::fromResource);
     }
 
     @Override
     public Stream<R> list(Predicate<R> predicate) {
         return sharedInformer.getStore().list().stream()
+                .filter(this::isAllowedNamespace)
                 .filter(predicate);
     }
 

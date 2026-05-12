@@ -205,15 +205,15 @@ class SharedInformerEventSourceTest {
                 secondaryToPrimaryMapper,
                 Set.of("ns1"));
 
-        // when - list() returns unfiltered stream from informer, namespace filtering happens elsewhere
+        // when
         List<Secret> result = eventSource.list(s -> true).toList();
 
-        // then - all secrets from informer are returned
-        assertThat(result).containsExactlyInAnyOrder(secret1, secret2, secret3);
+        // then - only secrets from allowed namespace are returned
+        assertThat(result).containsExactlyInAnyOrder(secret1, secret2);
     }
 
     @Test
-    void shouldReturnKeysFromInformer() {
+    void shouldReturnKeysFilteredByNamespace() {
         // given
         Secret secret1 = secretInNamespace("ns1", "secret1");
         Secret secret2 = secretInNamespace("ns2", "secret2");
@@ -232,9 +232,9 @@ class SharedInformerEventSourceTest {
         // when
         List<ResourceID> keys = eventSource.keys().toList();
 
-        // then
-        assertThat(keys).hasSize(2);
-        assertThat(keys).extracting(ResourceID::getName).containsExactlyInAnyOrder("secret1", "secret2");
+        // then - only keys from allowed namespace
+        assertThat(keys).hasSize(1);
+        assertThat(keys).extracting(ResourceID::getName).containsExactly("secret1");
     }
 
     @Test
@@ -260,6 +260,26 @@ class SharedInformerEventSourceTest {
 
         // then
         assertThat(result).isSameAs(secret);
+    }
+
+    @Test
+    void shouldNotGetResourceFromNonAllowedNamespace() {
+        // given
+        ResourceID resourceID = new ResourceID("secret1", "other-ns");
+
+        eventSource = new SharedInformerEventSource<>(
+                Secret.class,
+                "test-source",
+                sharedInformer,
+                primaryToSecondaryMapper,
+                secondaryToPrimaryMapper,
+                Set.of("ns1"));
+
+        // when
+        var result = eventSource.get(resourceID);
+
+        // then
+        assertThat(result).isEmpty();
     }
 
     @Test
