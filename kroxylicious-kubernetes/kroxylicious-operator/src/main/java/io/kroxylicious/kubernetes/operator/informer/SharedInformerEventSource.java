@@ -21,10 +21,15 @@ import io.javaoperatorsdk.operator.processing.event.source.PrimaryToSecondaryMap
 import io.javaoperatorsdk.operator.processing.event.source.SecondaryToPrimaryMapper;
 
 /**
- * An EventSource that wraps a shared Fabric8 SharedIndexInformer.
+ * An EventSource that wraps a shared Fabric8 SharedIndexInformer, allowing
+ * multiple reconcilers to share the same underlying informer cache while each
+ * having their own event handling and mapping logic.
  * <p>
- * This allows multiple reconcilers to share the same underlying informer cache
- * while each having their own event handling and mapping logic.
+ * Unlike JOSDK's {@code InformerEventSource}, this class does not suppress
+ * events originating from the reconciler's own writes (no
+ * {@code TemporaryResourceCache} or skip logic). It is therefore only suitable
+ * for secondary resources that the reconciler reads but does not create or
+ * modify (e.g. Secrets and ConfigMaps referenced by CRs).
  *
  * @param <P> the primary resource type (e.g., KafkaService)
  * @param <R> the secondary resource type (e.g., Secret)
