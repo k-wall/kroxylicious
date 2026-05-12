@@ -99,6 +99,7 @@ public class SharedInformerEventSource<P extends HasMetadata, R extends HasMetad
 
     @Override
     public void onUpdate(R oldResource, R newResource) {
+        // Namespace is immutable in Kubernetes, so checking either resource suffices.
         if (!isAllowedNamespace(newResource)) {
             return;
         }
