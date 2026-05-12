@@ -6,9 +6,9 @@
 
 package io.kroxylicious.kubernetes.operator.informer;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +34,7 @@ public class SharedInformerManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(SharedInformerManager.class);
 
     private final KubernetesClient client;
-    private final Map<Class<?>, SharedIndexInformer<?>> sharedInformers = new ConcurrentHashMap<>();
+    private final Map<Class<?>, SharedIndexInformer<?>> sharedInformers = new HashMap<>();
     private final Set<String> effectiveNamespaces;
 
     /**
@@ -65,7 +65,7 @@ public class SharedInformerManager {
      * @return the shared informer
      */
     @SuppressWarnings("unchecked")
-    public <R extends HasMetadata> SharedIndexInformer<R> getOrCreateInformer(Class<R> resourceClass) {
+    public synchronized <R extends HasMetadata> SharedIndexInformer<R> getOrCreateInformer(Class<R> resourceClass) {
         return (SharedIndexInformer<R>) sharedInformers.computeIfAbsent(resourceClass, clazz -> {
             SharedIndexInformer<R> informer;
 
@@ -111,7 +111,7 @@ public class SharedInformerManager {
     /**
      * Stops all shared informers managed by this instance.
      */
-    public void stopAll() {
+    public synchronized void stopAll() {
         LOGGER.info("Stopping all shared informers");
         sharedInformers.values().forEach(informer -> {
             try {
