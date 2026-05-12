@@ -94,45 +94,46 @@ public class SharedInformerEventSource<P extends HasMetadata, R extends HasMetad
 
     @Override
     public void onAdd(R resource) {
-        // Filter by namespace
         if (!isAllowedNamespace(resource)) {
             return;
         }
 
-        // Map the secondary resource to affected primary resources
         Set<ResourceID> primaryResourceIDs = secondaryToPrimaryMapper.toPrimaryResourceIDs(resource);
-
-        // Trigger reconciliation for each affected primary resource
-        primaryResourceIDs.forEach(primaryID -> getEventHandler().handleEvent(new io.javaoperatorsdk.operator.processing.event.Event(primaryID)));
+        primaryResourceIDs.forEach(this::propagateEvent);
     }
 
     @Override
     public void onUpdate(R oldResource, R newResource) {
-        // Filter by namespace - check new resource (old might have been in different namespace)
         if (!isAllowedNamespace(newResource)) {
             return;
         }
 
-        // For updates, we need to handle both the old and new resource
         Set<ResourceID> oldPrimaryIDs = secondaryToPrimaryMapper.toPrimaryResourceIDs(oldResource);
         Set<ResourceID> newPrimaryIDs = secondaryToPrimaryMapper.toPrimaryResourceIDs(newResource);
 
-        // Trigger reconciliation for all affected primary resources
         Stream.concat(oldPrimaryIDs.stream(), newPrimaryIDs.stream())
                 .distinct()
-                .forEach(primaryID -> getEventHandler().handleEvent(new io.javaoperatorsdk.operator.processing.event.Event(primaryID)));
+                .forEach(this::propagateEvent);
     }
 
     @Override
     public void onDelete(R resource, boolean deletedFinalStateUnknown) {
-        // Filter by namespace
         if (!isAllowedNamespace(resource)) {
             return;
         }
 
         Set<ResourceID> primaryResourceIDs = secondaryToPrimaryMapper.toPrimaryResourceIDs(resource);
+        primaryResourceIDs.forEach(this::propagateEvent);
+    }
 
-        primaryResourceIDs.forEach(primaryID -> getEventHandler().handleEvent(new io.javaoperatorsdk.operator.processing.event.Event(primaryID)));
+    private void propagateEvent(ResourceID primaryID) {
+        // The shared informer is already running when this event source registers its
+        // handler, so events can arrive before JOSDK has called setEventHandler().
+        // Guard against null to avoid NPE during this window.
+        var handler = getEventHandler();
+        if (handler != null) {
+            handler.handleEvent(new io.javaoperatorsdk.operator.processing.event.Event(primaryID));
+        }
     }
 
     // Cache implementation - delegates to the shared informer's cache
