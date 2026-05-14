@@ -176,6 +176,7 @@ if ! kubectl auth can-i get pods -n "${NAMESPACE}" &>/dev/null; then
 fi
 
 METRICS_PID=""
+KAFKA_METRICS_PID=""
 LOGS_PID=""
 
 teardown() {
@@ -183,6 +184,7 @@ teardown() {
     echo "--- Tearing down benchmark infrastructure ---"
     stop_logs_tailer
     stop_metrics_poller
+    stop_kafka_metrics_poller
     if helm status "${HELM_RELEASE}" -n "${NAMESPACE}" &>/dev/null; then
         helm uninstall "${HELM_RELEASE}" -n "${NAMESPACE}" --wait --timeout 120s
     fi
@@ -288,6 +290,31 @@ stop_metrics_poller() {
         kill "${METRICS_PID}" 2>/dev/null || true
         wait "${METRICS_PID}" 2>/dev/null || true
         METRICS_PID=""
+    fi
+}
+
+start_kafka_metrics_poller() {
+    local kafka_pod
+    kafka_pod=$(kubectl get pod -n "${NAMESPACE}" \
+        -l "strimzi.io/cluster=kafka,strimzi.io/pool-name=kafka-pool" \
+        -o jsonpath='{.items[0].metadata.name}' 2>/dev/null) || true
+    if [[ -z "${kafka_pod}" ]]; then
+        return
+    fi
+    echo "Starting Kafka JMX metrics polling (every ${METRICS_INTERVAL}s) for pod ${kafka_pod}..."
+    mkdir -p "${OUTPUT_DIR}"
+    "${SCRIPT_DIR}/poll-kafka-metrics.sh" \
+        "${kafka_pod}" "${NAMESPACE}" "${OUTPUT_DIR}" "${METRICS_INTERVAL}" &
+    KAFKA_METRICS_PID=$!
+    echo "Kafka metrics poller running (PID ${KAFKA_METRICS_PID})"
+}
+
+stop_kafka_metrics_poller() {
+    if [[ -n "${KAFKA_METRICS_PID}" ]]; then
+        echo "Stopping Kafka metrics poller (PID ${KAFKA_METRICS_PID})..."
+        kill "${KAFKA_METRICS_PID}" 2>/dev/null || true
+        wait "${KAFKA_METRICS_PID}" 2>/dev/null || true
+        KAFKA_METRICS_PID=""
     fi
 }
 
@@ -590,6 +617,7 @@ fi
 create_benchmark_job
 
 start_metrics_poller
+start_kafka_metrics_poller
 
 echo ""
 echo "--- Running benchmark (${SCENARIO} / ${WORKLOAD}) ---"
@@ -726,6 +754,7 @@ if [[ -n "${PROXY_POD}" ]]; then
 fi
 
 stop_metrics_poller
+stop_kafka_metrics_poller
 
 # --- Collect results ---
 
