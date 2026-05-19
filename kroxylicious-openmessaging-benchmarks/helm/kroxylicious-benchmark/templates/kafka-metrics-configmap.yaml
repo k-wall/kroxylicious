@@ -15,17 +15,17 @@ data:
   kafka-metrics-config.yml: |
     lowercaseOutputName: true
     rules:
-      # Request handler pool idle % — near 0 means Kafka I/O thread pool is saturated
+      # Request handler pool idle % - near 0 means Kafka I/O thread pool is saturated
       - pattern: "kafka.server<type=KafkaRequestHandlerPool><>RequestHandlerAvgIdlePercent"
         name: kafka_server_requesthandlerpool_requesthandleravagidle
         type: GAUGE
 
-      # Network processor idle % — near 0 means network threads saturated
+      # Network processor idle % - near 0 means network threads saturated
       - pattern: "kafka.network<type=SocketServer><>NetworkProcessorAvgIdlePercent"
         name: kafka_network_socketserver_networkprocessoravagidle
         type: GAUGE
 
-      # Broker-wide byte rates — aggregate inbound/outbound throughput
+      # Broker-wide byte rates - aggregate inbound/outbound throughput
       - pattern: "kafka.server<type=BrokerTopicMetrics, name=BytesInPerSec><>OneMinuteRate"
         name: kafka_server_brokertopicmetrics_bytesinpersec_rate
         type: GAUGE
@@ -38,7 +38,7 @@ data:
         name: kafka_server_brokertopicmetrics_messagesinpersec_rate
         type: GAUGE
 
-      # Per-topic byte rates — identify which topic is hitting the ceiling
+      # Per-topic byte rates - identify which topic is hitting the ceiling
       - pattern: "kafka.server<type=BrokerTopicMetrics, name=BytesInPerSec, topic=(.+)><>OneMinuteRate"
         name: kafka_server_brokertopicmetrics_bytesinpersec_rate
         labels:
@@ -50,13 +50,13 @@ data:
           topic: "$1"
         type: GAUGE
 
-      # ISR shrinks — indicates replica lag / replication bottleneck
+      # ISR shrinks - indicates replica lag / replication bottleneck
       - pattern: "kafka.server<type=ReplicaManager, name=IsrShrinksPerSec><>OneMinuteRate"
         name: kafka_server_replicamanager_isrshrinks_rate
         type: GAUGE
 
-      # Produce request latency — how long Kafka spends processing produce requests
-      - pattern: "kafka.network<type=RequestMetrics, name=TotalTimeMs, request=Produce><>(\w+)"
+      # Produce request latency - how long Kafka spends processing produce requests
+      - pattern: "kafka.network<type=RequestMetrics, name=TotalTimeMs, request=Produce><>(\\w+)"
         name: kafka_network_requestmetrics_totaltimems_produce
         labels:
           quantile: "$1"
