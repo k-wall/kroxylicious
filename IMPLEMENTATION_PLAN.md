@@ -189,7 +189,14 @@ CTM uses JWT tokens with expiry. Supports two authentication modes (see https://
 **User Authentication (initial implementation):**
 - **Endpoint:** POST `/api/v1/auth/tokens/`
 - **Request:** `{"name": "username", "password": "password"}`
-- **Response:** `{"jwt": "eyJ...", "duration": 300}`
+- **Response:** `{"jwt": "eyJ...", "duration": 300, "refresh_token": "..."}`
+
+**Token Refresh:**
+- Response includes `refresh_token` for obtaining new JWTs without re-authenticating
+- TODO: Determine CTM's refresh token endpoint/mechanism
+  - Separate endpoint for refresh? (e.g., POST `/api/v1/auth/tokens/refresh`)
+  - Same endpoint with `refresh_token` grant type?
+  - Check CTM documentation for refresh token usage
 
 **Client Authentication (future enhancement):**
 - **Endpoint:** POST `/api/v1/auth/tokens/` (same endpoint)
@@ -218,12 +225,31 @@ Use the existing `BearerTokenService` infrastructure from Azure provider:
        private final String username;
        private final String password;
        private final HttpClient client;
+       private volatile String refreshToken; // Store for token refresh
        
        @Override
        public CompletionStage<BearerToken> getBearerToken() {
+           if (refreshToken != null) {
+               // Use refresh token to get new JWT (avoids sending password)
+               // TODO: Implement based on CTM refresh token endpoint
+               return refreshWithToken();
+           } else {
+               // Initial authentication with username/password
+               return authenticateWithPassword();
+           }
+       }
+       
+       private CompletionStage<BearerToken> authenticateWithPassword() {
            // POST /api/v1/auth/tokens/ with username/password
-           // Parse response {"jwt": "...", "duration": 300}
+           // Parse response {"jwt": "...", "duration": 300, "refresh_token": "..."}
+           // Store refresh_token for future use
            // Convert to BearerToken(jwt, expiresAt)
+       }
+       
+       private CompletionStage<BearerToken> refreshWithToken() {
+           // Use refresh token to get new JWT
+           // TODO: Determine CTM's refresh endpoint
+           // Update stored refresh_token if response includes new one
        }
    }
    
@@ -335,7 +361,9 @@ CTM supports key lookup by name via query parameter.
 All use Jackson `@JsonProperty` annotations. Concrete structures from API testing:
 
 **AuthRequest:** `{"name": "...", "password": "..."}`
-**AuthResponse:** `{"jwt": "...", "duration": 300}`
+**AuthResponse:** `{"jwt": "...", "duration": 300, "refresh_token": "..."}`
+**RefreshTokenRequest:** TBD based on CTM API documentation
+**RefreshTokenResponse:** TBD based on CTM API documentation
 **EncryptRequest:** `{"id": "keyId", "plaintext": "base64", "aad": "base64 or null"}`
 **EncryptResponse:** `{"ciphertext": "base64", "tag": "base64", "id": "keyId", "version": 0, "mode": "gcm", "iv": "base64", "aad": "base64"}`
 **DecryptRequest:** `{"ciphertext": "base64", "tag": "base64", "id": "keyId", "version": 0, "mode": "gcm", "iv": "base64", "aad": "base64"}`
@@ -567,3 +595,8 @@ After implementation, verify end-to-end by:
 3. ~~**Client authentication:**~~ ✅ Config model now supports both user and client auth. Will implement user auth first, add client auth later
 4. **AAD usage decision:** Should we use AAD in envelope encryption? Default to not using it (simpler), can add later if needed
 5. **Client registration:** For client auth (future), need to understand if client registration happens once (manual setup) or if implementation should handle registration
+6. **Refresh token usage:** ⚠️ **CRITICAL** - How does CTM handle refresh tokens?
+   - What endpoint is used to refresh? (Same `/api/v1/auth/tokens/` or different endpoint?)
+   - What request format? (grant_type=refresh_token pattern?)
+   - Does refresh response include new refresh_token or reuse existing one?
+   - Check CTM documentation or test against real instance
