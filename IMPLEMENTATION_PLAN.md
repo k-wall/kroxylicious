@@ -182,7 +182,7 @@ serialize():
 **Pattern reference:** `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-hashicorp-vault/src/main/java/io/kroxylicious/kms/provider/hashicorp/vault/VaultEdekSerde.java`
 
 ### 4. Authentication Management
-**File:** `CipherTrustAuthenticator.java`
+**Files:** `auth/UserAuthenticationTokenService.java`, `auth/ClientAuthenticationTokenService.java` (future)
 
 CTM uses JWT tokens with expiry. Supports two authentication modes (see https://docs-cybersec.thalesgroup.com/bundle/latest-cdsp-cm/page/admin/cm_admin/authentication/rest-api/index.html):
 
@@ -197,92 +197,77 @@ CTM uses JWT tokens with expiry. Supports two authentication modes (see https://
 - **Response:** `{"jwt": "eyJ...", "duration": 300}`
 - **Note:** Requires client registration first via POST `/api/v1/auth/self/registration/`
 
-**Implementation requirements:**
-- Abstract interface or base class with two implementations:
-  - `UserAuthenticator` - handles user credentials (implement first)
-  - `ClientAuthenticator` - handles client credentials (implement later)
-- Lazy token acquisition (authenticate on first operation)
-- Token caching with expiry tracking (shared logic)
-- Thread-safe refresh (synchronized methods)
-- 30-second safety margin before expiry
-- Pass token in `Authorization: Bearer {jwt}` header
+**Follow Azure KMS Pattern:**
 
-**Token Refresh Mechanism:**
+Use the existing `BearerTokenService` infrastructure from Azure provider:
 
-The authenticator must handle token expiry and refresh transparently:
+1. **Reuse `BearerTokenService` interface** (from `kroxylicious-kms-provider-azure-key-vault-kms`)
+   - Already defines `CompletionStage<BearerToken> getBearerToken()`
+   - Already has `close()` for cleanup
 
-```java
-interface CipherTrustAuthenticator {
-    CompletionStage<String> getValidToken();
-    void invalidateToken(); // Called on 401/403 errors
-}
+2. **Reuse `CachingBearerTokenService`** (from `kroxylicious-kms-provider-azure-key-vault-kms`)
+   - Handles token caching with expiry
+   - Thread-safe refresh logic with state machine
+   - 5-minute refresh margin (configurable)
+   - Zero implementation needed - just use it!
 
-class UserAuthenticator implements CipherTrustAuthenticator {
-    private volatile String cachedToken;
-    private volatile Instant tokenExpiry;
-    private final Object lock = new Object();
-    
-    @Override
-    public CompletionStage<String> getValidToken() {
-        // Check if token exists and is still valid (with 30s safety margin)
-        if (cachedToken != null && Instant.now().plusSeconds(30).isBefore(tokenExpiry)) {
-            return CompletableFuture.completedFuture(cachedToken);
-        }
-        
-        // Token expired or about to expire - refresh synchronously
-        synchronized (lock) {
-            // Double-check after acquiring lock (another thread may have refreshed)
-            if (cachedToken != null && Instant.now().plusSeconds(30).isBefore(tokenExpiry)) {
-                return CompletableFuture.completedFuture(cachedToken);
-            }
-            
-            // Actually refresh the token
-            return refreshToken();
-        }
-    }
-    
-    private CompletionStage<String> refreshToken() {
-        // POST /api/v1/auth/tokens/ with credentials
-        // Parse response, extract jwt and duration
-        // Set cachedToken and tokenExpiry = now + duration
-        // Return cached token
-    }
-    
-    @Override
-    public void invalidateToken() {
-        synchronized (lock) {
-            cachedToken = null;
-            tokenExpiry = null;
-        }
-    }
-}
-```
+3. **Implement concrete token services:**
+   ```java
+   class UserAuthenticationTokenService implements BearerTokenService {
+       private final URI endpointUrl;
+       private final String username;
+       private final String password;
+       private final HttpClient client;
+       
+       @Override
+       public CompletionStage<BearerToken> getBearerToken() {
+           // POST /api/v1/auth/tokens/ with username/password
+           // Parse response {"jwt": "...", "duration": 300}
+           // Convert to BearerToken(jwt, expiresAt)
+       }
+   }
+   
+   class ClientAuthenticationTokenService implements BearerTokenService {
+       // Future implementation for client credentials
+   }
+   ```
 
-**Error Handling with Token Refresh:**
+4. **Wire it up in `CipherTrustKmsService.buildKms()`:**
+   ```java
+   BearerTokenService delegate;
+   if (config.userCredentials() != null) {
+       delegate = new UserAuthenticationTokenService(...);
+   } else {
+       delegate = new ClientAuthenticationTokenService(...);
+   }
+   BearerTokenService tokenService = new CachingBearerTokenService(delegate, Clock.systemUTC());
+   return new CipherTrustKms(config.endpointUrl(), tokenService, ...);
+   ```
 
-In `CipherTrustKms`, when HTTP operations return 401/403:
-1. Call `authenticator.invalidateToken()` to clear cached token
-2. Retry the operation once (which will trigger token refresh via `getValidToken()`)
-3. If retry also fails with 401/403, throw `KmsException` (credential problem)
+5. **In `CipherTrustKms`, use the token service:**
+   ```java
+   private final BearerTokenService tokenService;
+   
+   private CompletionStage<HttpRequest> createAuthenticatedRequest(URI uri, ...) {
+       return tokenService.getBearerToken()
+           .thenApply(token -> HttpRequest.newBuilder()
+               .uri(uri)
+               .header("Authorization", "Bearer " + token.bearerToken())
+               .build());
+   }
+   ```
 
-**Pattern:**
-```java
-private <T> CompletionStage<T> executeWithRetry(Function<String, CompletionStage<T>> operation) {
-    return authenticator.getValidToken()
-        .thenCompose(token -> operation.apply(token))
-        .exceptionallyCompose(error -> {
-            if (isAuthError(error)) {
-                // Invalidate and retry once
-                authenticator.invalidateToken();
-                return authenticator.getValidToken()
-                    .thenCompose(token -> operation.apply(token));
-            }
-            throw new CompletionException(error);
-        });
-}
-```
+**Benefits of this approach:**
+- Reuses battle-tested token caching logic
+- Thread-safe by design (state machine in `CachingBearerTokenService`)
+- Automatic refresh with safety margin
+- No need to implement our own caching/expiry logic
+- Consistent with Azure KMS provider
 
-Factory method in `CipherTrustKmsService` creates appropriate authenticator based on `Credentials` type.
+**Pattern reference:** 
+- Interface: `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-azure-key-vault-kms/src/main/java/io/kroxylicious/kms/provider/azure/auth/BearerTokenService.java`
+- Caching: `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-azure-key-vault-kms/src/main/java/io/kroxylicious/kms/provider/azure/auth/CachingBearerTokenService.java`
+- Example impl: `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-azure-key-vault-kms/src/main/java/io/kroxylicious/kms/provider/azure/auth/OauthClientCredentialsTokenService.java`
 
 **Pattern reference:** Similar to `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-azure-key-vault-kms/src/main/java/io/kroxylicious/kms/provider/azure/auth/CachingBearerTokenService.java` for token caching
 
@@ -335,13 +320,12 @@ CTM supports key lookup by name via query parameter.
 - Query parameter approach allows filtering by name
 
 **Error handling:**
-- HTTP 401/403: Invalidate cached token, retry operation once (forces token refresh)
-  - If retry succeeds: return result
-  - If retry also fails with 401/403: throw `KmsException` (invalid credentials)
+- HTTP 401/403: Token refresh is handled automatically by `CachingBearerTokenService`
+  - On next `getBearerToken()` call after expiry, it will refresh automatically
+  - No need for manual invalidation or retry logic
 - HTTP 404: Throw `UnknownKeyException` (for key operations) or `UnknownAliasException` (for alias resolution)
 - HTTP 500+: Throw `KmsException` with status code
 - Use structured logging with `LOGGER.atLevel().addKeyValue(...).log(...)`
-- Log token refresh events at INFO level (without logging the token itself)
 
 **Pattern reference:** `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-hashicorp-vault/src/main/java/io/kroxylicious/kms/provider/hashicorp/vault/VaultKms.java`
 
@@ -450,19 +434,21 @@ io.kroxylicious.testing.kms.ciphertrust.RealCipherTrustTestKmsFacadeFactory
 3. Write unit tests for serialization round-trips
 
 ### Phase 4: Authentication
-1. Create `CipherTrustAuthenticator` interface
-2. Implement `UserAuthenticator` with token caching and expiry handling
-3. Add factory method in Config or KmsService to create authenticator:
-   ```java
-   if (config.userCredentials() != null) {
-       return new UserAuthenticator(...);
-   } else {
-       return new ClientAuthenticator(...);  // future
-   }
-   ```
-4. Add unit tests for token refresh logic and expiry handling
-5. Test with WireMock for user auth endpoint
-6. (Future) Implement `ClientAuthenticator` when client auth support is needed
+1. Add dependency on `kroxylicious-kms-provider-azure-key-vault-kms` for `BearerTokenService` classes (scope: compile)
+2. Implement `UserAuthenticationTokenService implements BearerTokenService`:
+   - POST `/api/v1/auth/tokens/` with username/password
+   - Parse response, convert to `BearerToken` (jwt + expiry)
+3. Wire up in `CipherTrustKmsService.buildKms()`:
+   - Create delegate token service based on credential type
+   - Wrap with `CachingBearerTokenService`
+   - Pass to `CipherTrustKms` constructor
+4. Update `CipherTrustKms` to use `BearerTokenService`:
+   - Call `tokenService.getBearerToken()` for each request
+   - Add `Authorization: Bearer {token}` header
+5. Add unit tests:
+   - Test `UserAuthenticationTokenService` with WireMock
+   - Test integration with `CachingBearerTokenService`
+6. (Future) Implement `ClientAuthenticationTokenService` when client auth support is needed
 
 ### Phase 5: Core KMS Operations
 1. Implement `CipherTrustKms.generateDekPair` (random + encrypt flow)
