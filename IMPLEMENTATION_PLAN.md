@@ -245,9 +245,29 @@ Implements `Kms<String, CipherTrustEdek>`:
 5. Return `DestroyableRawSecretKey` wrapping plaintext DEK
 
 **resolveAlias(String alias):**
-- GET `/api/v1/vault/keys2/{name}` - CTM supports looking up keys by name or alias
-- Return the key's ID or name from the response
-- If key not found, throw `UnknownAliasException`
+
+CTM supports key lookup by name via query parameter.
+
+**Implementation approach:**
+1. Call GET `/api/v1/vault/keys2?name={alias}`
+2. Parse response (array) to extract the key identifier from first result:
+   ```json
+   [
+     {
+       "id": "5a78b671-8467-4548-82c8-ebce11bea4d6",
+       "name": "My Encryption Key",
+       "algorithm": "aes",
+       ...
+     }
+   ]
+   ```
+3. Return the `id` field (UUID string) as the resolved key reference
+4. Empty array or HTTP 404 → throw `UnknownAliasException`
+
+**Notes:**
+- Keys are identified by name (simple string, not complex alias objects)
+- Return value should be the key ID (UUID) for use in encrypt/decrypt operations
+- Query parameter approach allows filtering by name
 
 **Error handling:**
 - HTTP 401/403: Invalidate cached token, throw `KmsException`
@@ -258,7 +278,7 @@ Implements `Kms<String, CipherTrustEdek>`:
 **Pattern reference:** `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-hashicorp-vault/src/main/java/io/kroxylicious/kms/provider/hashicorp/vault/VaultKms.java`
 
 ### 6. HTTP Model Classes
-**Files:** `model/AuthRequest.java`, `model/AuthResponse.java`, `model/EncryptRequest.java`, `model/EncryptResponse.java`, `model/DecryptRequest.java`, `model/DecryptResponse.java`, `model/RandomResponse.java`, `model/CreateKeyRequest.java`, `model/CreateKeyResponse.java`
+**Files:** `model/AuthRequest.java`, `model/AuthResponse.java`, `model/EncryptRequest.java`, `model/EncryptResponse.java`, `model/DecryptRequest.java`, `model/DecryptResponse.java`, `model/RandomResponse.java`, `model/CreateKeyRequest.java`, `model/CreateKeyResponse.java`, `model/GetKeyResponse.java`
 
 All use Jackson `@JsonProperty` annotations. Concrete structures from API testing:
 
@@ -269,6 +289,7 @@ All use Jackson `@JsonProperty` annotations. Concrete structures from API testin
 **DecryptRequest:** `{"ciphertext": "base64", "tag": "base64", "id": "keyId", "version": 0, "mode": "gcm", "iv": "base64", "aad": "base64"}`
 **DecryptResponse:** `{"plaintext": "base64"}`
 **RandomResponse:** `{"bytes": "base64"}`
+**GetKeyResponse:** `{"id": "uuid", "name": "...", "algorithm": "aes", ...}` (minimal fields, use `@JsonIgnoreProperties(ignoreUnknown = true)`)
 
 **Note:** All binary data uses base64 encoding. Must encode when sending, decode when receiving.
 
@@ -280,9 +301,14 @@ WireMock-based simulation of CTM REST APIs:
 - GET `/api/v1/vault/random?bytes=N` - Generate N random bytes via `SecureRandom`, return `{"bytes": "base64..."}`
 - POST `/api/v1/crypto/encrypt` - Perform real AES-GCM encryption, return all fields (ciphertext, tag, id, version, mode, iv, aad)
 - POST `/api/v1/crypto/decrypt` - Perform real AES-GCM decryption, return `{"plaintext": "base64..."}`
-- POST `/api/v1/vault/keys2/` - Key creation (store in-memory by name), return key metadata with ID
-- GET `/api/v1/vault/keys2/{name}` - Key lookup by name or alias
+- POST `/api/v1/vault/keys2/` - Key creation (store in-memory indexed by ID), return key metadata with ID
+- GET `/api/v1/vault/keys2?name={keyName}` - Key lookup by name query parameter, return array of matching keys:
+  ```json
+  [{"id": "uuid", "name": "keyName", "algorithm": "aes", ...}]
+  ```
 - DELETE `/api/v1/vault/keys2/{id}` - Key deletion, return 204 No Content
+
+**Note for mock server:** Store keys in a map by ID. For name queries, filter the map and return matching entries in an array. Empty array if no match.
 
 **Approach:** Mock server does real cryptography (not just stubs) for realistic testing. Stores KEKs in-memory map. Validates `Authorization: Bearer {token}` header.
 
@@ -373,9 +399,12 @@ io.kroxylicious.testing.kms.ciphertrust.RealCipherTrustTestKmsFacadeFactory
 ### Phase 5: Core KMS Operations
 1. Implement `CipherTrustKms.generateDekPair` (random + encrypt flow)
 2. Implement `CipherTrustKms.decryptEdek`
-3. Implement `CipherTrustKms.resolveAlias`
+3. Implement `CipherTrustKms.resolveAlias`:
+   - GET `/api/v1/vault/keys2?name={alias}`
+   - Parse response array, extract `id` field from first element
+   - Handle empty array → `UnknownAliasException`
 4. Implement `CipherTrustKms.edekSerde`
-5. Add unit tests using WireMock for all endpoints
+5. Add unit tests using WireMock for all endpoints (including name-based key lookup)
 
 ### Phase 6: KMS Service
 1. Implement `CipherTrustKmsService`
@@ -479,7 +508,7 @@ After implementation, verify end-to-end by:
 5. ✅ **Authentication:** User authentication via POST to `/api/v1/auth/tokens/`, returns JWT with 300s duration
 
 ### Open Questions
-1. ~~**Alias resolution:**~~ ✅ CTM supports GET `/api/v1/vault/keys2/{name}` - can query by key name or alias
+1. ~~**Alias resolution:**~~ ✅ CTM supports GET `/api/v1/vault/keys2?name={keyName}` - query parameter for name-based lookup
 2. **Key rotation:** Defer to future enhancement (not needed for initial implementation)
 3. ~~**Client authentication:**~~ ✅ Config model now supports both user and client auth. Will implement user auth first, add client auth later
 4. **AAD usage decision:** Should we use AAD in envelope encryption? Default to not using it (simpler), can add later if needed
