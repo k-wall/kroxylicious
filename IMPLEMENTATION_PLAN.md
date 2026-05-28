@@ -245,7 +245,9 @@ Implements `Kms<String, CipherTrustEdek>`:
 5. Return `DestroyableRawSecretKey` wrapping plaintext DEK
 
 **resolveAlias(String alias):**
-- CTM may not have alias resolution; return `CompletableFuture.completedFuture(alias)` or implement via `/api/v1/vault/keys2/{id}` if available
+- GET `/api/v1/vault/keys2/{name}` - CTM supports looking up keys by name or alias
+- Return the key's ID or name from the response
+- If key not found, throw `UnknownAliasException`
 
 **Error handling:**
 - HTTP 401/403: Invalidate cached token, throw `KmsException`
@@ -278,7 +280,8 @@ WireMock-based simulation of CTM REST APIs:
 - GET `/api/v1/vault/random?bytes=N` - Generate N random bytes via `SecureRandom`, return `{"bytes": "base64..."}`
 - POST `/api/v1/crypto/encrypt` - Perform real AES-GCM encryption, return all fields (ciphertext, tag, id, version, mode, iv, aad)
 - POST `/api/v1/crypto/decrypt` - Perform real AES-GCM decryption, return `{"plaintext": "base64..."}`
-- POST `/api/v1/vault/keys2/` - Key creation (store in-memory), return key metadata
+- POST `/api/v1/vault/keys2/` - Key creation (store in-memory by name), return key metadata with ID
+- GET `/api/v1/vault/keys2/{name}` - Key lookup by name or alias
 - DELETE `/api/v1/vault/keys2/{id}` - Key deletion, return 204 No Content
 
 **Approach:** Mock server does real cryptography (not just stubs) for realistic testing. Stores KEKs in-memory map. Validates `Authorization: Bearer {token}` header.
@@ -476,7 +479,7 @@ After implementation, verify end-to-end by:
 5. ✅ **Authentication:** User authentication via POST to `/api/v1/auth/tokens/`, returns JWT with 300s duration
 
 ### Open Questions
-1. **Alias resolution:** CTM create-key API shows `aliases` array support. Likely need to resolve via GET `/api/v1/vault/keys2/{id}` or search by alias
+1. ~~**Alias resolution:**~~ ✅ CTM supports GET `/api/v1/vault/keys2/{name}` - can query by key name or alias
 2. **Key rotation:** Defer to future enhancement (not needed for initial implementation)
 3. ~~**Client authentication:**~~ ✅ Config model now supports both user and client auth. Will implement user auth first, add client auth later
 4. **AAD usage decision:** Should we use AAD in envelope encryption? Default to not using it (simpler), can add later if needed
