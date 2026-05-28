@@ -146,8 +146,7 @@ clientCredentials:
   "id": "mykey1",
   "version": 0,
   "mode": "gcm",
-  "iv": "GB1yLYeN5IljclAc38x6ow==",
-  "aad": "YWJj"
+  "iv": "GB1yLYeN5IljclAc38x6ow=="
 }
 ```
 
@@ -160,7 +159,8 @@ All binary fields are base64-encoded. Decrypt requires all these fields.
 - `int version` - Key version (CTM supports versioning)
 - `String mode` - Encryption mode ("gcm")
 - `byte[] iv` - Initialization vector (base64 decoded)
-- `byte[] aad` - Additional authenticated data (base64 decoded, may be null/empty)
+
+**Note:** We do not use AAD (Additional Authenticated Data), so it is excluded from the EDEK structure.
 
 **Pattern reference:** `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-hashicorp-vault/src/main/java/io/kroxylicious/kms/provider/hashicorp/vault/VaultEdek.java` (simpler structure, but shows equals/hashCode override pattern for byte arrays)
 
@@ -176,8 +176,9 @@ serialize():
   [varint: ciphertext length] [bytes: ciphertext]
   [varint: tag length] [bytes: tag]
   [varint: iv length] [bytes: iv]
-  [varint: aad length] [bytes: aad (0 if null/empty)]
 ```
+
+**Note:** No AAD field in serialization since we don't use it.
 
 **Pattern reference:** `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-hashicorp-vault/src/main/java/io/kroxylicious/kms/provider/hashicorp/vault/VaultEdekSerde.java`
 
@@ -339,19 +340,22 @@ Use the existing `BearerTokenService` infrastructure from Azure provider:
 Implements `Kms<String, CipherTrustEdek>`:
 
 **generateDekPair(String kekRef):**
-1. Get valid auth token from CipherTrustAuthenticator
+1. Get valid auth token from BearerTokenService
 2. Call GET `/api/v1/vault/random?bytes=32` → parse response `{"bytes": "base64..."}`
 3. Base64 decode to get plaintext DEK (32 bytes)
-4. Call POST `/api/v1/crypto/encrypt` with `{"id": kekRef, "plaintext": "base64(dek)", "aad": null or empty}`
-5. Parse response: `{"ciphertext", "tag", "id", "version", "mode", "iv", "aad"}` (all base64 except version)
-6. Base64 decode all binary fields, create `CipherTrustEdek(id, ciphertext, tag, version, mode, iv, aad)`
+4. Call POST `/api/v1/crypto/encrypt` with `{"id": kekRef, "plaintext": "base64(dek)"}`
+   - **Note:** Do not include `aad` field (not needed for envelope encryption)
+5. Parse response: `{"ciphertext", "tag", "id", "version", "mode", "iv"}` (all base64 except version)
+   - Response may include `aad` field but will be empty/null since we didn't send it
+6. Base64 decode all binary fields, create `CipherTrustEdek(id, ciphertext, tag, version, mode, iv)`
 7. Create `DestroyableRawSecretKey` from plaintext DEK
 8. Return `DekPair<CipherTrustEdek>`
 
 **decryptEdek(CipherTrustEdek edek):**
-1. Get valid auth token
-2. Build request with all EDEK fields (base64 encode binary fields):
-   `{"ciphertext": "base64...", "tag": "base64...", "id": "...", "version": 0, "mode": "gcm", "iv": "base64...", "aad": "base64..."}`
+1. Get valid auth token from BearerTokenService
+2. Build request with EDEK fields (base64 encode binary fields):
+   `{"ciphertext": "base64...", "tag": "base64...", "id": "...", "version": 0, "mode": "gcm", "iv": "base64..."}`
+   - **Note:** Do not include `aad` field (we don't use it)
 3. Call POST `/api/v1/crypto/decrypt` → parse response `{"plaintext": "base64..."}`
 4. Base64 decode plaintext
 5. Return `DestroyableRawSecretKey` wrapping plaintext DEK
@@ -425,9 +429,9 @@ public record AuthRequest(
 ```
 
 **AuthResponse:** `{"jwt": "...", "duration": 300, "refresh_token": "..."}` (same for both initial and refresh)
-**EncryptRequest:** `{"id": "keyId", "plaintext": "base64", "aad": "base64 or null"}`
-**EncryptResponse:** `{"ciphertext": "base64", "tag": "base64", "id": "keyId", "version": 0, "mode": "gcm", "iv": "base64", "aad": "base64"}`
-**DecryptRequest:** `{"ciphertext": "base64", "tag": "base64", "id": "keyId", "version": 0, "mode": "gcm", "iv": "base64", "aad": "base64"}`
+**EncryptRequest:** `{"id": "keyId", "plaintext": "base64"}` (no AAD)
+**EncryptResponse:** `{"ciphertext": "base64", "tag": "base64", "id": "keyId", "version": 0, "mode": "gcm", "iv": "base64"}`
+**DecryptRequest:** `{"ciphertext": "base64", "tag": "base64", "id": "keyId", "version": 0, "mode": "gcm", "iv": "base64"}` (no AAD)
 **DecryptResponse:** `{"plaintext": "base64"}`
 **RandomResponse:** `{"bytes": "base64"}`
 **GetKeyResponse:** `{"id": "uuid", "name": "...", "algorithm": "aes", ...}` (minimal fields, use `@JsonIgnoreProperties(ignoreUnknown = true)`)
@@ -650,10 +654,10 @@ After implementation, verify end-to-end by:
 4. ✅ **Key versioning:** CTM supports key versions (version field in encrypt/decrypt)
 5. ✅ **Authentication:** User authentication via POST to `/api/v1/auth/tokens/`, returns JWT with 300s duration
 
-### Open Questions
+### Resolved Questions
 1. ~~**Alias resolution:**~~ ✅ CTM supports GET `/api/v1/vault/keys2?name={keyName}` - query parameter for name-based lookup
-2. **Key rotation:** Defer to future enhancement (not needed for initial implementation)
+2. ~~**Key rotation:**~~ ✅ Defer to future enhancement (not needed for initial implementation)
 3. ~~**Client authentication:**~~ ✅ Config model now supports both user and client auth. Will implement user auth first, add client auth later
-4. **AAD usage decision:** Should we use AAD in envelope encryption? Default to not using it (simpler), can add later if needed
-5. **Client registration:** For client auth (future), need to understand if client registration happens once (manual setup) or if implementation should handle registration
+4. ~~**AAD usage:**~~ ✅ Don't use AAD (Additional Authenticated Data) - not needed, simpler implementation
+5. ~~**Client registration:**~~ ✅ Not our responsibility - users configure CTM externally with client IDs, we just consume the credentials
 6. ~~**Refresh token usage:**~~ ✅ Same endpoint (`/api/v1/auth/tokens/`), pass `{"refresh_token": "..."}` instead of username/password
