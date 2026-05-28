@@ -207,14 +207,79 @@ CTM uses JWT tokens with expiry. Supports two authentication modes (see https://
 - 30-second safety margin before expiry
 - Pass token in `Authorization: Bearer {jwt}` header
 
-**Design pattern:**
+**Token Refresh Mechanism:**
+
+The authenticator must handle token expiry and refresh transparently:
+
 ```java
 interface CipherTrustAuthenticator {
     CompletionStage<String> getValidToken();
+    void invalidateToken(); // Called on 401/403 errors
 }
 
-class UserAuthenticator implements CipherTrustAuthenticator { /* ... */ }
-class ClientAuthenticator implements CipherTrustAuthenticator { /* future */ }
+class UserAuthenticator implements CipherTrustAuthenticator {
+    private volatile String cachedToken;
+    private volatile Instant tokenExpiry;
+    private final Object lock = new Object();
+    
+    @Override
+    public CompletionStage<String> getValidToken() {
+        // Check if token exists and is still valid (with 30s safety margin)
+        if (cachedToken != null && Instant.now().plusSeconds(30).isBefore(tokenExpiry)) {
+            return CompletableFuture.completedFuture(cachedToken);
+        }
+        
+        // Token expired or about to expire - refresh synchronously
+        synchronized (lock) {
+            // Double-check after acquiring lock (another thread may have refreshed)
+            if (cachedToken != null && Instant.now().plusSeconds(30).isBefore(tokenExpiry)) {
+                return CompletableFuture.completedFuture(cachedToken);
+            }
+            
+            // Actually refresh the token
+            return refreshToken();
+        }
+    }
+    
+    private CompletionStage<String> refreshToken() {
+        // POST /api/v1/auth/tokens/ with credentials
+        // Parse response, extract jwt and duration
+        // Set cachedToken and tokenExpiry = now + duration
+        // Return cached token
+    }
+    
+    @Override
+    public void invalidateToken() {
+        synchronized (lock) {
+            cachedToken = null;
+            tokenExpiry = null;
+        }
+    }
+}
+```
+
+**Error Handling with Token Refresh:**
+
+In `CipherTrustKms`, when HTTP operations return 401/403:
+1. Call `authenticator.invalidateToken()` to clear cached token
+2. Retry the operation once (which will trigger token refresh via `getValidToken()`)
+3. If retry also fails with 401/403, throw `KmsException` (credential problem)
+
+**Pattern:**
+```java
+private <T> CompletionStage<T> executeWithRetry(Function<String, CompletionStage<T>> operation) {
+    return authenticator.getValidToken()
+        .thenCompose(token -> operation.apply(token))
+        .exceptionallyCompose(error -> {
+            if (isAuthError(error)) {
+                // Invalidate and retry once
+                authenticator.invalidateToken();
+                return authenticator.getValidToken()
+                    .thenCompose(token -> operation.apply(token));
+            }
+            throw new CompletionException(error);
+        });
+}
 ```
 
 Factory method in `CipherTrustKmsService` creates appropriate authenticator based on `Credentials` type.
@@ -270,10 +335,13 @@ CTM supports key lookup by name via query parameter.
 - Query parameter approach allows filtering by name
 
 **Error handling:**
-- HTTP 401/403: Invalidate cached token, throw `KmsException`
-- HTTP 404: Throw `UnknownKeyException`
+- HTTP 401/403: Invalidate cached token, retry operation once (forces token refresh)
+  - If retry succeeds: return result
+  - If retry also fails with 401/403: throw `KmsException` (invalid credentials)
+- HTTP 404: Throw `UnknownKeyException` (for key operations) or `UnknownAliasException` (for alias resolution)
 - HTTP 500+: Throw `KmsException` with status code
 - Use structured logging with `LOGGER.atLevel().addKeyValue(...).log(...)`
+- Log token refresh events at INFO level (without logging the token itself)
 
 **Pattern reference:** `/Users/kwall/src/kroxylicious/kroxylicious-kms-providers/kroxylicious-kms-provider-hashicorp-vault/src/main/java/io/kroxylicious/kms/provider/hashicorp/vault/VaultKms.java`
 
