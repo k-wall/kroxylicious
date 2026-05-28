@@ -188,9 +188,39 @@ CTM uses JWT tokens with expiry. Supports two authentication modes (see https://
 
 **User Authentication (initial implementation):**
 - **Endpoint:** POST `/api/v1/auth/tokens/`
-- **Initial auth request:** `{"name": "username", "password": "password"}`
-- **Refresh request:** `{"refresh_token": "..."}`
+- **Initial auth request:**
+  ```json
+  {
+    "username": "admin",
+    "password": "password"
+  }
+  ```
+- **Refresh request:**
+  ```json
+  {
+    "refresh_token": "..."
+  }
+  ```
 - **Response (both cases):** `{"jwt": "eyJ...", "duration": 300, "refresh_token": "..."}`
+
+**Full Request Schema** (optional fields):
+```json
+{
+  "username": string,           // Required for initial auth
+  "password": string,           // Required for initial auth
+  "refresh_token": string,      // Required for refresh
+  "grant_type": string,         // Optional
+  "refresh_token_lifetime": int,// Optional
+  "refresh_token_revoke_unused_in": int, // Optional
+  "renew_refresh_token": bool,  // Optional
+  "auth_domain": string,        // Optional
+  "client_id": string,          // Optional
+  "connection": string,         // Optional
+  "cookies": bool,              // Optional
+  "domain": string,             // Optional
+  "labels": [string]            // Optional
+}
+```
 
 **Token Refresh Flow:**
 1. Initial authentication: Send username + password → receive JWT + refresh_token
@@ -245,7 +275,7 @@ Use the existing `BearerTokenService` infrastructure from Azure provider:
        }
        
        private CompletionStage<BearerToken> authenticateWithPassword() {
-           // POST /api/v1/auth/tokens/ with {"name": username, "password": password}
+           // POST /api/v1/auth/tokens/ with {"username": username, "password": password}
            // Parse response {"jwt": "...", "duration": 300, "refresh_token": "..."}
            // Store refresh_token: refreshToken.set(response.refreshToken)
            // Convert to BearerToken(jwt, expiresAt = now + duration)
@@ -366,7 +396,34 @@ CTM supports key lookup by name via query parameter.
 
 All use Jackson `@JsonProperty` annotations. Concrete structures from API testing:
 
-**AuthRequest:** `{"name": "...", "password": "..."}` (initial auth) OR `{"refresh_token": "..."}` (refresh)
+**AuthRequest:** Jackson record with optional fields (username/password for initial, refresh_token for refresh):
+```java
+public record AuthRequest(
+    @Nullable String username,
+    @Nullable String password,
+    @Nullable String refreshToken,
+    @Nullable String grantType,
+    @Nullable Integer refreshTokenLifetime,
+    @Nullable Integer refreshTokenRevokeUnusedIn,
+    @Nullable Boolean renewRefreshToken,
+    @Nullable String authDomain,
+    @Nullable String clientId,
+    @Nullable String connection,
+    @Nullable Boolean cookies,
+    @Nullable String domain,
+    @Nullable List<String> labels
+) {
+    // Factory methods for clarity:
+    static AuthRequest withPassword(String username, String password) {
+        return new AuthRequest(username, password, null, ...);
+    }
+    
+    static AuthRequest withRefreshToken(String refreshToken) {
+        return new AuthRequest(null, null, refreshToken, ...);
+    }
+}
+```
+
 **AuthResponse:** `{"jwt": "...", "duration": 300, "refresh_token": "..."}` (same for both initial and refresh)
 **EncryptRequest:** `{"id": "keyId", "plaintext": "base64", "aad": "base64 or null"}`
 **EncryptResponse:** `{"ciphertext": "base64", "tag": "base64", "id": "keyId", "version": 0, "mode": "gcm", "iv": "base64", "aad": "base64"}`
