@@ -33,6 +33,7 @@ import io.kroxylicious.kms.provider.thales.ciphertrust.model.DecryptResponse;
 import io.kroxylicious.kms.provider.thales.ciphertrust.model.EncryptRequest;
 import io.kroxylicious.kms.provider.thales.ciphertrust.model.EncryptResponse;
 import io.kroxylicious.kms.provider.thales.ciphertrust.model.GetKeyResponse;
+import io.kroxylicious.kms.provider.thales.ciphertrust.model.GetKeysResponse;
 import io.kroxylicious.kms.provider.thales.ciphertrust.model.RandomResponse;
 import io.kroxylicious.kms.service.DekPair;
 import io.kroxylicious.kms.service.DestroyableRawSecretKey;
@@ -59,8 +60,6 @@ public class CipherTrustKms implements Kms<String, CipherTrustEdek> {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String AES_KEY_ALGO = "AES";
     private static final int DEK_SIZE_BYTES = 32; // 256-bit AES key
-    private static final TypeReference<GetKeyResponse[]> GET_KEY_RESPONSE_ARRAY = new TypeReference<>() {
-    };
 
     private final URI endpointUrl;
     private final BearerTokenService tokenService;
@@ -240,14 +239,14 @@ public class CipherTrustKms implements Kms<String, CipherTrustEdek> {
                 .thenApply(response -> checkResponseStatus(response, "alias resolution", alias))
                 .thenApply(HttpResponse::body)
                 .thenApply(this::parseGetKeysResponse)
-                .thenApply(keys -> {
-                    if (keys.length == 0) {
+                .thenApply(keysResponse -> {
+                    if (keysResponse.total() == 0 || keysResponse.resources() == null || keysResponse.resources().isEmpty()) {
                         LOGGER.atWarn()
                                 .addKeyValue("alias", alias)
                                 .log("key alias not found");
                         throw new UnknownAliasException("alias '%s' not found".formatted(alias));
                     }
-                    String keyId = keys[0].id();
+                    String keyId = keysResponse.resources().get(0).id();
                     LOGGER.atDebug()
                             .addKeyValue("alias", alias)
                             .addKeyValue("keyId", keyId)
@@ -313,8 +312,8 @@ public class CipherTrustKms implements Kms<String, CipherTrustEdek> {
         return response;
     }
 
-    private GetKeyResponse[] parseGetKeysResponse(byte[] bytes) {
-        return parseResponse(bytes, GET_KEY_RESPONSE_ARRAY, "get keys response");
+    private GetKeysResponse parseGetKeysResponse(byte[] bytes) {
+        return parseResponse(bytes, GetKeysResponse.class, "get keys response");
     }
 
     private <T> T parseResponse(byte[] bytes, Class<T> valueType, String description) {

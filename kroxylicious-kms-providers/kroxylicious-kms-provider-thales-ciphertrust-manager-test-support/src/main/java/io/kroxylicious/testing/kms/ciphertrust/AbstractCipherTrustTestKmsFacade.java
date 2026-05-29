@@ -39,6 +39,10 @@ public abstract class AbstractCipherTrustTestKmsFacade implements TestKmsFacade<
 
     protected abstract Tls getTlsConfig();
 
+    protected abstract String getUsername();
+
+    protected abstract String getPassword();
+
     @Override
     public final void start() {
         startCipherTrust();
@@ -52,8 +56,8 @@ public abstract class AbstractCipherTrustTestKmsFacade implements TestKmsFacade<
     @Override
     public final Config getKmsServiceConfig() {
         UserCredentials userCredentials = new UserCredentials(
-                TEST_USERNAME,
-                new InlinePassword(TEST_PASSWORD));
+                getUsername(),
+                new InlinePassword(getPassword()));
 
         return new Config(
                 getCipherTrustUrl(),

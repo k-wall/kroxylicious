@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
 
+import io.kroxylicious.kms.service.UnknownAliasException;
 import io.kroxylicious.proxy.config.tls.InsecureTls;
 import io.kroxylicious.proxy.config.tls.Tls;
 import io.kroxylicious.testing.kms.TestKekManager;
@@ -59,26 +60,33 @@ public class RealCipherTrustTestKmsFacade extends AbstractCipherTrustTestKmsFaca
 
     public RealCipherTrustTestKmsFacade() {
         String urlStr = System.getenv(ENV_URL);
-        if (urlStr == null || urlStr.isEmpty()) {
-            throw new IllegalStateException(ENV_URL + " environment variable must be set");
+        if (urlStr != null && !urlStr.isEmpty()) {
+            this.cipherTrustUrl = URI.create(urlStr);
+            this.username = System.getenv().getOrDefault(ENV_USERNAME, TEST_USERNAME);
+            this.password = System.getenv().getOrDefault(ENV_PASSWORD, TEST_PASSWORD);
+            this.tlsInsecure = Boolean.parseBoolean(System.getenv().getOrDefault(ENV_TLS_INSECURE, "false"));
+
+            HttpClient.Builder clientBuilder = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(30));
+
+            TlsHttpClientConfigurator tlsConfigurator = new TlsHttpClientConfigurator(getTlsConfig());
+            tlsConfigurator.apply(clientBuilder);
+
+            this.httpClient = clientBuilder.build();
         }
-        this.cipherTrustUrl = URI.create(urlStr);
-        this.username = System.getenv().getOrDefault(ENV_USERNAME, TEST_USERNAME);
-        this.password = System.getenv().getOrDefault(ENV_PASSWORD, TEST_PASSWORD);
-        this.tlsInsecure = Boolean.parseBoolean(System.getenv().getOrDefault(ENV_TLS_INSECURE, "false"));
-
-        HttpClient.Builder clientBuilder = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(30));
-
-        TlsHttpClientConfigurator tlsConfigurator = new TlsHttpClientConfigurator(getTlsConfig());
-        tlsConfigurator.apply(clientBuilder);
-
-        this.httpClient = clientBuilder.build();
+        else {
+            // Environment variable not set - facade is not available
+            this.cipherTrustUrl = null;
+            this.username = null;
+            this.password = null;
+            this.tlsInsecure = false;
+            this.httpClient = null;
+        }
     }
 
     @Override
     public boolean isAvailable() {
-        return System.getenv(ENV_URL) != null;
+        return cipherTrustUrl != null;
     }
 
     @Override
@@ -120,6 +128,9 @@ public class RealCipherTrustTestKmsFacade extends AbstractCipherTrustTestKmsFaca
 
     @Override
     protected URI getCipherTrustUrl() {
+        if (cipherTrustUrl == null) {
+            throw new IllegalStateException("RealCipherTrustTestKmsFacade is not available - " + ENV_URL + " environment variable not set");
+        }
         return cipherTrustUrl;
     }
 
@@ -134,6 +145,22 @@ public class RealCipherTrustTestKmsFacade extends AbstractCipherTrustTestKmsFaca
             return new Tls(null, new InsecureTls(true), null, null);
         }
         return null;
+    }
+
+    @Override
+    protected String getUsername() {
+        if (username == null) {
+            throw new IllegalStateException("RealCipherTrustTestKmsFacade is not available - " + ENV_URL + " environment variable not set");
+        }
+        return username;
+    }
+
+    @Override
+    protected String getPassword() {
+        if (password == null) {
+            throw new IllegalStateException("RealCipherTrustTestKmsFacade is not available - " + ENV_URL + " environment variable not set");
+        }
+        return password;
     }
 
     /**
@@ -208,23 +235,32 @@ public class RealCipherTrustTestKmsFacade extends AbstractCipherTrustTestKmsFaca
 
                 if (queryResponse.statusCode() == 200) {
                     @SuppressWarnings("unchecked")
-                    Map<String, Object>[] keys = OBJECT_MAPPER.readValue(queryResponse.body(), Map[].class);
-                    if (keys.length > 0) {
-                        String id = (String) keys[0].get("id");
+                    Map<String, Object> paginatedResponse = OBJECT_MAPPER.readValue(queryResponse.body(), Map.class);
+                    @SuppressWarnings("unchecked")
+                    var resources = (java.util.List<Map<String, Object>>) paginatedResponse.get("resources");
+                    if (resources == null || resources.isEmpty()) {
+                        throw new UnknownAliasException("Key not found: " + kekId);
+                    }
+                    String id = (String) resources.get(0).get("id");
 
-                        HttpRequest deleteRequest = HttpRequest.newBuilder()
-                                .uri(cipherTrustUrl.resolve("/api/v1/vault/keys2/" + id))
-                                .header("Authorization", "Bearer " + jwtToken)
-                                .DELETE()
-                                .build();
+                    HttpRequest deleteRequest = HttpRequest.newBuilder()
+                            .uri(cipherTrustUrl.resolve("/api/v1/vault/keys2/" + id))
+                            .header("Authorization", "Bearer " + jwtToken)
+                            .DELETE()
+                            .build();
 
-                        HttpResponse<String> deleteResponse = httpClient.send(deleteRequest, HttpResponse.BodyHandlers.ofString());
+                    HttpResponse<String> deleteResponse = httpClient.send(deleteRequest, HttpResponse.BodyHandlers.ofString());
 
-                        if (deleteResponse.statusCode() != 204 && deleteResponse.statusCode() != 200) {
-                            throw new IllegalStateException("Key deletion failed with status " + deleteResponse.statusCode() + ": " + deleteResponse.body());
-                        }
+                    if (deleteResponse.statusCode() != 204 && deleteResponse.statusCode() != 200) {
+                        throw new IllegalStateException("Key deletion failed with status " + deleteResponse.statusCode() + ": " + deleteResponse.body());
                     }
                 }
+                else {
+                    throw new UnknownAliasException("Key not found: " + kekId);
+                }
+            }
+            catch (UnknownAliasException e) {
+                throw e;
             }
             catch (Exception e) {
                 throw new RuntimeException("Failed to delete key: " + kekId, e);

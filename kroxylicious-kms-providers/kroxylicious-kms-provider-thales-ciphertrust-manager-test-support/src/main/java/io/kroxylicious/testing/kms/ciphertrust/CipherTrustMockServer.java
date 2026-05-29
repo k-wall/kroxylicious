@@ -498,16 +498,26 @@ public class CipherTrustMockServer {
 
                 String json;
                 if (name != null && keyStore.containsKey(name)) {
-                    // Return array with one key
+                    // Return paginated response with one key
                     Map<String, Object> key = Map.of(
                             "id", name, // For simplicity, use name as ID in mock
                             "name", name,
                             "algorithm", "aes");
-                    json = OBJECT_MAPPER.writeValueAsString(new Map[] { key });
+                    Map<String, Object> paginatedResponse = Map.of(
+                            "skip", 0,
+                            "limit", 10,
+                            "total", 1,
+                            "resources", new Map[] { key });
+                    json = OBJECT_MAPPER.writeValueAsString(paginatedResponse);
                 }
                 else {
-                    // Return empty array
-                    json = "[]";
+                    // Return empty paginated response
+                    Map<String, Object> paginatedResponse = Map.of(
+                            "skip", 0,
+                            "limit", 10,
+                            "total", 0);
+                    // Note: resources is null when total is 0, so we omit it
+                    json = OBJECT_MAPPER.writeValueAsString(paginatedResponse);
                 }
 
                 return aResponse()

@@ -68,6 +68,16 @@ public class CipherTrustTestKmsFacade extends AbstractCipherTrustTestKmsFacade {
         return null;
     }
 
+    @Override
+    protected String getUsername() {
+        return TEST_USERNAME;
+    }
+
+    @Override
+    protected String getPassword() {
+        return TEST_PASSWORD;
+    }
+
     /**
      * KEK manager for mock CipherTrust server.
      */
