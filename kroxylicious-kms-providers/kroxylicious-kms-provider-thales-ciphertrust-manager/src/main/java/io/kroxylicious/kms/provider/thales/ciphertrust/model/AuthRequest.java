@@ -33,19 +33,19 @@ import edu.umd.cs.findbugs.annotations.Nullable;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record AuthRequest(
-        @JsonProperty("username") @Nullable String username,
-        @JsonProperty("password") @Nullable String password,
-        @JsonProperty("refresh_token") @Nullable String refreshToken,
-        @JsonProperty("grant_type") @Nullable String grantType,
-        @JsonProperty("refresh_token_lifetime") @Nullable Integer refreshTokenLifetime,
-        @JsonProperty("refresh_token_revoke_unused_in") @Nullable Integer refreshTokenRevokeUnusedIn,
-        @JsonProperty("renew_refresh_token") @Nullable Boolean renewRefreshToken,
-        @JsonProperty("auth_domain") @Nullable String authDomain,
-        @JsonProperty("client_id") @Nullable String clientId,
-        @JsonProperty("connection") @Nullable String connection,
-        @JsonProperty("cookies") @Nullable Boolean cookies,
-        @JsonProperty("domain") @Nullable String domain,
-        @JsonProperty("labels") @Nullable List<String> labels) {
+                          @JsonProperty("username") @Nullable String username,
+                          @JsonProperty("password") @Nullable String password,
+                          @JsonProperty("refresh_token") @Nullable String refreshToken,
+                          @JsonProperty("grant_type") @Nullable String grantType,
+                          @JsonProperty("refresh_token_lifetime") @Nullable Integer refreshTokenLifetime,
+                          @JsonProperty("refresh_token_revoke_unused_in") @Nullable Integer refreshTokenRevokeUnusedIn,
+                          @JsonProperty("renew_refresh_token") @Nullable Boolean renewRefreshToken,
+                          @JsonProperty("auth_domain") @Nullable String authDomain,
+                          @JsonProperty("client_id") @Nullable String clientId,
+                          @JsonProperty("connection") @Nullable String connection,
+                          @JsonProperty("cookies") @Nullable Boolean cookies,
+                          @JsonProperty("domain") @Nullable String domain,
+                          @JsonProperty("labels") @Nullable List<String> labels) {
 
     /**
      * Create an auth request for initial authentication with username and password.

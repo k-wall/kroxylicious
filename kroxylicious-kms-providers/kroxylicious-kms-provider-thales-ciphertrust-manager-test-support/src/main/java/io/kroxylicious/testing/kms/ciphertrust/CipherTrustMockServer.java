@@ -6,7 +6,6 @@
 
 package io.kroxylicious.testing.kms.ciphertrust;
 
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Map;
@@ -17,12 +16,14 @@ import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.extension.ResponseTransformerV2;
+import com.github.tomakehurst.wiremock.http.Response;
+import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
@@ -57,13 +58,21 @@ public class CipherTrustMockServer {
      * Create a CipherTrust mock server.
      */
     public CipherTrustMockServer() {
-        this.server = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         try {
             this.secureRandom = SecureRandom.getInstanceStrong();
         }
         catch (Exception e) {
             throw new RuntimeException("Failed to initialize SecureRandom", e);
         }
+
+        this.server = new WireMockServer(WireMockConfiguration.options()
+                .dynamicPort()
+                .extensions(
+                        new RandomBytesTransformer(secureRandom),
+                        new EncryptTransformer(keyStore, secureRandom),
+                        new DecryptTransformer(keyStore),
+                        new CreateKeyTransformer(keyStore),
+                        new QueryKeyTransformer(keyStore)));
     }
 
     /**
@@ -129,38 +138,7 @@ public class CipherTrustMockServer {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withTransformers("random-bytes-transformer")));
-
-        // Register transformer for random bytes generation
-        server.addStubMapping(WireMock.get(urlPathMatching("/api/v1/vault/random.*"))
-                .withHeader("Authorization", equalTo("Bearer " + MOCK_JWT_TOKEN))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody((request) -> {
-                            // Extract bytes parameter from query string
-                            String query = request.getUrl();
-                            int bytesParam = 32; // default
-                            if (query.contains("bytes=")) {
-                                String bytesStr = query.substring(query.indexOf("bytes=") + 6);
-                                if (bytesStr.contains("&")) {
-                                    bytesStr = bytesStr.substring(0, bytesStr.indexOf("&"));
-                                }
-                                bytesParam = Integer.parseInt(bytesStr);
-                            }
-
-                            byte[] randomBytes = new byte[bytesParam];
-                            secureRandom.nextBytes(randomBytes);
-                            String base64 = Base64.getEncoder().encodeToString(randomBytes);
-
-                            try {
-                                return OBJECT_MAPPER.writeValueAsString(Map.of("bytes", base64));
-                            }
-                            catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        }))
-                .build());
+                        .withTransformers("random-bytes")));
     }
 
     private void setupEncryptEndpoint() {
@@ -172,49 +150,7 @@ public class CipherTrustMockServer {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody((request) -> {
-                            try {
-                                @SuppressWarnings("unchecked")
-                                Map<String, Object> requestBody = OBJECT_MAPPER.readValue(request.getBody(), Map.class);
-                                String keyId = (String) requestBody.get("id");
-                                String plaintextBase64 = (String) requestBody.get("plaintext");
-
-                                // Get or create KEK
-                                SecretKey kek = keyStore.computeIfAbsent(keyId, k -> generateAesKey());
-
-                                // Decrypt the base64 plaintext
-                                byte[] plaintext = Base64.getDecoder().decode(plaintextBase64);
-
-                                // Encrypt with AES-GCM
-                                byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
-                                secureRandom.nextBytes(iv);
-
-                                Cipher cipher = Cipher.getInstance(AES_GCM_CIPHER);
-                                GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv);
-                                cipher.init(Cipher.ENCRYPT_MODE, kek, gcmSpec);
-
-                                byte[] ciphertextWithTag = cipher.doFinal(plaintext);
-                                // Split ciphertext and tag
-                                int ciphertextLength = ciphertextWithTag.length - (GCM_TAG_LENGTH_BITS / 8);
-                                byte[] ciphertext = new byte[ciphertextLength];
-                                byte[] tag = new byte[GCM_TAG_LENGTH_BITS / 8];
-                                System.arraycopy(ciphertextWithTag, 0, ciphertext, 0, ciphertextLength);
-                                System.arraycopy(ciphertextWithTag, ciphertextLength, tag, 0, tag.length);
-
-                                Map<String, Object> response = Map.of(
-                                        "ciphertext", Base64.getEncoder().encodeToString(ciphertext),
-                                        "tag", Base64.getEncoder().encodeToString(tag),
-                                        "id", keyId,
-                                        "version", 0,
-                                        "mode", "gcm",
-                                        "iv", Base64.getEncoder().encodeToString(iv));
-
-                                return OBJECT_MAPPER.writeValueAsString(response);
-                            }
-                            catch (Exception e) {
-                                throw new RuntimeException("Encryption failed", e);
-                            }
-                        })));
+                        .withTransformers("encrypt")));
     }
 
     private void setupDecryptEndpoint() {
@@ -224,46 +160,7 @@ public class CipherTrustMockServer {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody((request) -> {
-                            try {
-                                @SuppressWarnings("unchecked")
-                                Map<String, Object> requestBody = OBJECT_MAPPER.readValue(request.getBody(), Map.class);
-                                String keyId = (String) requestBody.get("id");
-                                String ciphertextBase64 = (String) requestBody.get("ciphertext");
-                                String tagBase64 = (String) requestBody.get("tag");
-                                String ivBase64 = (String) requestBody.get("iv");
-
-                                // Get KEK
-                                SecretKey kek = keyStore.get(keyId);
-                                if (kek == null) {
-                                    return OBJECT_MAPPER.writeValueAsString(Map.of("error", "Key not found"));
-                                }
-
-                                // Decrypt with AES-GCM
-                                byte[] ciphertext = Base64.getDecoder().decode(ciphertextBase64);
-                                byte[] tag = Base64.getDecoder().decode(tagBase64);
-                                byte[] iv = Base64.getDecoder().decode(ivBase64);
-
-                                // Combine ciphertext and tag for GCM
-                                byte[] ciphertextWithTag = new byte[ciphertext.length + tag.length];
-                                System.arraycopy(ciphertext, 0, ciphertextWithTag, 0, ciphertext.length);
-                                System.arraycopy(tag, 0, ciphertextWithTag, ciphertext.length, tag.length);
-
-                                Cipher cipher = Cipher.getInstance(AES_GCM_CIPHER);
-                                GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv);
-                                cipher.init(Cipher.DECRYPT_MODE, kek, gcmSpec);
-
-                                byte[] plaintext = cipher.doFinal(ciphertextWithTag);
-
-                                Map<String, Object> response = Map.of(
-                                        "plaintext", Base64.getEncoder().encodeToString(plaintext));
-
-                                return OBJECT_MAPPER.writeValueAsString(response);
-                            }
-                            catch (Exception e) {
-                                throw new RuntimeException("Decryption failed", e);
-                            }
-                        })));
+                        .withTransformers("decrypt")));
     }
 
     private void setupKeyManagementEndpoints() {
@@ -273,30 +170,7 @@ public class CipherTrustMockServer {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody((request) -> {
-                            try {
-                                @SuppressWarnings("unchecked")
-                                Map<String, Object> requestBody = OBJECT_MAPPER.readValue(request.getBody(), Map.class);
-                                String name = (String) requestBody.get("name");
-                                String keyId = UUID.randomUUID().toString();
-
-                                // Create and store key
-                                SecretKey key = generateAesKey();
-                                keyStore.put(keyId, key);
-                                // Also store by name for lookup
-                                keyStore.put(name, key);
-
-                                Map<String, Object> response = Map.of(
-                                        "id", keyId,
-                                        "name", name,
-                                        "algorithm", "aes");
-
-                                return OBJECT_MAPPER.writeValueAsString(response);
-                            }
-                            catch (Exception e) {
-                                throw new RuntimeException("Key creation failed", e);
-                            }
-                        })));
+                        .withTransformers("create-key")));
 
         // Query keys by name
         server.stubFor(get(urlPathMatching("/api/v1/vault/keys2.*"))
@@ -305,34 +179,7 @@ public class CipherTrustMockServer {
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody((request) -> {
-                            try {
-                                String query = request.getUrl();
-                                String name = null;
-                                if (query.contains("name=")) {
-                                    name = query.substring(query.indexOf("name=") + 5);
-                                    if (name.contains("&")) {
-                                        name = name.substring(0, name.indexOf("&"));
-                                    }
-                                }
-
-                                if (name != null && keyStore.containsKey(name)) {
-                                    // Return array with one key
-                                    Map<String, Object> key = Map.of(
-                                            "id", name, // For simplicity, use name as ID in mock
-                                            "name", name,
-                                            "algorithm", "aes");
-                                    return OBJECT_MAPPER.writeValueAsString(new Map[] { key });
-                                }
-                                else {
-                                    // Return empty array
-                                    return "[]";
-                                }
-                            }
-                            catch (Exception e) {
-                                throw new RuntimeException("Key query failed", e);
-                            }
-                        })));
+                        .withTransformers("query-key")));
     }
 
     /**
@@ -354,7 +201,7 @@ public class CipherTrustMockServer {
         keyStore.remove(keyName);
     }
 
-    private SecretKey generateAesKey() {
+    private static SecretKey generateAesKey() {
         try {
             KeyGenerator keyGen = KeyGenerator.getInstance("AES");
             keyGen.init(256);
@@ -362,6 +209,266 @@ public class CipherTrustMockServer {
         }
         catch (Exception e) {
             throw new RuntimeException("Failed to generate AES key", e);
+        }
+    }
+
+    // Transformer implementations
+
+    private static class RandomBytesTransformer implements ResponseTransformerV2 {
+        private final SecureRandom secureRandom;
+
+        RandomBytesTransformer(SecureRandom secureRandom) {
+            this.secureRandom = secureRandom;
+        }
+
+        @Override
+        public Response transform(Response response, ServeEvent serveEvent) {
+            try {
+                String query = serveEvent.getRequest().getUrl();
+                int bytesParam = 32; // default
+                if (query.contains("bytes=")) {
+                    String bytesStr = query.substring(query.indexOf("bytes=") + 6);
+                    if (bytesStr.contains("&")) {
+                        bytesStr = bytesStr.substring(0, bytesStr.indexOf("&"));
+                    }
+                    bytesParam = Integer.parseInt(bytesStr);
+                }
+
+                byte[] randomBytes = new byte[bytesParam];
+                secureRandom.nextBytes(randomBytes);
+                String base64 = Base64.getEncoder().encodeToString(randomBytes);
+
+                String json = OBJECT_MAPPER.writeValueAsString(Map.of("bytes", base64));
+                return Response.Builder.like(response)
+                        .but().body(json)
+                        .build();
+            }
+            catch (Exception e) {
+                throw new RuntimeException("Random bytes generation failed", e);
+            }
+        }
+
+        @Override
+        public String getName() {
+            return "random-bytes";
+        }
+    }
+
+    private static class EncryptTransformer implements ResponseTransformerV2 {
+        private final Map<String, SecretKey> keyStore;
+        private final SecureRandom secureRandom;
+
+        EncryptTransformer(Map<String, SecretKey> keyStore, SecureRandom secureRandom) {
+            this.keyStore = keyStore;
+            this.secureRandom = secureRandom;
+        }
+
+        @Override
+        public Response transform(Response response, ServeEvent serveEvent) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> requestBody = OBJECT_MAPPER.readValue(
+                        serveEvent.getRequest().getBody(), Map.class);
+                String keyId = (String) requestBody.get("id");
+                String plaintextBase64 = (String) requestBody.get("plaintext");
+
+                // Get or create KEK
+                SecretKey kek = keyStore.computeIfAbsent(keyId, k -> generateAesKey());
+
+                // Decode the base64 plaintext
+                byte[] plaintext = Base64.getDecoder().decode(plaintextBase64);
+
+                // Encrypt with AES-GCM
+                byte[] iv = new byte[GCM_IV_LENGTH_BYTES];
+                secureRandom.nextBytes(iv);
+
+                Cipher cipher = Cipher.getInstance(AES_GCM_CIPHER);
+                GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv);
+                cipher.init(Cipher.ENCRYPT_MODE, kek, gcmSpec);
+
+                byte[] ciphertextWithTag = cipher.doFinal(plaintext);
+                // Split ciphertext and tag
+                int ciphertextLength = ciphertextWithTag.length - (GCM_TAG_LENGTH_BITS / 8);
+                byte[] ciphertext = new byte[ciphertextLength];
+                byte[] tag = new byte[GCM_TAG_LENGTH_BITS / 8];
+                System.arraycopy(ciphertextWithTag, 0, ciphertext, 0, ciphertextLength);
+                System.arraycopy(ciphertextWithTag, ciphertextLength, tag, 0, tag.length);
+
+                Map<String, Object> responseBody = Map.of(
+                        "ciphertext", Base64.getEncoder().encodeToString(ciphertext),
+                        "tag", Base64.getEncoder().encodeToString(tag),
+                        "id", keyId,
+                        "version", 0,
+                        "mode", "gcm",
+                        "iv", Base64.getEncoder().encodeToString(iv));
+
+                String json = OBJECT_MAPPER.writeValueAsString(responseBody);
+                return Response.Builder.like(response)
+                        .but().body(json)
+                        .build();
+            }
+            catch (Exception e) {
+                throw new RuntimeException("Encryption failed", e);
+            }
+        }
+
+        @Override
+        public String getName() {
+            return "encrypt";
+        }
+    }
+
+    private static class DecryptTransformer implements ResponseTransformerV2 {
+        private final Map<String, SecretKey> keyStore;
+
+        DecryptTransformer(Map<String, SecretKey> keyStore) {
+            this.keyStore = keyStore;
+        }
+
+        @Override
+        public Response transform(Response response, ServeEvent serveEvent) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> requestBody = OBJECT_MAPPER.readValue(
+                        serveEvent.getRequest().getBody(), Map.class);
+                String keyId = (String) requestBody.get("id");
+                String ciphertextBase64 = (String) requestBody.get("ciphertext");
+                String tagBase64 = (String) requestBody.get("tag");
+                String ivBase64 = (String) requestBody.get("iv");
+
+                // Get KEK
+                SecretKey kek = keyStore.get(keyId);
+                if (kek == null) {
+                    String errorJson = OBJECT_MAPPER.writeValueAsString(Map.of("error", "Key not found"));
+                    return Response.Builder.like(response)
+                            .but().status(404)
+                            .body(errorJson)
+                            .build();
+                }
+
+                // Decrypt with AES-GCM
+                byte[] ciphertext = Base64.getDecoder().decode(ciphertextBase64);
+                byte[] tag = Base64.getDecoder().decode(tagBase64);
+                byte[] iv = Base64.getDecoder().decode(ivBase64);
+
+                // Combine ciphertext and tag for GCM
+                byte[] ciphertextWithTag = new byte[ciphertext.length + tag.length];
+                System.arraycopy(ciphertext, 0, ciphertextWithTag, 0, ciphertext.length);
+                System.arraycopy(tag, 0, ciphertextWithTag, ciphertext.length, tag.length);
+
+                Cipher cipher = Cipher.getInstance(AES_GCM_CIPHER);
+                GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv);
+                cipher.init(Cipher.DECRYPT_MODE, kek, gcmSpec);
+
+                byte[] plaintext = cipher.doFinal(ciphertextWithTag);
+
+                Map<String, Object> responseBody = Map.of(
+                        "plaintext", Base64.getEncoder().encodeToString(plaintext));
+
+                String json = OBJECT_MAPPER.writeValueAsString(responseBody);
+                return Response.Builder.like(response)
+                        .but().body(json)
+                        .build();
+            }
+            catch (Exception e) {
+                throw new RuntimeException("Decryption failed", e);
+            }
+        }
+
+        @Override
+        public String getName() {
+            return "decrypt";
+        }
+    }
+
+    private static class CreateKeyTransformer implements ResponseTransformerV2 {
+        private final Map<String, SecretKey> keyStore;
+
+        CreateKeyTransformer(Map<String, SecretKey> keyStore) {
+            this.keyStore = keyStore;
+        }
+
+        @Override
+        public Response transform(Response response, ServeEvent serveEvent) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> requestBody = OBJECT_MAPPER.readValue(
+                        serveEvent.getRequest().getBody(), Map.class);
+                String name = (String) requestBody.get("name");
+                String keyId = UUID.randomUUID().toString();
+
+                // Create and store key
+                SecretKey key = generateAesKey();
+                keyStore.put(keyId, key);
+                // Also store by name for lookup
+                keyStore.put(name, key);
+
+                Map<String, Object> responseBody = Map.of(
+                        "id", keyId,
+                        "name", name,
+                        "algorithm", "aes");
+
+                String json = OBJECT_MAPPER.writeValueAsString(responseBody);
+                return Response.Builder.like(response)
+                        .but().body(json)
+                        .build();
+            }
+            catch (Exception e) {
+                throw new RuntimeException("Key creation failed", e);
+            }
+        }
+
+        @Override
+        public String getName() {
+            return "create-key";
+        }
+    }
+
+    private static class QueryKeyTransformer implements ResponseTransformerV2 {
+        private final Map<String, SecretKey> keyStore;
+
+        QueryKeyTransformer(Map<String, SecretKey> keyStore) {
+            this.keyStore = keyStore;
+        }
+
+        @Override
+        public Response transform(Response response, ServeEvent serveEvent) {
+            try {
+                String query = serveEvent.getRequest().getUrl();
+                String name = null;
+                if (query.contains("name=")) {
+                    name = query.substring(query.indexOf("name=") + 5);
+                    if (name.contains("&")) {
+                        name = name.substring(0, name.indexOf("&"));
+                    }
+                }
+
+                String json;
+                if (name != null && keyStore.containsKey(name)) {
+                    // Return array with one key
+                    Map<String, Object> key = Map.of(
+                            "id", name, // For simplicity, use name as ID in mock
+                            "name", name,
+                            "algorithm", "aes");
+                    json = OBJECT_MAPPER.writeValueAsString(new Map[] { key });
+                }
+                else {
+                    // Return empty array
+                    json = "[]";
+                }
+
+                return Response.Builder.like(response)
+                        .but().body(json)
+                        .build();
+            }
+            catch (Exception e) {
+                throw new RuntimeException("Key query failed", e);
+            }
+        }
+
+        @Override
+        public String getName() {
+            return "query-key";
         }
     }
 }

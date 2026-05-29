@@ -46,12 +46,12 @@ import io.kroxylicious.kms.service.UnknownKeyException;
  * Implementation of {@link Kms} backed by Thales CipherTrust Manager.
  * <p>
  * Implements envelope encryption using CTM's primitive cryptographic operations:
+ * </p>
  * <ul>
  *   <li>Generate random DEK bytes via {@code /api/v1/vault/random}</li>
  *   <li>Encrypt DEK with KEK via {@code /api/v1/crypto/encrypt}</li>
  *   <li>Decrypt EDEK via {@code /api/v1/crypto/decrypt}</li>
  * </ul>
- * </p>
  */
 public class CipherTrustKms implements Kms<String, CipherTrustEdek> {
 
@@ -124,7 +124,7 @@ public class CipherTrustKms implements Kms<String, CipherTrustEdek> {
                 .thenCompose(token -> {
                     HttpRequest request = HttpRequest.newBuilder()
                             .uri(randomUri)
-                            .header("Authorization", "Bearer " + token.bearerToken())
+                            .header("Authorization", "Bearer " + token.token())
                             .header("Accept", "application/json")
                             .GET()
                             .build();
@@ -148,7 +148,7 @@ public class CipherTrustKms implements Kms<String, CipherTrustEdek> {
 
                         HttpRequest request = HttpRequest.newBuilder()
                                 .uri(encryptUri)
-                                .header("Authorization", "Bearer " + token.bearerToken())
+                                .header("Authorization", "Bearer " + token.token())
                                 .header("Content-Type", "application/json")
                                 .header("Accept", "application/json")
                                 .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
@@ -194,7 +194,7 @@ public class CipherTrustKms implements Kms<String, CipherTrustEdek> {
 
                         HttpRequest request = HttpRequest.newBuilder()
                                 .uri(decryptUri)
-                                .header("Authorization", "Bearer " + token.bearerToken())
+                                .header("Authorization", "Bearer " + token.token())
                                 .header("Content-Type", "application/json")
                                 .header("Accept", "application/json")
                                 .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
@@ -230,7 +230,7 @@ public class CipherTrustKms implements Kms<String, CipherTrustEdek> {
                 .thenCompose(token -> {
                     HttpRequest request = HttpRequest.newBuilder()
                             .uri(keysUri)
-                            .header("Authorization", "Bearer " + token.bearerToken())
+                            .header("Authorization", "Bearer " + token.token())
                             .header("Accept", "application/json")
                             .GET()
                             .build();

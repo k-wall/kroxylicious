@@ -148,13 +148,14 @@ public class UserAuthenticationTokenService implements BearerTokenService {
                         refreshToken.set(authResponse.refreshToken());
 
                         // Calculate expiry time
-                        Instant expiresAt = Instant.now().plusSeconds(authResponse.duration());
+                        Instant now = Instant.now();
+                        Instant expiresAt = now.plusSeconds(authResponse.duration());
 
                         LOGGER.atInfo()
                                 .addKeyValue("expiresAt", expiresAt)
                                 .log("{} succeeded", operationType);
 
-                        return new BearerToken(authResponse.jwt(), expiresAt);
+                        return new BearerToken(authResponse.jwt(), now, expiresAt);
                     });
         }
         catch (IOException e) {

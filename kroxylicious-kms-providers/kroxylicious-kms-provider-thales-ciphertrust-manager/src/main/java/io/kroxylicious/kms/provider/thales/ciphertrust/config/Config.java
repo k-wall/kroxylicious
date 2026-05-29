@@ -25,10 +25,10 @@ import edu.umd.cs.findbugs.annotations.Nullable;
  * @param tls TLS configuration
  */
 public record Config(
-        @JsonProperty(value = "endpointUrl", required = true) URI endpointUrl,
-        @JsonProperty("userCredentials") @Nullable UserCredentials userCredentials,
-        @JsonProperty("clientCredentials") @Nullable ClientCredentials clientCredentials,
-        @JsonProperty(value = "tls", required = false) @Nullable Tls tls) {
+                     @JsonProperty(value = "endpointUrl", required = true) URI endpointUrl,
+                     @JsonProperty("userCredentials") @Nullable UserCredentials userCredentials,
+                     @JsonProperty("clientCredentials") @Nullable ClientCredentials clientCredentials,
+                     @JsonProperty(value = "tls", required = false) @Nullable Tls tls) {
 
     public Config {
         Objects.requireNonNull(endpointUrl, "endpointUrl cannot be null");

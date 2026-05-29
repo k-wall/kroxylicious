@@ -17,6 +17,5 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 @SuppressWarnings("java:S6218") // no need for toString, equals, hashCode to go deep on the byte[]
 public record EncryptRequest(
-        @JsonProperty("id") String id,
-        @JsonProperty("plaintext") byte[] plaintext) {
-}
+                             @JsonProperty("id") String id,
+                             @JsonProperty("plaintext") byte[] plaintext) {}

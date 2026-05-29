@@ -19,7 +19,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GetKeyResponse(
-        @JsonProperty("id") String id,
-        @JsonProperty("name") String name,
-        @JsonProperty("algorithm") String algorithm) {
-}
+                             @JsonProperty("id") String id,
+                             @JsonProperty("name") String name,
+                             @JsonProperty("algorithm") String algorithm) {}

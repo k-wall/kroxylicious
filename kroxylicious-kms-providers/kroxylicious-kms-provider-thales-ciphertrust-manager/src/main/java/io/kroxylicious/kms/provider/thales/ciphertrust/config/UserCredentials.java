@@ -19,8 +19,8 @@ import io.kroxylicious.proxy.config.secret.PasswordProvider;
  * @param password the password provider
  */
 public record UserCredentials(
-        @JsonProperty(required = true) String username,
-        @JsonProperty(required = true) PasswordProvider password) {
+                              @JsonProperty(required = true) String username,
+                              @JsonProperty(required = true) PasswordProvider password) {
     public UserCredentials {
         Objects.requireNonNull(username, "username cannot be null");
         Objects.requireNonNull(password, "password cannot be null");

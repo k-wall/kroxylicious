@@ -23,10 +23,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @SuppressWarnings("java:S6218") // no need for toString, equals, hashCode to go deep on the byte[]
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record EncryptResponse(
-        @JsonProperty("ciphertext") byte[] ciphertext,
-        @JsonProperty("tag") byte[] tag,
-        @JsonProperty("id") String id,
-        @JsonProperty("version") int version,
-        @JsonProperty("mode") String mode,
-        @JsonProperty("iv") byte[] iv) {
-}
+                              @JsonProperty("ciphertext") byte[] ciphertext,
+                              @JsonProperty("tag") byte[] tag,
+                              @JsonProperty("id") String id,
+                              @JsonProperty("version") int version,
+                              @JsonProperty("mode") String mode,
+                              @JsonProperty("iv") byte[] iv) {}

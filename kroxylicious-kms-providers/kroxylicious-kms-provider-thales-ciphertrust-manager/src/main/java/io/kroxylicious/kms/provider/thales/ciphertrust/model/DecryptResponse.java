@@ -18,5 +18,4 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @SuppressWarnings("java:S6218") // no need for toString, equals, hashCode to go deep on the byte[]
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record DecryptResponse(
-        @JsonProperty("plaintext") byte[] plaintext) {
-}
+                              @JsonProperty("plaintext") byte[] plaintext) {}

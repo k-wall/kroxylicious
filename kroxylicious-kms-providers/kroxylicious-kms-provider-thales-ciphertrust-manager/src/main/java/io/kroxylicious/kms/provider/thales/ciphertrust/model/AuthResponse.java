@@ -18,7 +18,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record AuthResponse(
-        @JsonProperty("jwt") String jwt,
-        @JsonProperty("duration") int duration,
-        @JsonProperty("refresh_token") String refreshToken) {
-}
+                           @JsonProperty("jwt") String jwt,
+                           @JsonProperty("duration") int duration,
+                           @JsonProperty("refresh_token") String refreshToken) {}

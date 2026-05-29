@@ -22,12 +22,12 @@ import java.util.Objects;
  * @param iv initialization vector
  */
 public record CipherTrustEdek(
-        String id,
-        byte[] ciphertext,
-        byte[] tag,
-        int version,
-        String mode,
-        byte[] iv) {
+                              String id,
+                              byte[] ciphertext,
+                              byte[] tag,
+                              int version,
+                              String mode,
+                              byte[] iv) {
 
     public CipherTrustEdek {
         Objects.requireNonNull(id, "id cannot be null");
