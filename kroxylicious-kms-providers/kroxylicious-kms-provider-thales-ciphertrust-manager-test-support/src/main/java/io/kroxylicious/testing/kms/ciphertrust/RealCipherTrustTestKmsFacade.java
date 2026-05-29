@@ -201,19 +201,46 @@ public class RealCipherTrustTestKmsFacade extends AbstractCipherTrustTestKmsFaca
         @Override
         public void rotateKek(@NonNull String kekId) {
             try {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(cipherTrustUrl.resolve("/api/v1/vault/keys2/" + kekId + "/versions/"))
-                        .header("Content-Type", "application/json")
+                // First, resolve the key name to get the ID
+                HttpRequest queryRequest = HttpRequest.newBuilder()
+                        .uri(cipherTrustUrl.resolve("/api/v1/vault/keys2?name=" + kekId))
                         .header("Accept", "application/json")
                         .header("Authorization", "Bearer " + jwtToken)
-                        .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                        .GET()
                         .build();
 
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                HttpResponse<String> queryResponse = httpClient.send(queryRequest, HttpResponse.BodyHandlers.ofString());
 
-                if (response.statusCode() != 200 && response.statusCode() != 201) {
-                    throw new IllegalStateException("Key rotation failed with status " + response.statusCode() + ": " + response.body());
+                if (queryResponse.statusCode() == 200) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> paginatedResponse = OBJECT_MAPPER.readValue(queryResponse.body(), Map.class);
+                    @SuppressWarnings("unchecked")
+                    var resources = (java.util.List<Map<String, Object>>) paginatedResponse.get("resources");
+                    if (resources == null || resources.isEmpty()) {
+                        throw new UnknownAliasException("Key not found: " + kekId);
+                    }
+                    String id = (String) resources.get(0).get("id");
+
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(cipherTrustUrl.resolve("/api/v1/vault/keys2/" + id + "/versions/"))
+                            .header("Content-Type", "application/json")
+                            .header("Accept", "application/json")
+                            .header("Authorization", "Bearer " + jwtToken)
+                            .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                            .build();
+
+                    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+                    if (response.statusCode() != 200 && response.statusCode() != 201) {
+                        throw new IllegalStateException("Key rotation failed with status " + response.statusCode() + ": " + response.body());
+                    }
                 }
+                else {
+                    throw new UnknownAliasException("Key not found: " + kekId);
+                }
+            }
+            catch (UnknownAliasException e) {
+                throw e;
             }
             catch (Exception e) {
                 throw new RuntimeException("Failed to rotate key: " + kekId, e);
