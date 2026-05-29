@@ -292,4 +292,35 @@ class TlsHttpClientConfiguratorTest {
         assertThatThrownBy(() -> tls.apply(builder))
                 .isInstanceOf(SslConfigurationException.class);
     }
+
+    @Test
+    void testInsecureTlsDisablesHostnameVerification() {
+        var tls = new TlsHttpClientConfigurator(new Tls(null, new InsecureTls(true), null, null));
+
+        tls.apply(builder);
+
+        assertThat(builder.build().sslParameters().getEndpointIdentificationAlgorithm()).isNull();
+    }
+
+    @Test
+    void testSecureTlsEnablesHostnameVerification() throws NoSuchAlgorithmException {
+        var tls = new TlsHttpClientConfigurator(new Tls(null, new InsecureTls(false), null, null));
+
+        tls.apply(builder);
+
+        // When InsecureTls is false, hostname verification should use the platform default
+        assertThat(builder.build().sslParameters().getEndpointIdentificationAlgorithm())
+                .isEqualTo(SSLContext.getDefault().getDefaultSSLParameters().getEndpointIdentificationAlgorithm());
+    }
+
+    @Test
+    void testNullTlsEnablesHostnameVerification() throws NoSuchAlgorithmException {
+        var tls = new TlsHttpClientConfigurator(null);
+
+        tls.apply(builder);
+
+        // When TLS is null, hostname verification should use the platform default
+        assertThat(builder.build().sslParameters().getEndpointIdentificationAlgorithm())
+                .isEqualTo(SSLContext.getDefault().getDefaultSSLParameters().getEndpointIdentificationAlgorithm());
+    }
 }

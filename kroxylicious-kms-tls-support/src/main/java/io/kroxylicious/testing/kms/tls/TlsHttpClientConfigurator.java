@@ -25,7 +25,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509TrustManager;
+import javax.net.ssl.X509ExtendedTrustManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,7 +67,7 @@ public class TlsHttpClientConfigurator implements UnaryOperator<HttpClient.Build
         }
     }
 
-    private static final X509TrustManager INSECURE_TRUST_MANAGER = new InsecureTrustManager();
+    private static final X509ExtendedTrustManager INSECURE_TRUST_MANAGER = new InsecureTrustManager();
 
     private static final TrustManager[] INSECURE_TRUST_MANAGERS = { INSECURE_TRUST_MANAGER };
     @Nullable
@@ -113,6 +113,12 @@ public class TlsHttpClientConfigurator implements UnaryOperator<HttpClient.Build
 
     private SSLParameters sslParameters() {
         var defaultSslParameters = PLATFORM_SSL_CONTEXT.getDefaultSSLParameters();
+
+        // Disable hostname verification if using insecure TLS
+        if (isInsecureTls()) {
+            defaultSslParameters.setEndpointIdentificationAlgorithm(null);
+        }
+
         if (tls == null || (tls.protocols() == null && tls.cipherSuites() == null)) {
             return defaultSslParameters;
         }
@@ -126,6 +132,28 @@ public class TlsHttpClientConfigurator implements UnaryOperator<HttpClient.Build
         defaultSslParameters.setCipherSuites(cipherSuites);
 
         return defaultSslParameters;
+    }
+
+    private boolean isInsecureTls() {
+        if (tls == null || tls.trust() == null) {
+            return false;
+        }
+        return tls.trust().accept(new TrustProviderVisitor<>() {
+            @Override
+            public Boolean visit(TrustStore trustStore) {
+                return false;
+            }
+
+            @Override
+            public Boolean visit(InsecureTls insecureTls) {
+                return insecureTls.insecure();
+            }
+
+            @Override
+            public Boolean visit(PlatformTrustProvider platformTrustProvider) {
+                return false;
+            }
+        });
     }
 
     @NonNull
