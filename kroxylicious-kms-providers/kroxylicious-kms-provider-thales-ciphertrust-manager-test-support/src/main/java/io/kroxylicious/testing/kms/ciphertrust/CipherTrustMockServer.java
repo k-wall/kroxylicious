@@ -53,7 +53,7 @@ public class CipherTrustMockServer {
     private static final String AES_GCM_CIPHER = "AES/GCM/NoPadding";
 
     private final WireMockServer server;
-    private final Map<String, SecretKey> keyStore = new ConcurrentHashMap<>();
+    private final VersionedKeyStore keyStore = new VersionedKeyStore();
     private final SecureRandom secureRandom;
 
     /**
@@ -190,8 +190,16 @@ public class CipherTrustMockServer {
      * @param keyName name of the key
      */
     public void createKey(String keyName) {
-        SecretKey key = generateAesKey();
-        keyStore.put(keyName, key);
+        keyStore.createKey(keyName);
+    }
+
+    /**
+     * Rotate a key - creates a new version.
+     *
+     * @param keyName name of the key
+     */
+    public void rotateKey(String keyName) {
+        keyStore.rotateKey(keyName);
     }
 
     /**
@@ -200,7 +208,7 @@ public class CipherTrustMockServer {
      * @param keyName name of the key
      */
     public void deleteKey(String keyName) {
-        keyStore.remove(keyName);
+        keyStore.deleteKey(keyName);
     }
 
     private static SecretKey generateAesKey() {
@@ -264,10 +272,10 @@ public class CipherTrustMockServer {
     }
 
     private static class EncryptTransformer implements ResponseDefinitionTransformerV2 {
-        private final Map<String, SecretKey> keyStore;
+        private final VersionedKeyStore keyStore;
         private final SecureRandom secureRandom;
 
-        EncryptTransformer(Map<String, SecretKey> keyStore, SecureRandom secureRandom) {
+        EncryptTransformer(VersionedKeyStore keyStore, SecureRandom secureRandom) {
             this.keyStore = keyStore;
             this.secureRandom = secureRandom;
         }
@@ -286,9 +294,9 @@ public class CipherTrustMockServer {
                 String keyId = (String) requestBody.get("id");
                 String plaintextBase64 = (String) requestBody.get("plaintext");
 
-                // Get KEK (do not auto-create)
-                SecretKey kek = keyStore.get(keyId);
-                if (kek == null) {
+                // Get latest version of KEK
+                int latestVersion = keyStore.getLatestVersion(keyId);
+                if (latestVersion < 0) {
                     String errorJson = OBJECT_MAPPER.writeValueAsString(Map.of("error", "Key not found"));
                     return aResponse()
                             .withStatus(404)
@@ -296,6 +304,7 @@ public class CipherTrustMockServer {
                             .withBody(errorJson)
                             .build();
                 }
+                SecretKey kek = keyStore.getKey(keyId, latestVersion);
 
                 // Decode the base64 plaintext
                 byte[] plaintext = Base64.getDecoder().decode(plaintextBase64);
@@ -320,7 +329,7 @@ public class CipherTrustMockServer {
                         "ciphertext", Base64.getEncoder().encodeToString(ciphertext),
                         "tag", Base64.getEncoder().encodeToString(tag),
                         "id", keyId,
-                        "version", 0,
+                        "version", latestVersion,
                         "mode", "gcm",
                         "iv", Base64.getEncoder().encodeToString(iv));
 
@@ -343,9 +352,9 @@ public class CipherTrustMockServer {
     }
 
     private static class DecryptTransformer implements ResponseDefinitionTransformerV2 {
-        private final Map<String, SecretKey> keyStore;
+        private final VersionedKeyStore keyStore;
 
-        DecryptTransformer(Map<String, SecretKey> keyStore) {
+        DecryptTransformer(VersionedKeyStore keyStore) {
             this.keyStore = keyStore;
         }
 
@@ -361,16 +370,18 @@ public class CipherTrustMockServer {
                 Map<String, Object> requestBody = OBJECT_MAPPER.readValue(
                         serveEvent.getRequest().getBody(), Map.class);
                 String keyId = (String) requestBody.get("id");
+                Integer version = (Integer) requestBody.get("version");
                 String ciphertextBase64 = (String) requestBody.get("ciphertext");
                 String tagBase64 = (String) requestBody.get("tag");
                 String ivBase64 = (String) requestBody.get("iv");
 
-                // Get KEK
-                SecretKey kek = keyStore.get(keyId);
+                // Get specific version of KEK
+                SecretKey kek = keyStore.getKey(keyId, version);
                 if (kek == null) {
-                    String errorJson = OBJECT_MAPPER.writeValueAsString(Map.of("error", "Key not found"));
+                    String errorJson = OBJECT_MAPPER.writeValueAsString(Map.of("error", "Key version not found"));
                     return aResponse()
                             .withStatus(404)
+                            .withHeader("Content-Type", "application/json")
                             .withBody(errorJson)
                             .build();
                 }
@@ -413,9 +424,9 @@ public class CipherTrustMockServer {
     }
 
     private static class CreateKeyTransformer implements ResponseDefinitionTransformerV2 {
-        private final Map<String, SecretKey> keyStore;
+        private final VersionedKeyStore keyStore;
 
-        CreateKeyTransformer(Map<String, SecretKey> keyStore) {
+        CreateKeyTransformer(VersionedKeyStore keyStore) {
             this.keyStore = keyStore;
         }
 
@@ -433,11 +444,10 @@ public class CipherTrustMockServer {
                 String name = (String) requestBody.get("name");
                 String keyId = UUID.randomUUID().toString();
 
-                // Create and store key
-                SecretKey key = generateAesKey();
-                keyStore.put(keyId, key);
+                // Create and store key at version 0
+                keyStore.createKey(keyId);
                 // Also store by name for lookup
-                keyStore.put(name, key);
+                keyStore.createKey(name);
 
                 Map<String, Object> responseBody = Map.of(
                         "id", keyId,
@@ -463,9 +473,9 @@ public class CipherTrustMockServer {
     }
 
     private static class QueryKeyTransformer implements ResponseDefinitionTransformerV2 {
-        private final Map<String, SecretKey> keyStore;
+        private final VersionedKeyStore keyStore;
 
-        QueryKeyTransformer(Map<String, SecretKey> keyStore) {
+        QueryKeyTransformer(VersionedKeyStore keyStore) {
             this.keyStore = keyStore;
         }
 
@@ -514,6 +524,82 @@ public class CipherTrustMockServer {
         @Override
         public String getName() {
             return "query-key";
+        }
+    }
+
+    /**
+     * Versioned key store for CTM key versioning support.
+     * Each key can have multiple versions, with version 0 being the initial version.
+     */
+    private static class VersionedKeyStore {
+        private final Map<String, Map<Integer, SecretKey>> keys = new ConcurrentHashMap<>();
+        private final Map<String, Integer> latestVersions = new ConcurrentHashMap<>();
+
+        /**
+         * Create a new key at version 0.
+         */
+        void createKey(String keyId) {
+            Map<Integer, SecretKey> versions = new ConcurrentHashMap<>();
+            versions.put(0, generateAesKey());
+            keys.put(keyId, versions);
+            latestVersions.put(keyId, 0);
+        }
+
+        /**
+         * Rotate a key - creates a new version.
+         * @return the new version number, or -1 if key doesn't exist
+         */
+        int rotateKey(String keyId) {
+            Map<Integer, SecretKey> versions = keys.get(keyId);
+            if (versions == null) {
+                return -1;
+            }
+
+            int currentVersion = latestVersions.getOrDefault(keyId, 0);
+            int newVersion = currentVersion + 1;
+
+            versions.put(newVersion, generateAesKey());
+            latestVersions.put(keyId, newVersion);
+
+            return newVersion;
+        }
+
+        /**
+         * Get the latest version number for a key.
+         */
+        int getLatestVersion(String keyId) {
+            return latestVersions.getOrDefault(keyId, -1);
+        }
+
+        /**
+         * Get a specific version of a key.
+         */
+        SecretKey getKey(String keyId, int version) {
+            Map<Integer, SecretKey> versions = keys.get(keyId);
+            return versions != null ? versions.get(version) : null;
+        }
+
+        /**
+         * Get the latest version of a key.
+         */
+        SecretKey getLatestKey(String keyId) {
+            int version = getLatestVersion(keyId);
+            return version >= 0 ? getKey(keyId, version) : null;
+        }
+
+        /**
+         * Check if a key exists.
+         */
+        boolean containsKey(String keyId) {
+            return keys.containsKey(keyId);
+        }
+
+        /**
+         * Delete a key and all its versions.
+         */
+        void deleteKey(String keyId) {
+            keys.remove(keyId);
+            latestVersions.remove(keyId);
         }
     }
 }

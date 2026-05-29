@@ -79,8 +79,7 @@ public class CipherTrustTestKmsFacade extends AbstractCipherTrustTestKmsFacade {
 
         @Override
         public void rotateKek(String kekId) {
-            // TODO: check how CTM handles key rotation - does it support versioning like Vault?
-            // For now, treat rotation as a no-op so tests pass
+            mockServer.rotateKey(kekId);
         }
 
         @Override
