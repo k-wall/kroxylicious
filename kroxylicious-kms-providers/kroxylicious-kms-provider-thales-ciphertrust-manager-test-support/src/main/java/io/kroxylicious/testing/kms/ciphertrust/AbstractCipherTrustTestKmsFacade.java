@@ -13,6 +13,8 @@ import io.kroxylicious.kms.provider.thales.ciphertrust.CipherTrustKmsService;
 import io.kroxylicious.kms.provider.thales.ciphertrust.config.Config;
 import io.kroxylicious.kms.provider.thales.ciphertrust.config.UserCredentials;
 import io.kroxylicious.proxy.config.secret.InlinePassword;
+import io.kroxylicious.proxy.config.tls.InsecureTls;
+import io.kroxylicious.proxy.config.tls.Tls;
 import io.kroxylicious.testing.kms.TestKekManager;
 import io.kroxylicious.testing.kms.TestKmsFacade;
 
@@ -35,6 +37,8 @@ public abstract class AbstractCipherTrustTestKmsFacade implements TestKmsFacade<
 
     protected abstract TestKekManager getKekManager();
 
+    protected abstract Tls getTlsConfig();
+
     @Override
     public final void start() {
         startCipherTrust();
@@ -55,7 +59,7 @@ public abstract class AbstractCipherTrustTestKmsFacade implements TestKmsFacade<
                 getCipherTrustUrl(),
                 userCredentials,
                 null,
-                null);
+                getTlsConfig());
     }
 
     @Override

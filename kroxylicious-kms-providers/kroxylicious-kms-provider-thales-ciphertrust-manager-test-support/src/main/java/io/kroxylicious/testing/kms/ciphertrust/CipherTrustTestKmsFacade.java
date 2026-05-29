@@ -8,6 +8,7 @@ package io.kroxylicious.testing.kms.ciphertrust;
 
 import java.net.URI;
 
+import io.kroxylicious.proxy.config.tls.Tls;
 import io.kroxylicious.testing.kms.TestKekManager;
 
 import edu.umd.cs.findbugs.annotations.Nullable;
@@ -59,6 +60,12 @@ public class CipherTrustTestKmsFacade extends AbstractCipherTrustTestKmsFacade {
             throw new IllegalStateException("KEK manager not initialized");
         }
         return kekManager;
+    }
+
+    @Override
+    protected Tls getTlsConfig() {
+        // Mock server doesn't need TLS
+        return null;
     }
 
     /**

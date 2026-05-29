@@ -1,1 +1,2 @@
 io.kroxylicious.testing.kms.ciphertrust.CipherTrustTestKmsFacadeFactory
+io.kroxylicious.testing.kms.ciphertrust.RealCipherTrustTestKmsFacadeFactory
