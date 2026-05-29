@@ -21,13 +21,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.extension.ResponseTransformerV2;
-import com.github.tomakehurst.wiremock.http.Response;
+import com.github.tomakehurst.wiremock.extension.ResponseDefinitionTransformerV2;
+import com.github.tomakehurst.wiremock.http.ResponseDefinition;
 import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.anyUrl;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
@@ -80,7 +82,6 @@ public class CipherTrustMockServer {
      */
     public void start() {
         server.start();
-        WireMock.configureFor("localhost", server.port());
         setupEndpoints();
     }
 
@@ -108,10 +109,16 @@ public class CipherTrustMockServer {
         setupEncryptEndpoint();
         setupDecryptEndpoint();
         setupKeyManagementEndpoints();
+
+        // Catch-all for debugging - log unmatched requests
+        server.stubFor(WireMock.any(anyUrl())
+                .atPriority(10) // Low priority so specific stubs match first
+                .willReturn(aResponse()
+                        .withStatus(404)
+                        .withBody("No matching stub found")));
     }
 
     private void setupAuthEndpoint() {
-        // Handle both username/password and refresh_token authentication
         server.stubFor(post(urlPathEqualTo("/api/v1/auth/tokens/"))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -137,8 +144,7 @@ public class CipherTrustMockServer {
                 .withHeader("Authorization", equalTo("Bearer " + MOCK_JWT_TOKEN))
                 .willReturn(aResponse()
                         .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withTransformers("random-bytes")));
+                        .withTransformers("random-bytes"))); // Transformer will set body and headers
     }
 
     private void setupEncryptEndpoint() {
@@ -149,8 +155,7 @@ public class CipherTrustMockServer {
                 .withRequestBody(matchingJsonPath("$.plaintext"))
                 .willReturn(aResponse()
                         .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withTransformers("encrypt")));
+                        .withTransformers("encrypt"))); // Transformer will set body and headers
     }
 
     private void setupDecryptEndpoint() {
@@ -159,8 +164,7 @@ public class CipherTrustMockServer {
                 .withHeader("Content-Type", equalTo("application/json"))
                 .willReturn(aResponse()
                         .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withTransformers("decrypt")));
+                        .withTransformers("decrypt"))); // Transformer will set body and headers
     }
 
     private void setupKeyManagementEndpoints() {
@@ -169,17 +173,15 @@ public class CipherTrustMockServer {
                 .withHeader("Authorization", equalTo("Bearer " + MOCK_JWT_TOKEN))
                 .willReturn(aResponse()
                         .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withTransformers("create-key")));
+                        .withTransformers("create-key"))); // Transformer will set body and headers
 
         // Query keys by name
         server.stubFor(get(urlPathMatching("/api/v1/vault/keys2.*"))
                 .withHeader("Authorization", equalTo("Bearer " + MOCK_JWT_TOKEN))
-                .withQueryParam("name", WireMock.matching(".*"))
+                .withQueryParam("name", matching(".*"))
                 .willReturn(aResponse()
                         .withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withTransformers("query-key")));
+                        .withTransformers("query-key"))); // Transformer will set body and headers
     }
 
     /**
@@ -214,7 +216,7 @@ public class CipherTrustMockServer {
 
     // Transformer implementations
 
-    private static class RandomBytesTransformer implements ResponseTransformerV2 {
+    private static class RandomBytesTransformer implements ResponseDefinitionTransformerV2 {
         private final SecureRandom secureRandom;
 
         RandomBytesTransformer(SecureRandom secureRandom) {
@@ -222,7 +224,12 @@ public class CipherTrustMockServer {
         }
 
         @Override
-        public Response transform(Response response, ServeEvent serveEvent) {
+        public boolean applyGlobally() {
+            return false;
+        }
+
+        @Override
+        public ResponseDefinition transform(ServeEvent serveEvent) {
             try {
                 String query = serveEvent.getRequest().getUrl();
                 int bytesParam = 32; // default
@@ -239,8 +246,10 @@ public class CipherTrustMockServer {
                 String base64 = Base64.getEncoder().encodeToString(randomBytes);
 
                 String json = OBJECT_MAPPER.writeValueAsString(Map.of("bytes", base64));
-                return Response.Builder.like(response)
-                        .but().body(json)
+                return aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(json)
                         .build();
             }
             catch (Exception e) {
@@ -254,7 +263,7 @@ public class CipherTrustMockServer {
         }
     }
 
-    private static class EncryptTransformer implements ResponseTransformerV2 {
+    private static class EncryptTransformer implements ResponseDefinitionTransformerV2 {
         private final Map<String, SecretKey> keyStore;
         private final SecureRandom secureRandom;
 
@@ -264,7 +273,12 @@ public class CipherTrustMockServer {
         }
 
         @Override
-        public Response transform(Response response, ServeEvent serveEvent) {
+        public boolean applyGlobally() {
+            return false;
+        }
+
+        @Override
+        public ResponseDefinition transform(ServeEvent serveEvent) {
             try {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> requestBody = OBJECT_MAPPER.readValue(
@@ -272,8 +286,16 @@ public class CipherTrustMockServer {
                 String keyId = (String) requestBody.get("id");
                 String plaintextBase64 = (String) requestBody.get("plaintext");
 
-                // Get or create KEK
-                SecretKey kek = keyStore.computeIfAbsent(keyId, k -> generateAesKey());
+                // Get KEK (do not auto-create)
+                SecretKey kek = keyStore.get(keyId);
+                if (kek == null) {
+                    String errorJson = OBJECT_MAPPER.writeValueAsString(Map.of("error", "Key not found"));
+                    return aResponse()
+                            .withStatus(404)
+                            .withHeader("Content-Type", "application/json")
+                            .withBody(errorJson)
+                            .build();
+                }
 
                 // Decode the base64 plaintext
                 byte[] plaintext = Base64.getDecoder().decode(plaintextBase64);
@@ -303,8 +325,10 @@ public class CipherTrustMockServer {
                         "iv", Base64.getEncoder().encodeToString(iv));
 
                 String json = OBJECT_MAPPER.writeValueAsString(responseBody);
-                return Response.Builder.like(response)
-                        .but().body(json)
+                return aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(json)
                         .build();
             }
             catch (Exception e) {
@@ -318,7 +342,7 @@ public class CipherTrustMockServer {
         }
     }
 
-    private static class DecryptTransformer implements ResponseTransformerV2 {
+    private static class DecryptTransformer implements ResponseDefinitionTransformerV2 {
         private final Map<String, SecretKey> keyStore;
 
         DecryptTransformer(Map<String, SecretKey> keyStore) {
@@ -326,7 +350,12 @@ public class CipherTrustMockServer {
         }
 
         @Override
-        public Response transform(Response response, ServeEvent serveEvent) {
+        public boolean applyGlobally() {
+            return false;
+        }
+
+        @Override
+        public ResponseDefinition transform(ServeEvent serveEvent) {
             try {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> requestBody = OBJECT_MAPPER.readValue(
@@ -340,9 +369,9 @@ public class CipherTrustMockServer {
                 SecretKey kek = keyStore.get(keyId);
                 if (kek == null) {
                     String errorJson = OBJECT_MAPPER.writeValueAsString(Map.of("error", "Key not found"));
-                    return Response.Builder.like(response)
-                            .but().status(404)
-                            .body(errorJson)
+                    return aResponse()
+                            .withStatus(404)
+                            .withBody(errorJson)
                             .build();
                 }
 
@@ -366,8 +395,10 @@ public class CipherTrustMockServer {
                         "plaintext", Base64.getEncoder().encodeToString(plaintext));
 
                 String json = OBJECT_MAPPER.writeValueAsString(responseBody);
-                return Response.Builder.like(response)
-                        .but().body(json)
+                return aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(json)
                         .build();
             }
             catch (Exception e) {
@@ -381,7 +412,7 @@ public class CipherTrustMockServer {
         }
     }
 
-    private static class CreateKeyTransformer implements ResponseTransformerV2 {
+    private static class CreateKeyTransformer implements ResponseDefinitionTransformerV2 {
         private final Map<String, SecretKey> keyStore;
 
         CreateKeyTransformer(Map<String, SecretKey> keyStore) {
@@ -389,7 +420,12 @@ public class CipherTrustMockServer {
         }
 
         @Override
-        public Response transform(Response response, ServeEvent serveEvent) {
+        public boolean applyGlobally() {
+            return false;
+        }
+
+        @Override
+        public ResponseDefinition transform(ServeEvent serveEvent) {
             try {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> requestBody = OBJECT_MAPPER.readValue(
@@ -409,8 +445,10 @@ public class CipherTrustMockServer {
                         "algorithm", "aes");
 
                 String json = OBJECT_MAPPER.writeValueAsString(responseBody);
-                return Response.Builder.like(response)
-                        .but().body(json)
+                return aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(json)
                         .build();
             }
             catch (Exception e) {
@@ -424,7 +462,7 @@ public class CipherTrustMockServer {
         }
     }
 
-    private static class QueryKeyTransformer implements ResponseTransformerV2 {
+    private static class QueryKeyTransformer implements ResponseDefinitionTransformerV2 {
         private final Map<String, SecretKey> keyStore;
 
         QueryKeyTransformer(Map<String, SecretKey> keyStore) {
@@ -432,7 +470,12 @@ public class CipherTrustMockServer {
         }
 
         @Override
-        public Response transform(Response response, ServeEvent serveEvent) {
+        public boolean applyGlobally() {
+            return false;
+        }
+
+        @Override
+        public ResponseDefinition transform(ServeEvent serveEvent) {
             try {
                 String query = serveEvent.getRequest().getUrl();
                 String name = null;
@@ -457,8 +500,10 @@ public class CipherTrustMockServer {
                     json = "[]";
                 }
 
-                return Response.Builder.like(response)
-                        .but().body(json)
+                return aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(json)
                         .build();
             }
             catch (Exception e) {
