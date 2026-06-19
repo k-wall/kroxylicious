@@ -123,8 +123,16 @@ public final class VirtualKafkaClusterReconciler implements
 
     @Override
     public UpdateControl<VirtualKafkaCluster> reconcile(VirtualKafkaCluster cluster, Context<VirtualKafkaCluster> context) {
-        // Enhanced logging for CI reproduction: log informer sync state
-        logInformerSyncState(context, cluster);
+        // Wait for all secondary informers to sync before proceeding
+        // This prevents reconciling with incomplete cache data during operator startup
+        if (!allSecondaryInformersHaveSynced(context)) {
+            LOGGER.atDebug()
+                    .addKeyValue(OperatorLoggingKeys.NAMESPACE, namespace(cluster))
+                    .addKeyValue(OperatorLoggingKeys.NAME, name(cluster))
+                    .log("Deferring reconciliation - secondary informers not yet synced");
+            return UpdateControl.<VirtualKafkaCluster>noUpdate()
+                    .rescheduleAfter(Duration.ofSeconds(1));
+        }
 
         ClusterResolutionResult clusterResolutionResult = resolver.resolveClusterRefs(cluster, context);
 
@@ -160,32 +168,48 @@ public final class VirtualKafkaClusterReconciler implements
     }
 
     /**
-     * Logs the sync state of all secondary informers for debugging CI race condition.
-     * TEMPORARY: For issue reproduction only.
+     * Checks if all secondary resource informers required by VirtualKafkaCluster have completed
+     * their initial sync. Returns false if any informer is still populating its cache.
+     * <p>
+     * This prevents reconciling with incomplete cache data during operator startup, which could
+     * cause false negatives where resources are reported as not found even though they exist.
+     *
+     * @param context reconciliation context
+     * @return true if all secondary informers have synced, false otherwise
      */
-    private void logInformerSyncState(Context<VirtualKafkaCluster> context, VirtualKafkaCluster cluster) {
-        logInformerStateForType(context, KafkaProxy.class, cluster);
-        logInformerStateForType(context, KafkaService.class, cluster);
-        logInformerStateForType(context, KafkaProxyIngress.class, cluster);
-        logInformerStateForType(context, KafkaProtocolFilter.class, cluster);
+    private boolean allSecondaryInformersHaveSynced(Context<VirtualKafkaCluster> context) {
+        // Check all secondary resource types that VKC depends on
+        if (!checkInformersSynced(context, KafkaProxy.class)) {
+            return false;
+        }
+        if (!checkInformersSynced(context, KafkaService.class)) {
+            return false;
+        }
+        if (!checkInformersSynced(context, KafkaProxyIngress.class)) {
+            return false;
+        }
+        if (!checkInformersSynced(context, KafkaProtocolFilter.class)) {
+            return false;
+        }
+        return true;
     }
 
-    private <R> void logInformerStateForType(Context<VirtualKafkaCluster> context, Class<R> resourceType, VirtualKafkaCluster cluster) {
-        List<io.javaoperatorsdk.operator.processing.event.source.EventSource<R, VirtualKafkaCluster>> eventSources =
+    private <R> boolean checkInformersSynced(Context<VirtualKafkaCluster> context, Class<R> resourceType) {
+        List<EventSource<R, VirtualKafkaCluster>> eventSources =
                 context.eventSourceRetriever().getEventSourcesFor(resourceType);
 
-        for (io.javaoperatorsdk.operator.processing.event.source.EventSource<R, VirtualKafkaCluster> eventSource : eventSources) {
+        for (EventSource<R, VirtualKafkaCluster> eventSource : eventSources) {
             if (eventSource instanceof InformerHealthIndicator informerSource) {
-                LOGGER.atInfo()
-                        .addKeyValue(OperatorLoggingKeys.NAMESPACE, namespace(cluster))
-                        .addKeyValue(OperatorLoggingKeys.NAME, name(cluster))
-                        .addKeyValue("resourceType", resourceType.getSimpleName())
-                        .addKeyValue("hasSynced", informerSource.hasSynced())
-                        .addKeyValue("isRunning", informerSource.isRunning())
-                        .addKeyValue("isWatching", informerSource.isWatching())
-                        .log("INFORMER_SYNC_STATE");
+                if (!informerSource.hasSynced()) {
+                    LOGGER.atDebug()
+                            .addKeyValue("resourceType", resourceType.getSimpleName())
+                            .addKeyValue("isRunning", informerSource.isRunning())
+                            .log("Secondary informer not yet synced");
+                    return false;
+                }
             }
         }
+        return true;
     }
 
     private static void appendSecretsFromCertificateRefs(Context<VirtualKafkaCluster> context, VirtualKafkaCluster updatedCluster,
