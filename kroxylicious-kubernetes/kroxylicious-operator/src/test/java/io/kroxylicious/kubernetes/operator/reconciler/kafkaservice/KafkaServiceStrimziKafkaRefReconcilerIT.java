@@ -26,7 +26,7 @@ import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.Updatable;
-import io.strimzi.api.kafka.Crds;
+import io.fabric8.kubernetes.client.dsl.base.CustomResourceDefinitionContext;
 import io.strimzi.api.kafka.model.kafka.Kafka;
 import io.strimzi.api.kafka.model.kafka.KafkaBuilder;
 import io.strimzi.api.kafka.model.kafka.listener.GenericKafkaListenerBuilder;
@@ -79,12 +79,16 @@ class KafkaServiceStrimziKafkaRefReconcilerIT {
             .replaceClusterRoleGlobs("*.ClusterRole.kroxylicious-operator-watched.yaml")
             .withSetupAction(() -> {
                 try (KubernetesClient client = OperatorTestUtils.kubeClient()) {
-                    client.apiextensions().v1().customResourceDefinitions().resource(Crds.kafka()).createOr(Updatable::update);
+                    client.apiextensions().v1().customResourceDefinitions()
+                            .resource(CustomResourceDefinitionContext.v1CRDFromCustomResourceType(Kafka.class).build())
+                            .createOr(Updatable::update);
                 }
             })
             .withTeardownAction(() -> {
                 try (KubernetesClient client = OperatorTestUtils.kubeClient()) {
-                    client.apiextensions().v1().customResourceDefinitions().resource(Crds.kafka()).delete();
+                    client.apiextensions().v1().customResourceDefinitions()
+                            .resource(CustomResourceDefinitionContext.v1CRDFromCustomResourceType(Kafka.class).build())
+                            .delete();
                 }
             })
             .withAdditionalCleanupTypes(Kafka.class)
