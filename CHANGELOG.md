@@ -1,18 +1,18 @@
 # CHANGELOG
 
-This changelog enumerates **all user-facing** changes made to Kroxylicious, in reverse chronological order.
+This changelog enumerates **all user-facing** changes made to Kroxylicious.
 For changes that effect a public API, the [deprecation policy](./DEV_GUIDE.md#deprecation-policy) is followed.
 
 Format `<github issue/pr number>: <short description>`.
 
-## SNAPSHOT
+## 0.24.0
 
-* [#3759](https://github.com/kroxylicious/kroxylicious/issues/3759): fix(authorization): use client-negotiated version for internal metadata request
-* [#3783](https://github.com/kroxylicious/kroxylicious/issues/3783): fix(config): remove deprecated `shutdownQuietPeriodSeconds` field from `NettySettings`.
+* [#3783](https://github.com/k-wall/kroxylicious/issues/3783): fix(config): remove deprecated `shutdownQuietPeriodSeconds` field from `NettySettings`.
+* [#3759](https://github.com/k-wall/kroxylicious/issues/3759): fix(authorization): use client-negotiated version for internal metadata request
 
 ### Changes, deprecations and removals
 
-* [#3783](https://github.com/kroxylicious/kroxylicious/issues/3783): The `shutdownQuietPeriodSeconds` field under `network.proxy` and `network.management` is removed.
+* [#3783](https://github.com/k-wall/kroxylicious/issues/3783): The `shutdownQuietPeriodSeconds` field under `network.proxy` and `network.management` is removed.
   Use the new `shutdownQuietPeriod` field instead, which accepts Go-style durations (e.g. `"2s"`, `"500ms"`) and adds support for sub-second precision.
   A new `shutdownTimeout` field is also available to configure the previously hardcoded 15-second Netty shutdown timeout.
 
