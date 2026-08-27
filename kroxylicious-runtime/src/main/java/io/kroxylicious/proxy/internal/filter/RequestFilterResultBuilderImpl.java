@@ -8,7 +8,6 @@ package io.kroxylicious.proxy.internal.filter;
 
 import java.util.Objects;
 
-import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -24,7 +23,7 @@ import edu.umd.cs.findbugs.annotations.Nullable;
 /**
  * Builder of {@link RequestFilterResult} instances. In addition to forwarding, supports
  * short-circuit responses (answering the client without forwarding the request upstream),
- * including error responses derived from an {@link ApiException}.
+ * including error responses carrying an {@link Errors} code.
  */
 public class RequestFilterResultBuilderImpl extends FilterResultBuilderImpl<RequestHeaderData, RequestFilterResult>
         implements RequestFilterResultBuilder {
@@ -77,12 +76,13 @@ public class RequestFilterResultBuilderImpl extends FilterResultBuilderImpl<Requ
         if (error == Errors.NONE) {
             throw new IllegalArgumentException("error must denote an actual error, but was Errors.NONE");
         }
-        // Errors.exception(String) returns the default-message exception when message is null.
-        return errorResponseForException(header, requestMessage, error.exception(message));
-    }
-
-    private CloseOrTerminalStage<RequestFilterResult> errorResponseForException(RequestHeaderData header, ApiMessage requestMessage, ApiException apiException) {
-        final ApiMessage errorResponseMessage = KafkaProxyExceptionMapper.errorResponseForMessage(header, requestMessage, apiException);
+        final ApiMessage errorResponseMessage = KafkaProxyExceptionMapper.errorResponseForMessage(header, requestMessage, error, message);
+        if (errorResponseMessage == null) {
+            // e.g. a Produce request with acks=0 has no response: it is a programming error to short-circuit
+            // such a request with an error response, since the client is not waiting for one.
+            throw new IllegalArgumentException(
+                    "cannot build an error response for apiKey=" + requestMessage.apiKey() + ": this request does not expect a response");
+        }
         validateShortCircuitResponse(errorResponseMessage);
         final ResponseHeaderData responseHeaders = new ResponseHeaderData();
         responseHeaders.setCorrelationId(header.correlationId());

@@ -402,12 +402,12 @@ public class KafkaProxyFrontendHandler
     /**
      * Called by the {@link ClientConnectionStateMachine} on entry to the {@link Closed} state.
      */
-    void inClosed(@Nullable Throwable errorCodeEx) {
+    void inClosed(@Nullable ClientError clientError) {
         Channel inboundChannel = clientCtx().channel();
         if (inboundChannel.isActive()) {
             Object msg = null;
-            if (errorCodeEx != null) {
-                msg = errorResponse(errorCodeEx);
+            if (clientError != null) {
+                msg = errorResponse(clientError);
             }
             if (msg == null) {
                 msg = Unpooled.EMPTY_BUFFER;
@@ -525,10 +525,15 @@ public class KafkaProxyFrontendHandler
         return this.clientCtx != null ? this.clientCtx.channel() : null;
     }
 
+    @Nullable
     private static ResponseFrame buildErrorResponseFrame(
                                                          DecodedRequestFrame<?> triggerFrame,
-                                                         Throwable error) {
-        var responseData = KafkaProxyExceptionMapper.errorResponseMessage(triggerFrame, error);
+                                                         ClientError clientError) {
+        var responseData = KafkaProxyExceptionMapper.errorResponseMessage(triggerFrame, clientError.error(), clientError.message());
+        if (responseData == null) {
+            // e.g. a Produce request with acks=0: the client is not waiting for any response, so send none.
+            return null;
+        }
         final ResponseHeaderData responseHeaderData = new ResponseHeaderData();
         responseHeaderData.setCorrelationId(triggerFrame.correlationId());
         return new DecodedResponseFrame<>(triggerFrame.apiVersion(), triggerFrame.correlationId(), responseHeaderData, responseData);
@@ -536,11 +541,11 @@ public class KafkaProxyFrontendHandler
 
     /**
      * Return an error response to send to the client, or null if no response should be sent.
-     * @param errorCodeEx The exception
-     * @return The response frame
+     * @param clientError the error to relay to the client
+     * @return The response frame, or {@code null} if no response should be sent
      */
     private @Nullable ResponseFrame errorResponse(
-                                                  @Nullable Throwable errorCodeEx) {
+                                                  @Nullable ClientError clientError) {
         final Object triggerMsg;
         if (bufferedMsgs != null && !bufferedMsgs.isEmpty()) {
             triggerMsg = bufferedMsgs.getFirst();
@@ -548,8 +553,8 @@ public class KafkaProxyFrontendHandler
         else {
             triggerMsg = initialRequestForError;
         }
-        if (errorCodeEx != null && triggerMsg instanceof final DecodedRequestFrame<?> triggerFrame) {
-            return buildErrorResponseFrame(triggerFrame, errorCodeEx);
+        if (clientError != null && triggerMsg instanceof final DecodedRequestFrame<?> triggerFrame) {
+            return buildErrorResponseFrame(triggerFrame, clientError);
         }
         return null;
     }

@@ -19,7 +19,6 @@ import java.util.function.Supplier;
 
 import javax.net.ssl.SSLSession;
 
-import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -789,17 +788,23 @@ public class ClientConnectionStateMachine {
      * @param cause the exception that triggered the issue
      */
     void onServerConnectionException(@Nullable Throwable cause) {
-        toClosed(cause);
+        // A raw server-side Throwable legitimately enters here. We do not attempt to map its
+        // type to a specific Kafka error code (that mapping is not available on the vendored
+        // Errors surface we are migrating towards): an un-recoverable server-side failure is
+        // relayed to the client as UNKNOWN_SERVER_ERROR. The cause is retained for logging only.
+        ClientError clientError = cause != null
+                ? new ClientError(Errors.UNKNOWN_SERVER_ERROR, cause.getMessage(), cause)
+                : null;
+        toClosed(clientError);
     }
 
     /**
      * Notify the state machine that something exceptional and un-recoverable has happened on the downstream side.
      * @param cause the exception that triggered the issue
      */
-    @SuppressWarnings("java:S5738")
     void onClientException(@Nullable Throwable cause) {
         var tlsEnabled = endpointGateway().getDownstreamSslContext().isPresent();
-        ApiException errorCodeEx;
+        Errors error;
         if (cause instanceof DecoderException de
                 && de.getCause() instanceof FrameOversizedException e) {
             String tlsHint;
@@ -813,7 +818,7 @@ public class ClientConnectionStateMachine {
                     .addKeyValue("receivedFrameSizeBytes", e.getReceivedFrameSizeBytes())
                     .addKeyValue("hint", tlsHint)
                     .log("Received over-sized frame from client, other possible causes are: an oversized Kafka frame, or something unexpected like an HTTP request");
-            errorCodeEx = Errors.INVALID_REQUEST.exception();
+            error = Errors.INVALID_REQUEST;
         }
         else {
             log(Level.WARN)
@@ -822,10 +827,12 @@ public class ClientConnectionStateMachine {
                     .log(LOGGER.isDebugEnabled()
                             ? "exception from client channel"
                             : "exception from client channel, increase log level to DEBUG for stacktrace");
-            errorCodeEx = Errors.UNKNOWN_SERVER_ERROR.exception();
+            error = Errors.UNKNOWN_SERVER_ERROR;
         }
         clientToProxyErrorCounter.increment();
-        toClosed(errorCodeEx);
+        // Relay the error's default message to the client (not the raw cause's message); keep the
+        // cause for diagnostic logging only.
+        toClosed(new ClientError(error, null, cause));
     }
 
     /**
@@ -1188,11 +1195,23 @@ public class ClientConnectionStateMachine {
         setState(haProxy);
     }
 
-    private void toClosed(@Nullable Throwable errorCodeEx) {
-        toClosed(errorCodeEx, null);
+    @Nullable
+    private static String describeClientError(@Nullable ClientError clientError) {
+        if (clientError == null) {
+            return null;
+        }
+        Throwable cause = clientError.cause();
+        if (cause != null) {
+            return cause.getClass().getSimpleName() + ": " + cause.getMessage();
+        }
+        return clientError.error().name() + ": " + clientError.message();
     }
 
-    private void toClosed(@Nullable Throwable errorCodeEx, @Nullable DisconnectCause disconnectCause) {
+    private void toClosed(@Nullable ClientError clientError) {
+        toClosed(clientError, null);
+    }
+
+    private void toClosed(@Nullable ClientError clientError, @Nullable DisconnectCause disconnectCause) {
         if (state instanceof Closed) {
             return;
         }
@@ -1220,7 +1239,7 @@ public class ClientConnectionStateMachine {
 
         // Close the client connection
         if (frontendHandler != null) { // Can be null if the error happens before clientActive (unlikely but possible)
-            frontendHandler.inClosed(errorCodeEx);
+            frontendHandler.inClosed(clientError);
             clientToProxyConnectionToken.release();
         }
 
@@ -1232,7 +1251,8 @@ public class ClientConnectionStateMachine {
                     .addKeyValue("sessionId", kafkaSession.sessionId())
                     .addKeyValue("virtualCluster", clusterName())
                     .addKeyValue("disconnectCause", disconnectCause)
-                    .addKeyValue("errorCodeEx", errorCodeEx == null ? null : errorCodeEx.getClass().getSimpleName() + ": " + errorCodeEx.getMessage())
+                    .addKeyValue("errorCode", clientError == null ? null : clientError.error().name())
+                    .addKeyValue("error", describeClientError(clientError))
                     .addKeyValue("clientMessagesInFlightCount", clientMessagesInFlightCount)
                     .addKeyValue("serverMessagesInFlightCount",
                             () -> serverConnections.values().stream().mapToInt(ServerConnectionStateMachine::serverMessagesInFlightCount).sum())
