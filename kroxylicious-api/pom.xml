@@ -312,6 +312,17 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Integration tests run after package, so they can assert on the packaged jar's
+                 manifest (see ImplementationVersionIT). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <implementation.version>${project.version}</implementation.version>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
