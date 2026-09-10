@@ -22,6 +22,7 @@ import org.jose4j.jwt.JwtClaims;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.Testcontainers;
@@ -30,14 +31,16 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 
 import io.kroxylicious.kms.provider.hashicorp.vault.config.Config;
+import io.kroxylicious.kms.provider.hashicorp.vault.config.KubernetesCredentialsConfig;
+import io.kroxylicious.kms.provider.hashicorp.vault.config.VaultCredentialsConfig;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
+@EnabledIf(value = "isDockerAvailable", disabledReason = "docker unavailable")
 class VaultKmsKubernetesAuthIT {
 
     private TestVault testVault;
@@ -45,7 +48,6 @@ class VaultKmsKubernetesAuthIT {
 
     @BeforeEach
     void setUp() {
-        assumeThat(DockerClientFactory.instance().isDockerAvailable()).withFailMessage("docker unavailable").isTrue();
         mockK8sApi = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         mockK8sApi.start();
         // Expose WireMock port to containers BEFORE starting the Vault container
@@ -173,10 +175,7 @@ class VaultKmsKubernetesAuthIT {
         // 7. Initialize KMS with Kubernetes Auth and verify we can resolve a key
         Config config = new Config(
                 testVault.getEndpoint(),
-                null,
-                "test-role",
-                tokenFile.toString(),
-                "kubernetes",
+                new VaultCredentialsConfig(null, new KubernetesCredentialsConfig("test-role", tokenFile.toString(), "kubernetes")),
                 null);
 
         VaultKmsService service = new VaultKmsService();
@@ -187,5 +186,9 @@ class VaultKmsKubernetesAuthIT {
         assertThat(resolved)
                 .succeedsWithin(Duration.ofSeconds(10))
                 .isEqualTo(keyName);
+    }
+
+    static boolean isDockerAvailable() {
+        return DockerClientFactory.instance().isDockerAvailable();
     }
 }

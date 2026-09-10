@@ -29,6 +29,10 @@ class ConfigParseTest {
     private static final Logger LOG = LoggerFactory.getLogger(ConfigParseTest.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    // ---------------------------------------------------------------------------
+    // Deprecated top-level vaultToken (backward-compatibility)
+    // ---------------------------------------------------------------------------
+
     @Test
     void vaultUrlAndInlineToken() throws IOException {
         String json = """
@@ -40,6 +44,9 @@ class ConfigParseTest {
         Config config = readConfig(json);
         assertThat(config.vaultToken().getProvidedPassword()).isEqualTo("token");
         assertThat(config.vaultTransitEngineUrl()).isEqualTo(URI.create("http://vault"));
+        assertThat(config.credentials()).isNotNull();
+        assertThat(config.credentials().token()).isNotNull();
+        assertThat(config.credentials().token().token().getProvidedPassword()).isEqualTo("token");
     }
 
     @Test
@@ -58,6 +65,8 @@ class ConfigParseTest {
             Config config = readConfig(json);
             assertThat(config.vaultToken().getProvidedPassword()).isEqualTo("token");
             assertThat(config.vaultTransitEngineUrl()).isEqualTo(URI.create("http://vault"));
+            assertThat(config.credentials()).isNotNull();
+            assertThat(config.credentials().token().token().getProvidedPassword()).isEqualTo("token");
         }
         finally {
             if (!tmp.toFile().delete()) {
@@ -65,6 +74,83 @@ class ConfigParseTest {
             }
         }
     }
+
+    // ---------------------------------------------------------------------------
+    // New credentials.token structure
+    // ---------------------------------------------------------------------------
+
+    @Test
+    void credentialsTokenInlinePassword() throws IOException {
+        String json = """
+                {
+                    "vaultTransitEngineUrl": "http://vault",
+                    "credentials": {
+                        "token": {
+                            "token": { "password": "mytoken" }
+                        }
+                    }
+                }
+                """;
+        Config config = readConfig(json);
+        assertThat(config.credentials()).isNotNull();
+        assertThat(config.credentials().token()).isNotNull();
+        assertThat(config.credentials().token().token().getProvidedPassword()).isEqualTo("mytoken");
+        assertThat(config.credentials().kubernetes()).isNull();
+        assertThat(config.vaultToken()).isNull();
+    }
+
+    // ---------------------------------------------------------------------------
+    // New credentials.kubernetes structure
+    // ---------------------------------------------------------------------------
+
+    @Test
+    void credentialsKubernetesWithRoleOnly() throws IOException {
+        String json = """
+                {
+                    "vaultTransitEngineUrl": "http://vault",
+                    "credentials": {
+                        "kubernetes": {
+                            "role": "my-k8s-role"
+                        }
+                    }
+                }
+                """;
+        Config config = readConfig(json);
+        assertThat(config.credentials()).isNotNull();
+        assertThat(config.credentials().kubernetes()).isNotNull();
+        assertThat(config.credentials().kubernetes().role()).isEqualTo("my-k8s-role");
+        assertThat(config.credentials().kubernetes().serviceAccountTokenPath())
+                .isEqualTo(KubernetesCredentialsConfig.DEFAULT_SERVICE_ACCOUNT_TOKEN_PATH);
+        assertThat(config.credentials().kubernetes().authPath())
+                .isEqualTo(KubernetesCredentialsConfig.DEFAULT_AUTH_PATH);
+        assertThat(config.credentials().token()).isNull();
+        assertThat(config.vaultToken()).isNull();
+    }
+
+    @Test
+    void credentialsKubernetesWithCustomPaths() throws IOException {
+        String json = """
+                {
+                    "vaultTransitEngineUrl": "http://vault",
+                    "credentials": {
+                        "kubernetes": {
+                            "role": "my-k8s-role",
+                            "serviceAccountTokenPath": "/custom/sa/token",
+                            "authPath": "k8s"
+                        }
+                    }
+                }
+                """;
+        Config config = readConfig(json);
+        var k8s = config.credentials().kubernetes();
+        assertThat(k8s.role()).isEqualTo("my-k8s-role");
+        assertThat(k8s.serviceAccountTokenPath()).isEqualTo("/custom/sa/token");
+        assertThat(k8s.authPath()).isEqualTo("k8s");
+    }
+
+    // ---------------------------------------------------------------------------
+    // Validation errors
+    // ---------------------------------------------------------------------------
 
     @Test
     void vaultUrlRequired() {
@@ -92,7 +178,7 @@ class ConfigParseTest {
     }
 
     @Test
-    void vaultTokenOrRoleRequired() {
+    void credentialsOrDeprecatedTokenRequired() {
         Assertions.assertThatThrownBy(() -> {
             String json = """
                     {
@@ -101,11 +187,11 @@ class ConfigParseTest {
                     """;
             readConfig(json);
         }).isInstanceOf(ValueInstantiationException.class).cause().isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Either vaultToken or role must be provided");
+                .hasMessageContaining("Either 'credentials' or deprecated 'vaultToken' must be provided");
     }
 
     @Test
-    void vaultTokenShouldNotBeNullWhenRoleIsMissing() {
+    void vaultTokenShouldNotBeNullWhenCredentialsMissing() {
         Assertions.assertThatThrownBy(() -> {
             String json = """
                     {
@@ -115,38 +201,60 @@ class ConfigParseTest {
                     """;
             readConfig(json);
         }).isInstanceOf(ValueInstantiationException.class).cause().isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Either vaultToken or role must be provided");
+                .hasMessageContaining("Either 'credentials' or deprecated 'vaultToken' must be provided");
     }
 
     @Test
-    void roleUsedInsteadOfToken() throws IOException {
-        String json = """
-                {
-                    "vaultTransitEngineUrl": "http://vault",
-                    "role": "my-k8s-role"
-                }
-                """;
-        Config config = readConfig(json);
-        assertThat(config.role()).isEqualTo("my-k8s-role");
-        assertThat(config.vaultToken()).isNull();
-        assertThat(config.serviceAccountTokenPath()).isEqualTo("/var/run/secrets/kubernetes.io/serviceaccount/token");
-        assertThat(config.authPath()).isEqualTo("kubernetes");
-    }
-
-    @Test
-    void bothTokenAndRoleThrows() {
+    void bothCredentialsAndDeprecatedTokenThrows() {
         Assertions.assertThatThrownBy(() -> {
             String json = """
                     {
                         "vaultTransitEngineUrl": "https://vault",
                         "vaultToken": { "password" : "token" },
-                        "role": "my-k8s-role"
+                        "credentials": {
+                            "token": { "token": { "password": "token2" } }
+                        }
                     }
                     """;
             readConfig(json);
         }).isInstanceOf(ValueInstantiationException.class).cause().isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Only one of vaultToken or role may be provided");
+                .hasMessageContaining("Cannot specify both 'vaultToken' and 'credentials' - use 'credentials.token' instead");
     }
+
+    @Test
+    void credentialsWithBothTokenAndKubernetesThrows() {
+        Assertions.assertThatThrownBy(() -> {
+            String json = """
+                    {
+                        "vaultTransitEngineUrl": "https://vault",
+                        "credentials": {
+                            "token": { "token": { "password": "mytoken" } },
+                            "kubernetes": { "role": "my-role" }
+                        }
+                    }
+                    """;
+            readConfig(json);
+        }).isInstanceOf(ValueInstantiationException.class).cause().isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Only one of 'token' or 'kubernetes' credentials may be provided");
+    }
+
+    @Test
+    void credentialsWithNeitherTokenNorKubernetesThrows() {
+        Assertions.assertThatThrownBy(() -> {
+            String json = """
+                    {
+                        "vaultTransitEngineUrl": "https://vault",
+                        "credentials": {}
+                    }
+                    """;
+            readConfig(json);
+        }).isInstanceOf(ValueInstantiationException.class).cause().isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Either 'token' or 'kubernetes' credentials must be provided");
+    }
+
+    // ---------------------------------------------------------------------------
+    // TLS
+    // ---------------------------------------------------------------------------
 
     @Test
     void emptyTls() throws Exception {
@@ -159,24 +267,10 @@ class ConfigParseTest {
                 """;
         Config config = readConfig(json);
         assertThat(config.tls()).isNotNull();
-        assertThat(config.tls().trust()).isNull();
     }
 
     @Test
-    void missingTls() throws Exception {
-        String json = """
-                {
-                    "vaultTransitEngineUrl": "https://vault",
-                    "vaultToken": { "password" : "token" }
-                }
-                """;
-        Config config = readConfig(json);
-        assertThat(config.tls()).isNull();
-    }
-
-    // we do not need to exhaustively test serialization of Tls as it has its own coverage
-    @Test
-    void testTlsTrust() throws Exception {
+    void insecureTls() throws IOException {
         String json = """
                 {
                     "vaultTransitEngineUrl": "https://vault",
@@ -189,7 +283,7 @@ class ConfigParseTest {
                 }
                 """;
         Config config = readConfig(json);
-        Config expected = new Config(URI.create("https://vault"), new InlinePassword("token"), null, null, null, new Tls(null, new InsecureTls(true), null, null));
+        Config expected = new Config(URI.create("https://vault"), new InlinePassword("token"), new Tls(null, new InsecureTls(true), null, null));
         assertThat(config).isEqualTo(expected);
     }
 

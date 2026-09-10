@@ -29,6 +29,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.github.tomakehurst.wiremock.WireMockServer;
 
 import io.kroxylicious.kms.provider.hashicorp.vault.config.Config;
+import io.kroxylicious.kms.provider.hashicorp.vault.config.TokenCredentialsConfig;
+import io.kroxylicious.kms.provider.hashicorp.vault.config.VaultCredentialsConfig;
 import io.kroxylicious.kms.service.DekPair;
 import io.kroxylicious.kms.service.DestroyableRawSecretKey;
 import io.kroxylicious.kms.service.KmsException;
@@ -65,7 +67,7 @@ class VaultKmsTest {
     @BeforeEach
     void beforeEach() {
         var vaultAddress = URI.create(server.baseUrl()).resolve("/v1/transit");
-        var config = new Config(vaultAddress, new InlinePassword("token"), null, null, null, null);
+        var config = new Config(vaultAddress, new VaultCredentialsConfig(new TokenCredentialsConfig(new InlinePassword("token")), null), null);
         vaultKmsService = new VaultKmsService();
         vaultKmsService.initialize(config);
         kms = vaultKmsService.buildKms();
