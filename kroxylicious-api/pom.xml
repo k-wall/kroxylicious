@@ -320,6 +320,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <implementation.version>${project.version}</implementation.version>
+                        <packaged.jar>${project.build.directory}/${project.build.finalName}.jar</packaged.jar>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
