@@ -1,2 +1,4 @@
 {"id":"d1f43a95-15ba-4097-89d7-b05dd475dfda","ts":"2026-09-11T10:07:52.802Z","path":"/Users/kwall/src/kroxylicious/scripts/validate_jar_manifests.py","version":"1.0.0","taskID":"4273129f-7585-46d8-82fb-37954562ec74"}
 {"id":"3a6fa67b-96a2-4c8f-9ae9-167ddf7e1e8a","ts":"2026-09-11T10:09:43.213Z","path":"/Users/kwall/src/kroxylicious/.github/workflows/lint.yaml","version":"1.0.0","taskID":"4273129f-7585-46d8-82fb-37954562ec74"}
+
+{"id":"fdc43d47-e831-4ea9-97c9-804751a369d3","ts":"2026-09-11T10:25:18.494Z","path":"/Users/kwall/src/kroxylicious/.github/workflows/lint.yaml","version":"1.0.0","taskID":"4273129f-7585-46d8-82fb-37954562ec74"}
