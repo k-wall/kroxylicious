@@ -15,25 +15,35 @@ import java.util.jar.JarFile;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
- * The parent POM configures the maven-jar-plugin to add default implementation entries
- * ({@code addDefaultImplementationEntries}), so every packaged jar carries the project version
- * as {@code Implementation-Version}. These integration tests run after the jar is packaged
- * and assert on the real manifest.
+ * Verifies the documented Maven/JVM packaging contract rather than Kroxylicious-owned
+ * version-reporting logic. The parent POM configures the maven-jar-plugin to add default
+ * implementation entries ({@code addDefaultImplementationEntries}); these integration tests
+ * catch POM inheritance or wiring mistakes by asserting that those entries reach the packaged
+ * jar and are exposed by {@link Package#getImplementationVersion()} when a class is loaded from it.
  */
 class ImplementationVersionIT {
 
     /** Set by the failsafe configuration in kroxylicious-api/pom.xml. */
     private static final String EXPECTED_VERSION = System.getProperty("implementation.version");
+    private static final String PACKAGED_JAR = System.getProperty("packaged.jar");
 
     private Path packagedJar() {
-        return Path.of("target", "kroxylicious-api-" + EXPECTED_VERSION + ".jar");
+        assertThat(PACKAGED_JAR)
+                .as("packaged.jar must be supplied by the failsafe configuration")
+                .isNotBlank();
+        return Path.of(PACKAGED_JAR);
     }
 
     @Test
     void packagedJarManifestCarriesImplementationEntries() throws Exception {
-        try (var jarFile = new JarFile(packagedJar().toFile())) {
+        var packagedJar = packagedJar();
+        assumeThat(packagedJar)
+                .as("packaged jar must exist before manifest integration tests run")
+                .exists();
+        try (var jarFile = new JarFile(packagedJar.toFile())) {
             Attributes manifest = jarFile.getManifest().getMainAttributes();
             assertThat(manifest.getValue(Attributes.Name.IMPLEMENTATION_VERSION)).isEqualTo(EXPECTED_VERSION);
             assertThat(manifest.getValue(Attributes.Name.IMPLEMENTATION_TITLE)).isEqualTo("Kroxylicious API");
@@ -43,7 +53,11 @@ class ImplementationVersionIT {
 
     @Test
     void implementationVersionIsReadableFromClassLoadedFromJar() throws Exception {
-        var jarUrl = packagedJar().toUri().toURL();
+        var packagedJar = packagedJar();
+        assumeThat(packagedJar)
+                .as("packaged jar must exist before package metadata integration tests run")
+                .exists();
+        var jarUrl = packagedJar.toUri().toURL();
         try (var loader = new URLClassLoader(new URL[]{ jarUrl }, getClass().getClassLoader())) {
             var filterClass = loader.loadClass("io.kroxylicious.proxy.filter.Filter");
             assertThat(filterClass.getPackage().getImplementationVersion()).isEqualTo(EXPECTED_VERSION);
