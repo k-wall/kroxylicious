@@ -185,6 +185,7 @@ class VaultKmsKubernetesAuthIT {
         var resolved = vaultKms.resolveAlias(keyName);
         assertThat(resolved)
                 .succeedsWithin(Duration.ofSeconds(10))
+                .extracting(WrappingKey::name)
                 .isEqualTo(keyName);
     }
 
