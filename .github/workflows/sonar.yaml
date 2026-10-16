@@ -154,33 +154,10 @@ jobs:
       - name: SonarCloud scan on PR for the Operator
         id: operator_scan
         continue-on-error: true
-        if: env.SONAR_TOKEN_SET == 'true' && github.event.workflow_run.event != 'merge_group' && hashFiles('scripts/ci-build-functions.sh') != ''
+        if: github.event.workflow_run.event != 'merge_group'
         run: |
-          source scripts/ci-build-functions.sh
-          if [ -f "kroxylicious-kubernetes/pom.xml" ]; then
-            run_sonar "${KUBERNETES_PROFILES}" 'Kroxylicious Operator' 'kroxylicious_operator' \
-              -Djapicmp.skip=true \
-              -Dsonar.scm.revision=${{ github.event.workflow_run.head_sha }} \
-              -Dsonar.pullrequest.key=${{ fromJson(steps.get_pr_data.outputs.data).number }} \
-              -Dsonar.pullrequest.branch=${{ fromJson(steps.get_pr_data.outputs.data).head.ref }} \
-              -Dsonar.pullrequest.base=${{ fromJson(steps.get_pr_data.outputs.data).base.ref }}
-          else
-            # Old release branches: operator was not under kroxylicious-kubernetes/
-            mvn --batch-mode \
-              --activate-profiles 'ci,!qa' \
-              --projects ':kroxylicious-operator,:kroxylicious-parent' \
-              -Derrorprone.skip=true \
-              -DskipITs=true \
-              -Djapicmp.skip=true \
-              -Dsonar.projectName='Kroxylicious Operator' \
-              -Dsonar.projectKey='kroxylicious_operator' \
-              -Dsonar.scm.revision=${{ github.event.workflow_run.head_sha }} \
-              -Dsonar.pullrequest.key=${{ fromJson(steps.get_pr_data.outputs.data).number }} \
-              -Dsonar.pullrequest.branch=${{ fromJson(steps.get_pr_data.outputs.data).head.ref }} \
-              -Dsonar.pullrequest.base=${{ fromJson(steps.get_pr_data.outputs.data).base.ref }} \
-              verify \
-              org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
-          fi
+          # TEST ONLY: simulate a transient scan failure (e.g. HTTP 500)
+          exit 1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -62,41 +62,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # This is the authoritative QA check for all PRs. Explicitly enable the qa profile.
-          # ErrorProne automatically activates on JDK 17+ (errorprone-jdk-compatible profile).
-          # All quality checks run: formatting, licensing, checkstyle, spotbugs, dependency analysis, enforcer, errorprone.
-          # Other workflows skip QA to avoid duplication.
-          mvn --batch-mode \
-            --activate-profiles build-the-world,ci,qa \
-            --threads 1.5C \
-            -DskipTests \
-            -Djapicmp.skip=true \
-            verify
+          # TEST ONLY: skipped to speed up sonar failure-path testing
+          echo "skipped"
       - name: 'Validate POM metadata for Central Portal'
         if: github.event_name != 'merge_group'
-        run: |
-          mvn --batch-mode --quiet help:effective-pom -Doutput=target/effective-pom.xml
-          mvn --batch-mode --quiet --projects kroxylicious-bom help:effective-pom -Doutput=target/effective-pom.xml
-          # +1 for the root reactor pom, which appears in the effective-pom but is not declared as a <module> anywhere
-          expected=$(( $(grep -h -r --include="pom.xml" "<module>" . | grep -v target | sort | uniq | wc -l) + 1 ))
-          python3 scripts/validate_pom_metadata.py target/effective-pom.xml "$expected"
-          python3 scripts/validate_pom_metadata.py kroxylicious-bom/target/effective-pom.xml
+        run: echo "skipped"  # TEST ONLY
       - name: 'Validate JAR manifest entries'
         if: github.event_name != 'merge_group'
-        run: |
-          KROXYLICIOUS_VERSION="$(mvn --batch-mode --quiet help:evaluate -Dexpression=project.version -DforceStdout)"
-          KROXYLICIOUS_API_FINAL_NAME="$(mvn --batch-mode --quiet --projects kroxylicious-api help:evaluate -Dexpression=project.build.finalName -DforceStdout)"
-          python3 scripts/validate_jar_manifests.py \
-            "kroxylicious-api/target/${KROXYLICIOUS_API_FINAL_NAME}.jar" \
-            --expected-version="$KROXYLICIOUS_VERSION" \
-            --expected-title="Kroxylicious API" \
-            --expected-vendor="Kroxylicious"
+        run: echo "skipped"  # TEST ONLY
       - name: 'Install xmllint'
         if: github.event_name != 'merge_group'
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+        run: echo "skipped"  # TEST ONLY
       - name: 'Validate module-profile structure'
         if: github.event_name != 'merge_group'
-        run: bash scripts/validate-module-structure.sh
+        run: echo "skipped"  # TEST ONLY
       - name: Save PR number to file
         if: github.event_name != 'merge_group'
         run: echo ${{ github.event.number }} > PR_NUMBER.txt
