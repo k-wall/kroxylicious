@@ -1128,11 +1128,11 @@ class ConfigParserTest {
     @Test
     void shouldThrowWhenSerializingUnserializableObject() {
         var gateway = new VirtualClusterGateway("gw", new PortIdentifiesNodeIdentificationStrategy(HostPort.parse("localhost:9082"), null, null, null), null,
-                Optional.empty());
+                Optional.empty(), null);
         List<VirtualCluster> vcs = List.of(new VirtualCluster("demo", new RouteTarget("upstream", null), List.of(gateway), false, false, List.of()));
         List<ClusterDefinition> clusterDefinitions = List.of(new ClusterDefinition("upstream", "kafka:9092", null));
         var config = new Configuration(null, clusterDefinitions, List.of(new NamedFilterDefinition("foo", "", new NonSerializableConfig(""))), List.of("foo"), null,
-                vcs, null, false, Optional.empty(), null, null);
+                vcs, null, false, Optional.empty(), null);
 
         ConfigParser cp = new ConfigParser();
         assertThatThrownBy(() -> {

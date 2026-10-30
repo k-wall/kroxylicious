@@ -14,25 +14,24 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 
-import io.kroxylicious.proxy.config.ProxyProtocolMode;
-
 import edu.umd.cs.findbugs.annotations.Nullable;
-
-import static io.kroxylicious.proxy.internal.util.NettyFutures.logFailure;
 
 /**
  * Uses {@link HAProxyMessageDecoder#detectProtocol(ByteBuf)} on the first bytes
  * of a connection to decide whether to install the PROXY protocol decoder.
  * <p>
- * In {@link ProxyProtocolMode#REQUIRED} mode, non-PROXY bytes cause the
- * connection to be closed with a warning. In {@link ProxyProtocolMode#ALLOWED}
- * mode, non-PROXY bytes are simply passed through to the Kafka decoder.
+ * This handler is a <em>pure detector</em>: when a PROXY v1 or v2 header is found it
+ * installs {@code HAProxyMessageDecoder} + {@code HaProxyMessageHandler} and stores
+ * the decoded context in the {@link KafkaSession}. When no PROXY header is present the
+ * bytes are passed through to the next handler unchanged.
  * </p>
  * <p>
- * This handler is not used when the proxy is in {@link ProxyProtocolMode#DISABLED} mode.
+ * Per-gateway enforcement (reject if header missing on a {@code required} gateway, or
+ * reject if header present on a {@code forbidden} gateway) is handled downstream by
+ * {@link ProxyProtocolEnforcementHandler}.
  * </p>
  * <p>
- * This handler removes itself from the pipeline after the first read.
+ * This handler removes itself from the pipeline after the first complete read.
  * </p>
  */
 public class HaProxyProtocolDetectionHandler extends ChannelInboundHandlerAdapter {
@@ -42,18 +41,15 @@ public class HaProxyProtocolDetectionHandler extends ChannelInboundHandlerAdapte
     private static final String HAPROXY_MESSAGE_DECODER_HANDLER_NAME = "HAProxyMessageDecoder";
     private static final String HAPROXY_MESSAGE_HANDLER_NAME = "HaProxyMessageHandler";
 
-    private final ProxyProtocolMode mode;
     private final KafkaSession kafkaSession;
     @Nullable
     private ByteBuf cumulation;
 
     /**
      * Creates a PROXY protocol detection handler.
-     * @param mode how the PROXY protocol is accepted on this connection ({@code ALLOWED} or {@code REQUIRED})
      * @param kafkaSession the session in which any decoded PROXY context will be stored
      */
-    public HaProxyProtocolDetectionHandler(ProxyProtocolMode mode, KafkaSession kafkaSession) {
-        this.mode = mode;
+    public HaProxyProtocolDetectionHandler(KafkaSession kafkaSession) {
         this.kafkaSession = kafkaSession;
     }
 
@@ -89,22 +85,12 @@ public class HaProxyProtocolDetectionHandler extends ChannelInboundHandlerAdapte
                 cumulation = null;
             }
             case INVALID -> {
-                if (mode == ProxyProtocolMode.REQUIRED) {
-                    LOGGER.atWarn().addKeyValue("ctx", ctx.channel())
-                            .log("Connection rejected — expected PROXY protocol header but received non-PROXY data. "
-                                    + "Ensure the upstream load balancer is configured to send PROXY protocol headers, "
-                                    + "or set proxyProtocol mode to 'allowed' or 'disabled'.");
-                    cumulation.release();
-                    cumulation = null;
-                    ctx.close().addListener(logFailure(LOGGER, "close after PROXY protocol rejection"));
-                }
-                else {
-                    // ALLOWED mode — no PROXY header, pass through to Kafka decoder
-                    LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("No PROXY protocol header detected, passing through");
-                    ctx.pipeline().remove(this);
-                    ctx.fireChannelRead(cumulation);
-                    cumulation = null;
-                }
+                // No PROXY header detected — pass bytes through; enforcement is handled downstream
+                // by ProxyProtocolEnforcementHandler based on per-gateway configuration.
+                LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("No PROXY protocol header detected, passing through");
+                ctx.pipeline().remove(this);
+                ctx.fireChannelRead(cumulation);
+                cumulation = null;
             }
             case NEEDS_MORE_DATA -> {
                 LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("PROXY protocol detection needs more data, waiting for next read");

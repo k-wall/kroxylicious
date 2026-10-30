@@ -25,11 +25,15 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.haproxy.HAProxyMessage;
+import io.netty.handler.codec.haproxy.HAProxyMessageEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 
@@ -68,6 +72,8 @@ public final class KafkaClient implements AutoCloseable {
     private final String host;
     private final int port;
     private final SslContext sslContext;
+    @Nullable
+    private final HAProxyMessage proxyMessage;
 
     private final AtomicReference<CompletableFuture<Channel>> connected = new AtomicReference<>();
 
@@ -83,7 +89,7 @@ public final class KafkaClient implements AutoCloseable {
      * @param port port to connect to
      */
     public KafkaClient(String host, int port) {
-        this(host, port, null);
+        this(host, port, null, null);
     }
 
     /**
@@ -94,13 +100,46 @@ public final class KafkaClient implements AutoCloseable {
      * @param clientSslContext client ssl context or null if TLS should not be used.
      */
     public KafkaClient(String host, int port, SslContext clientSslContext) {
+        this(host, port, clientSslContext, null);
+    }
+
+    private KafkaClient(String host, int port, @Nullable SslContext sslContext, @Nullable HAProxyMessage proxyMessage) {
         this.host = host;
         this.port = port;
-        this.sslContext = clientSslContext;
+        this.sslContext = sslContext;
+        this.proxyMessage = proxyMessage;
         this.eventGroupConfig = EventGroupConfig.create();
         bossGroup = eventGroupConfig.newBossGroup();
         correlationManager = new CorrelationManager();
         kafkaClientHandler = new KafkaClientHandler();
+    }
+
+    /**
+     * Creates a KafkaClient that emits a HAProxy PROXY protocol preamble before any Kafka traffic.
+     *
+     * @param host host to connect to
+     * @param port port to connect to
+     * @param proxyMessage the PROXY protocol message to send as the connection preamble
+     * @return a new KafkaClient configured to send the preamble
+     */
+    public static KafkaClient withProxyProtocol(String host, int port, HAProxyMessage proxyMessage) {
+        return new KafkaClient(host, port, null, proxyMessage);
+    }
+
+    /**
+     * Creates a KafkaClient that emits a HAProxy PROXY protocol preamble and then negotiates TLS.
+     * The preamble is sent as plain bytes before the TLS ClientHello, matching the wire order
+     * that a proxy configured with {@code proxyProtocol.mode: required} expects.
+     *
+     * @param host host to connect to
+     * @param port port to connect to
+     * @param proxyMessage the PROXY protocol message to send as the connection preamble
+     * @param sslContext client SSL context
+     * @return a new KafkaClient configured to send the preamble then establish TLS
+     */
+    public static KafkaClient withProxyProtocol(String host, int port, HAProxyMessage proxyMessage,
+                                                SslContext sslContext) {
+        return new KafkaClient(host, port, sslContext, proxyMessage);
     }
 
     private static final AtomicInteger correlationId = new AtomicInteger(1);
@@ -178,7 +217,31 @@ public final class KafkaClient implements AutoCloseable {
                         @Override
                         public void initChannel(SocketChannel ch) {
                             ChannelPipeline p = ch.pipeline();
-                            if (sslContext != null) {
+                            if (proxyMessage != null) {
+                                p.addLast(HAProxyMessageEncoder.INSTANCE);
+                                p.addLast(new ChannelInboundHandlerAdapter() {
+                                    @Override
+                                    public void channelActive(ChannelHandlerContext ctx) {
+                                        ctx.writeAndFlush(proxyMessage).addListener(writeFuture -> {
+                                            ctx.pipeline().remove(HAProxyMessageEncoder.class);
+                                            ctx.pipeline().remove(this);
+                                            if (sslContext != null) {
+                                                var sslHandler = sslContext.newHandler(ctx.alloc(), host, port);
+                                                ctx.pipeline().addFirst(sslHandler);
+                                                sslHandler.handshakeFuture().addListener(hf -> {
+                                                    ctx.fireChannelActive();
+                                                    candidate.complete(ctx.channel());
+                                                });
+                                            }
+                                            else {
+                                                ctx.fireChannelActive();
+                                                candidate.complete(ctx.channel());
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                            else if (sslContext != null) {
                                 p.addLast(sslContext.newHandler(ch.alloc(), host, port));
                             }
                             p.addLast(new KafkaRequestEncoder(correlationManager));
@@ -188,7 +251,9 @@ public final class KafkaClient implements AutoCloseable {
                     });
 
             ChannelFuture connect = b.connect(host, port);
-            connect.addListeners((ChannelFutureListener) channelFuture -> candidate.complete(channelFuture.channel()));
+            if (proxyMessage == null) {
+                connect.addListeners((ChannelFutureListener) channelFuture -> candidate.complete(channelFuture.channel()));
+            }
             connect.channel().closeFuture().addListener(future -> correlationManager.onChannelClose());
             return candidate;
         }

@@ -23,11 +23,13 @@ import edu.umd.cs.findbugs.annotations.Nullable;
  * @param portIdentifiesNode network config
  * @param sniHostIdentifiesNode network config
  * @param tls tls settings
+ * @param proxyProtocol per-gateway PROXY protocol configuration; {@code null} means {@link ProxyProtocolMode#FORBIDDEN}
  */
 public record VirtualClusterGateway(@JsonProperty(required = true) String name,
                                     @Nullable @JsonProperty(required = false) PortIdentifiesNodeIdentificationStrategy portIdentifiesNode,
                                     @Nullable @JsonProperty(required = false) SniHostIdentifiesNodeIdentificationStrategy sniHostIdentifiesNode,
-                                    Optional<Tls> tls) {
+                                    Optional<Tls> tls,
+                                    @Nullable @JsonProperty(required = false) ProxyProtocolConfig proxyProtocol) {
 
     /**
      * Validates the gateway: exactly one of {@code portIdentifiesNode} or
@@ -45,6 +47,16 @@ public record VirtualClusterGateway(@JsonProperty(required = true) String name,
         if (sniHostIdentifiesNode != null && tls.isEmpty()) {
             throw new IllegalConfigurationException("When using 'sniHostIdentifiesNode', 'tls' must be provided (virtual cluster listener %s)".formatted(name));
         }
+    }
+
+    /**
+     * Returns the effective PROXY protocol mode for this gateway.
+     * When no {@code proxyProtocol} block is configured, {@link ProxyProtocolMode#FORBIDDEN} is returned.
+     *
+     * @return the proxy protocol mode
+     */
+    public ProxyProtocolMode proxyProtocolMode() {
+        return proxyProtocol != null ? proxyProtocol.mode() : ProxyProtocolMode.FORBIDDEN;
     }
 
     /**
@@ -73,6 +85,7 @@ public record VirtualClusterGateway(@JsonProperty(required = true) String name,
                 ", portIdentifiesNode=" + portIdentifiesNode +
                 ", sniHostIdentifiesNode=" + sniHostIdentifiesNode +
                 ", tls=" + tls +
+                ", proxyProtocol=" + proxyProtocol +
                 '}';
     }
 }

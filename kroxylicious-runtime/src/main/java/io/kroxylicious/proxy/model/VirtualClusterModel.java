@@ -38,6 +38,7 @@ import io.kroxylicious.proxy.config.CacheConfiguration;
 import io.kroxylicious.proxy.config.IllegalConfigurationException;
 import io.kroxylicious.proxy.config.NamedFilterDefinition;
 import io.kroxylicious.proxy.config.PluginFactoryRegistry;
+import io.kroxylicious.proxy.config.ProxyProtocolMode;
 import io.kroxylicious.proxy.config.TargetCluster;
 import io.kroxylicious.proxy.config.TransportSubjectBuilderConfig;
 import io.kroxylicious.proxy.config.tls.AllowDeny;
@@ -321,9 +322,21 @@ public class VirtualClusterModel implements AutoCloseable {
      * @param name name of the gateway.
      * @param nodeIdentificationStrategy strategy used by the gateway to identify the target node from an incoming connection.
      * @param tls downstream TLS configuration for the gateway, or empty for plain connections.
+     * @param proxyProtocolMode the PROXY protocol enforcement mode for this gateway.
+     */
+    public void addGateway(String name, NodeIdentificationStrategy nodeIdentificationStrategy, Optional<Tls> tls, ProxyProtocolMode proxyProtocolMode) {
+        gateways.put(name, new VirtualClusterGatewayModel(this, nodeIdentificationStrategy, tls, name, proxyProtocolMode));
+    }
+
+    /**
+     * Adds a gateway to this virtual cluster.
+     *
+     * @param name name of the gateway.
+     * @param nodeIdentificationStrategy strategy used by the gateway to identify the target node from an incoming connection.
+     * @param tls downstream TLS configuration for the gateway, or empty for plain connections.
      */
     public void addGateway(String name, NodeIdentificationStrategy nodeIdentificationStrategy, Optional<Tls> tls) {
-        gateways.put(name, new VirtualClusterGatewayModel(this, nodeIdentificationStrategy, tls, name));
+        addGateway(name, nodeIdentificationStrategy, tls, ProxyProtocolMode.FORBIDDEN);
     }
 
     /**
@@ -600,6 +613,7 @@ public class VirtualClusterModel implements AutoCloseable {
         private final Optional<Tls> tls;
         private final Optional<SslContext> downstreamSslContext;
         private final String name;
+        private final ProxyProtocolMode proxyProtocolMode;
 
         /**
          * Resolves the actual bound port for a given virtual node. Set by
@@ -615,10 +629,16 @@ public class VirtualClusterModel implements AutoCloseable {
 
         @VisibleForTesting
         VirtualClusterGatewayModel(VirtualClusterModel virtualCluster, NodeIdentificationStrategy nodeIdentificationStrategy, Optional<Tls> tls, String name) {
+            this(virtualCluster, nodeIdentificationStrategy, tls, name, ProxyProtocolMode.FORBIDDEN);
+        }
+
+        VirtualClusterGatewayModel(VirtualClusterModel virtualCluster, NodeIdentificationStrategy nodeIdentificationStrategy, Optional<Tls> tls, String name,
+                                   ProxyProtocolMode proxyProtocolMode) {
             this.virtualCluster = virtualCluster;
             this.nodeIdentificationStrategy = nodeIdentificationStrategy;
             this.tls = tls;
             this.name = name;
+            this.proxyProtocolMode = Objects.requireNonNull(proxyProtocolMode);
             validatePortUsage(nodeIdentificationStrategy);
             validateTLsSettings(nodeIdentificationStrategy, tls);
             this.downstreamSslContext = buildDownstreamSslContext();
@@ -646,6 +666,11 @@ public class VirtualClusterModel implements AutoCloseable {
         @Override
         public VirtualClusterModel virtualCluster() {
             return virtualCluster;
+        }
+
+        @Override
+        public ProxyProtocolMode proxyProtocolMode() {
+            return proxyProtocolMode;
         }
 
         @Override
