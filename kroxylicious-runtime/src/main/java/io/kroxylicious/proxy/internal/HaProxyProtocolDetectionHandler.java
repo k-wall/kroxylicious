@@ -77,12 +77,35 @@ public class HaProxyProtocolDetectionHandler extends ChannelInboundHandlerAdapte
             case DETECTED -> {
                 LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("PROXY protocol detected, adding decoder");
                 String thisName = ctx.name();
-                ctx.pipeline().addAfter(thisName, HAPROXY_MESSAGE_DECODER_HANDLER_NAME, new HAProxyMessageDecoder());
-                ctx.pipeline().addAfter(HAPROXY_MESSAGE_DECODER_HANDLER_NAME, HAPROXY_MESSAGE_HANDLER_NAME,
-                        new HaProxyMessageHandler(kafkaSession));
-                ctx.pipeline().remove(this);
-                ctx.fireChannelRead(cumulation);
-                cumulation = null;
+                int headerLen = proxyHeaderLength(cumulation);
+                if (headerLen > 0 && headerLen < cumulation.readableBytes()) {
+                    // The cumulation contains the complete PROXY header plus additional bytes
+                    // (e.g. a TLS ClientHello that arrived in the same TCP segment). Feed only
+                    // the PROXY bytes to the decoder; the rest bypass the decoder and are fired
+                    // downstream by HaProxyMessageHandler once the PROXY context is stored.
+                    // This prevents HAProxyMessageDecoder from attempting to parse non-PROXY
+                    // bytes as a second header, which would throw HAProxyProtocolException.
+                    ByteBuf proxyPart = cumulation.readRetainedSlice(headerLen);
+                    ByteBuf postProxyBytes = cumulation.retain();
+                    cumulation.release();
+                    cumulation = null;
+                    ctx.pipeline().addAfter(thisName, HAPROXY_MESSAGE_DECODER_HANDLER_NAME, new HAProxyMessageDecoder());
+                    ctx.pipeline().addAfter(HAPROXY_MESSAGE_DECODER_HANDLER_NAME, HAPROXY_MESSAGE_HANDLER_NAME,
+                            new HaProxyMessageHandler(kafkaSession, postProxyBytes));
+                    ctx.pipeline().remove(this);
+                    ctx.fireChannelRead(proxyPart);
+                }
+                else {
+                    // Either the full PROXY header length cannot yet be determined, or the
+                    // cumulation contains exactly (and only) the PROXY header with nothing
+                    // trailing. The standard pipeline approach is safe in both cases.
+                    ctx.pipeline().addAfter(thisName, HAPROXY_MESSAGE_DECODER_HANDLER_NAME, new HAProxyMessageDecoder());
+                    ctx.pipeline().addAfter(HAPROXY_MESSAGE_DECODER_HANDLER_NAME, HAPROXY_MESSAGE_HANDLER_NAME,
+                            new HaProxyMessageHandler(kafkaSession));
+                    ctx.pipeline().remove(this);
+                    ctx.fireChannelRead(cumulation);
+                    cumulation = null;
+                }
             }
             case INVALID -> {
                 // No PROXY header detected — pass bytes through; enforcement is handled downstream
@@ -96,6 +119,31 @@ public class HaProxyProtocolDetectionHandler extends ChannelInboundHandlerAdapte
                 LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("PROXY protocol detection needs more data, waiting for next read");
             }
         }
+    }
+
+    /**
+     * Returns the total byte length of the PROXY header starting at {@code buf}'s
+     * current reader index, or {@code -1} if it cannot be determined yet (insufficient
+     * bytes in the buffer). Does not modify the reader index.
+     */
+    private static int proxyHeaderLength(ByteBuf buf) {
+        int ri = buf.readerIndex();
+        int readable = buf.readableBytes();
+        byte first = buf.getByte(ri);
+        if (first == 0x0D) {
+            // PROXY v2: 16-byte fixed header + variable-length address block.
+            // Bytes 14-15 (unsigned short, big-endian) give the address block length.
+            if (readable < 16) {
+                return -1;
+            }
+            return 16 + buf.getUnsignedShort(ri + 14);
+        }
+        else if (first == 'P') {
+            // PROXY v1: human-readable line terminated by CRLF.
+            int nlPos = buf.indexOf(ri, ri + readable, (byte) '\n');
+            return nlPos < 0 ? -1 : nlPos - ri + 1;
+        }
+        return -1;
     }
 
     @Override

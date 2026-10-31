@@ -5,379 +5,227 @@
  */
 package io.kroxylicious.it;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.MetadataRequestData;
-import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.github.nettyplus.leakdetector.junit.NettyLeakDetectorExtension;
-import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.netty.channel.nio.NioIoHandler;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.haproxy.HAProxyCommand;
 import io.netty.handler.codec.haproxy.HAProxyMessage;
-import io.netty.handler.codec.haproxy.HAProxyMessageEncoder;
 import io.netty.handler.codec.haproxy.HAProxyProtocolVersion;
 import io.netty.handler.codec.haproxy.HAProxyProxiedProtocol;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.SslHandler;
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
 import io.kroxylicious.proxy.config.ConfigurationBuilder;
-import io.kroxylicious.proxy.config.ProxyProtocolConfig;
 import io.kroxylicious.proxy.config.ProxyProtocolMode;
 import io.kroxylicious.testing.certificate.CertificateGenerator;
 import io.kroxylicious.testing.integration.Request;
-import io.kroxylicious.testing.integration.Response;
 import io.kroxylicious.testing.integration.ResponsePayload;
-import io.kroxylicious.testing.integration.client.CorrelationManager;
-import io.kroxylicious.testing.integration.client.KafkaClientHandler;
-import io.kroxylicious.testing.integration.codec.KafkaRequestEncoder;
-import io.kroxylicious.testing.integration.codec.KafkaResponseDecoder;
-import io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils;
+import io.kroxylicious.testing.integration.client.KafkaClient;
 
+import static io.kroxylicious.testing.integration.client.KafkaClient.TRUST_ALL_CLIENT_SSL_CONTEXT;
 import static io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils.DEFAULT_CLUSTER_DEF_NAME;
 import static io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils.DEFAULT_CLUSTER_TARGET;
 import static io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils.OS_ASSIGNED_BOOTSTRAP;
+import static io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils.baseConfigurationBuilder;
 import static io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils.defaultPortIdentifiesNodeGatewayBuilder;
 import static io.kroxylicious.testing.integration.tester.KroxyliciousTesters.mockKafkaKroxyliciousTester;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Integration tests for HaProxy PROXY protocol support.
+ * Integration tests for per-gateway HAProxy PROXY protocol support.
+ * Covers both plain-channel and TLS-channel cases for REQUIRED and FORBIDDEN modes.
  */
 @ExtendWith(NettyLeakDetectorExtension.class)
 class ProxyProtocolIT {
 
-    @Test
-    void requiredModeShouldRejectConnectionWithoutProxyHeader() {
-        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> KroxyliciousConfigUtils.proxy(bootstrap)
-                .withProxyProtocol(new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED)));
-                var client = tester.simpleTestClient()) {
+    private static final CertificateGenerator.Keys TLS_KEYS = CertificateGenerator.generate();
 
-            var request = new Request(ApiKeys.API_VERSIONS, ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION,
-                    "test-client", new ApiVersionsRequestData());
-
-            // Connection should be rejected fast, not hang
-            assertThat(client.get(request))
-                    .failsWithin(5, TimeUnit.SECONDS);
-        }
+    // Factory method — HAProxyMessage is ref-counted; the encoder releases it after writing,
+    // so each test must get a fresh instance rather than sharing a static one.
+    private static HAProxyMessage proxyMessage() {
+        return new HAProxyMessage(HAProxyProtocolVersion.V2, HAProxyCommand.PROXY,
+                HAProxyProxiedProtocol.TCP4, "192.168.1.100", "127.0.0.1", 54321, 9092);
     }
 
-    @Test
-    void requiredModeShouldProxyKafkaRequestsAfterProxyHeader() throws Exception {
-        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> KroxyliciousConfigUtils.proxy(bootstrap)
-                .withProxyProtocol(new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED)))) {
+    // ---- plain channel ----
 
+    @Test
+    void requiredMode_plainChannel_withProxyHeader_succeeds() {
+        // Given
+        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> plainConfig(bootstrap, ProxyProtocolMode.REQUIRED))) {
             tester.addMockResponseForApiKey(new ResponsePayload(ApiKeys.API_VERSIONS,
                     ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, new ApiVersionsResponseData()));
-            tester.addMockResponseForApiKey(new ResponsePayload(ApiKeys.METADATA,
-                    MetadataRequestData.HIGHEST_SUPPORTED_VERSION, new MetadataResponseData()));
+            var parts = tester.getBootstrapAddress().split(":", 2);
+            try (var client = KafkaClient.withProxyProtocol(parts[0], Integer.parseInt(parts[1]), proxyMessage())) {
 
-            var address = tester.getBootstrapAddress();
-            var parts = address.split(":", -1);
-            var host = parts[0];
-            var port = Integer.parseInt(parts[1]);
+                // When
+                var response = client.get(apiVersionsRequest());
 
-            var correlationManager = new CorrelationManager();
-            var kafkaHandler = new KafkaClientHandler();
-            try (var group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory())) {
-                Channel channel = connectClient(group, host, port, correlationManager, kafkaHandler);
-
-                // Send PROXY header first
-                channel.writeAndFlush(new HAProxyMessage(
-                        HAProxyProtocolVersion.V2,
-                        HAProxyCommand.PROXY,
-                        HAProxyProxiedProtocol.TCP4,
-                        "192.168.1.100",
-                        "127.0.0.1",
-                        54321,
-                        port)).sync();
-
-                // Remove encoder after sending (PROXY header is one-shot)
-                channel.pipeline().remove(HAProxyMessageEncoder.class);
-
-                // Send ApiVersions request
-                var apiVersionsRequest = toRequestFrame(new Request(ApiKeys.API_VERSIONS,
-                        ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, "test-client", new ApiVersionsRequestData()));
-                CompletableFuture<?> apiVersionsFuture = kafkaHandler.sendRequest(apiVersionsRequest);
-                assertThat(apiVersionsFuture)
-                        .as("ApiVersions request should succeed after PROXY header")
-                        .succeedsWithin(5, TimeUnit.SECONDS);
-
-                // Send Metadata request on the same connection
-                var metadataRequest = toRequestFrame(new Request(ApiKeys.METADATA,
-                        MetadataRequestData.HIGHEST_SUPPORTED_VERSION, "test-client", new MetadataRequestData()));
-                CompletableFuture<?> metadataFuture = kafkaHandler.sendRequest(metadataRequest);
-                assertThat(metadataFuture)
-                        .as("Metadata request should succeed after PROXY header")
-                        .succeedsWithin(5, TimeUnit.SECONDS);
-
-                channel.close().sync();
+                // Then
+                assertThat(response).succeedsWithin(5, TimeUnit.SECONDS);
             }
         }
     }
 
     @Test
-    void allowedModeShouldAcceptDirectConnectionWithoutProxyHeader() {
-        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> KroxyliciousConfigUtils.proxy(bootstrap)
-                .withProxyProtocol(new ProxyProtocolConfig(ProxyProtocolMode.ALLOWED)));
+    void requiredMode_plainChannel_withoutProxyHeader_rejects() {
+        // Given
+        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> plainConfig(bootstrap, ProxyProtocolMode.REQUIRED));
                 var client = tester.simpleTestClient()) {
 
-            tester.addMockResponseForApiKey(new ResponsePayload(ApiKeys.API_VERSIONS,
-                    ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, new ApiVersionsResponseData()));
+            // When
+            var response = client.get(apiVersionsRequest());
 
-            var request = new Request(ApiKeys.API_VERSIONS, ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION,
-                    "test-client", new ApiVersionsRequestData());
-
-            Response response = client.getSync(request);
-            assertThat(response.payload().message()).isInstanceOf(ApiVersionsResponseData.class);
+            // Then
+            assertThat(response).failsWithin(5, TimeUnit.SECONDS);
         }
     }
 
-    // ---- TLS + PROXY protocol tests ----
-
     @Test
-    void tlsRequiredModeShouldProxyKafkaRequestsAfterProxyHeader() throws Exception {
-        var keys = CertificateGenerator.generate();
-        var keystore = keys.jksServerKeystore();
-
-        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> buildTlsProxyProtocolConfig(bootstrap, keystore, ProxyProtocolMode.REQUIRED))) {
-
+    void forbiddenMode_plainChannel_withoutProxyHeader_succeeds() {
+        // Given
+        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> plainConfig(bootstrap, ProxyProtocolMode.FORBIDDEN));
+                var client = tester.simpleTestClient()) {
             tester.addMockResponseForApiKey(new ResponsePayload(ApiKeys.API_VERSIONS,
                     ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, new ApiVersionsResponseData()));
 
-            var address = tester.getBootstrapAddress();
-            var parts = address.split(":", -1);
-            var host = parts[0];
-            var port = Integer.parseInt(parts[1]);
+            // When
+            var response = client.get(apiVersionsRequest());
 
-            var correlationManager = new CorrelationManager();
-            var kafkaHandler = new KafkaClientHandler();
-            SslContext sslContext = SslContextBuilder.forClient()
-                    .trustManager(InsecureTrustManagerFactory.INSTANCE)
-                    .build();
+            // Then
+            assertThat(response).succeedsWithin(5, TimeUnit.SECONDS);
+        }
+    }
 
-            try (var group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory())) {
-                Channel channel = connectClient(group, host, port, correlationManager, kafkaHandler);
+    @Test
+    void forbiddenMode_plainChannel_withProxyHeader_rejects() {
+        // Given
+        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> plainConfig(bootstrap, ProxyProtocolMode.FORBIDDEN))) {
+            var parts = tester.getBootstrapAddress().split(":", 2);
+            try (var client = KafkaClient.withProxyProtocol(parts[0], Integer.parseInt(parts[1]), proxyMessage())) {
 
-                // Send PROXY header first (before TLS handshake)
-                channel.writeAndFlush(new HAProxyMessage(
-                        HAProxyProtocolVersion.V2,
-                        HAProxyCommand.PROXY,
-                        HAProxyProxiedProtocol.TCP4,
-                        "192.168.1.100",
-                        "127.0.0.1",
-                        54321,
-                        port)).sync();
+                // When
+                var response = client.get(apiVersionsRequest());
 
-                // Remove PROXY encoder (one-shot) and add TLS handler at the front
-                channel.pipeline().remove(HAProxyMessageEncoder.class);
-                SslHandler sslHandler = sslContext.newHandler(channel.alloc(), host, port);
-                channel.pipeline().addFirst(sslHandler);
+                // Then
+                assertThat(response).failsWithin(5, TimeUnit.SECONDS);
+            }
+        }
+    }
 
-                // Wait for TLS handshake to complete
-                sslHandler.handshakeFuture().sync();
+    // ---- TLS channel ----
 
-                // Send Kafka request over TLS
-                var apiVersionsRequest = toRequestFrame(new Request(ApiKeys.API_VERSIONS,
-                        ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, "test-client", new ApiVersionsRequestData()));
-                CompletableFuture<?> apiVersionsFuture = kafkaHandler.sendRequest(apiVersionsRequest);
-                assertThat(apiVersionsFuture)
-                        .as("ApiVersions request should succeed after PROXY header + TLS handshake")
-                        .succeedsWithin(5, TimeUnit.SECONDS);
+    @Test
+    void requiredMode_tlsChannel_withProxyHeader_succeeds() {
+        // Given
+        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> tlsConfig(bootstrap, ProxyProtocolMode.REQUIRED))) {
+            tester.addMockResponseForApiKey(new ResponsePayload(ApiKeys.API_VERSIONS,
+                    ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, new ApiVersionsResponseData()));
+            var parts = tester.getBootstrapAddress().split(":", 2);
+            try (var client = KafkaClient.withProxyProtocol(parts[0], Integer.parseInt(parts[1]),
+                    proxyMessage(), TRUST_ALL_CLIENT_SSL_CONTEXT)) {
 
-                channel.close().sync();
+                // When
+                var response = client.get(apiVersionsRequest());
+
+                // Then
+                assertThat(response).succeedsWithin(5, TimeUnit.SECONDS);
             }
         }
     }
 
     @Test
-    void tlsRequiredModeShouldRejectTlsConnectionWithoutProxyHeader() {
-        var keys = CertificateGenerator.generate();
-        var keystore = keys.jksServerKeystore();
+    void requiredMode_tlsChannel_withoutProxyHeader_rejects() {
+        // Given
+        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> tlsConfig(bootstrap, ProxyProtocolMode.REQUIRED));
+                var client = tester.simpleTestClient(tester.getBootstrapAddress(), true)) {
 
-        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> buildTlsProxyProtocolConfig(bootstrap, keystore, ProxyProtocolMode.REQUIRED));
-                var client = tester.simpleTestClient()) {
+            // When
+            var response = client.get(apiVersionsRequest());
 
-            var request = new Request(ApiKeys.API_VERSIONS, ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION,
-                    "test-client", new ApiVersionsRequestData());
-
-            // TLS ClientHello bytes won't match PROXY header, connection should be rejected
-            assertThat(client.get(request))
-                    .failsWithin(5, TimeUnit.SECONDS);
+            // Then
+            assertThat(response).failsWithin(5, TimeUnit.SECONDS);
         }
     }
 
     @Test
-    void tlsAllowedModeShouldAcceptDirectTlsConnectionWithoutProxyHeader() {
-        var keys = CertificateGenerator.generate();
-        var keystore = keys.jksServerKeystore();
-
-        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> buildTlsProxyProtocolConfig(bootstrap, keystore, ProxyProtocolMode.ALLOWED));
-                var client = tester.simpleTestClient()) {
-
+    void forbiddenMode_tlsChannel_withoutProxyHeader_succeeds() {
+        // Given
+        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> tlsConfig(bootstrap, ProxyProtocolMode.FORBIDDEN));
+                var client = tester.simpleTestClient(tester.getBootstrapAddress(), true)) {
             tester.addMockResponseForApiKey(new ResponsePayload(ApiKeys.API_VERSIONS,
                     ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, new ApiVersionsResponseData()));
 
-            var request = new Request(ApiKeys.API_VERSIONS, ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION,
-                    "test-client", new ApiVersionsRequestData());
+            // When
+            var response = client.get(apiVersionsRequest());
 
-            Response response = client.getSync(request);
-            assertThat(response.payload().message()).isInstanceOf(ApiVersionsResponseData.class);
+            // Then
+            assertThat(response).succeedsWithin(5, TimeUnit.SECONDS);
         }
     }
 
     @Test
-    void tlsAllowedModeShouldAcceptTlsConnectionWithProxyHeader() throws Exception {
-        var keys = CertificateGenerator.generate();
-        var keystore = keys.jksServerKeystore();
+    void forbiddenMode_tlsChannel_withProxyHeader_rejects() {
+        // Given
+        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> tlsConfig(bootstrap, ProxyProtocolMode.FORBIDDEN))) {
+            var parts = tester.getBootstrapAddress().split(":", 2);
+            try (var client = KafkaClient.withProxyProtocol(parts[0], Integer.parseInt(parts[1]),
+                    proxyMessage(), TRUST_ALL_CLIENT_SSL_CONTEXT)) {
 
-        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> buildTlsProxyProtocolConfig(bootstrap, keystore, ProxyProtocolMode.ALLOWED))) {
+                // When
+                var response = client.get(apiVersionsRequest());
 
-            tester.addMockResponseForApiKey(new ResponsePayload(ApiKeys.API_VERSIONS,
-                    ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, new ApiVersionsResponseData()));
-
-            var address = tester.getBootstrapAddress();
-            var parts = address.split(":", -1);
-            var host = parts[0];
-            var port = Integer.parseInt(parts[1]);
-
-            var correlationManager = new CorrelationManager();
-            var kafkaHandler = new KafkaClientHandler();
-            SslContext sslContext = SslContextBuilder.forClient()
-                    .trustManager(InsecureTrustManagerFactory.INSTANCE)
-                    .build();
-
-            try (var group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory())) {
-                Channel channel = connectClient(group, host, port, correlationManager, kafkaHandler);
-
-                // Send PROXY header first (before TLS handshake)
-                channel.writeAndFlush(new HAProxyMessage(
-                        HAProxyProtocolVersion.V2,
-                        HAProxyCommand.PROXY,
-                        HAProxyProxiedProtocol.TCP4,
-                        "192.168.1.100",
-                        "127.0.0.1",
-                        54321,
-                        port)).sync();
-
-                // Remove PROXY encoder (one-shot) and add TLS handler at the front
-                channel.pipeline().remove(HAProxyMessageEncoder.class);
-                SslHandler sslHandler = sslContext.newHandler(channel.alloc(), host, port);
-                channel.pipeline().addFirst(sslHandler);
-
-                // Wait for TLS handshake to complete
-                sslHandler.handshakeFuture().sync();
-
-                // Send Kafka request over TLS
-                var apiVersionsRequest = toRequestFrame(new Request(ApiKeys.API_VERSIONS,
-                        ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, "test-client", new ApiVersionsRequestData()));
-                CompletableFuture<?> apiVersionsFuture = kafkaHandler.sendRequest(apiVersionsRequest);
-                assertThat(apiVersionsFuture)
-                        .as("ApiVersions request should succeed in ALLOWED mode with PROXY header + TLS")
-                        .succeedsWithin(5, TimeUnit.SECONDS);
-
-                channel.close().sync();
+                // Then
+                assertThat(response).failsWithin(5, TimeUnit.SECONDS);
             }
         }
     }
 
-    @Test
-    void disabledModeShouldRejectConnectionWithProxyHeader() throws Exception {
-        try (var tester = mockKafkaKroxyliciousTester(bootstrap -> KroxyliciousConfigUtils.proxy(bootstrap)
-                .withProxyProtocol(new ProxyProtocolConfig(ProxyProtocolMode.DISABLED)))) {
+    // ---- helpers ----
 
-            var address = tester.getBootstrapAddress();
-            var parts = address.split(":", -1);
-            var host = parts[0];
-            var port = Integer.parseInt(parts[1]);
-
-            var correlationManager = new CorrelationManager();
-            var kafkaHandler = new KafkaClientHandler();
-            try (var group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory())) {
-                Channel channel = connectClient(group, host, port, correlationManager, kafkaHandler);
-
-                // Send PROXY header — in DISABLED mode, proxy treats this as Kafka data
-                channel.writeAndFlush(new HAProxyMessage(
-                        HAProxyProtocolVersion.V2,
-                        HAProxyCommand.PROXY,
-                        HAProxyProxiedProtocol.TCP4,
-                        "192.168.1.100",
-                        "127.0.0.1",
-                        54321,
-                        port)).sync();
-
-                channel.pipeline().remove(HAProxyMessageEncoder.class);
-
-                // Send a Kafka request — should fail because the PROXY header bytes
-                // were interpreted as a malformed Kafka request
-                var apiVersionsRequest = toRequestFrame(new Request(ApiKeys.API_VERSIONS,
-                        ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, "test-client", new ApiVersionsRequestData()));
-                CompletableFuture<?> apiVersionsFuture = kafkaHandler.sendRequest(apiVersionsRequest);
-                assertThat(apiVersionsFuture)
-                        .as("Request should fail when PROXY header is sent to DISABLED proxy")
-                        .failsWithin(5, TimeUnit.SECONDS);
-
-                channel.close().sync();
-            }
-        }
+    private static Request apiVersionsRequest() {
+        return new Request(ApiKeys.API_VERSIONS, ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION,
+                "test-client", new ApiVersionsRequestData());
     }
 
-    // ---- Helpers ----
-
-    /**
-     * Build a {@link Bootstrap} with the standard test-client pipeline
-     * (PROXY encoder, Kafka codec, {@code kafkaHandler}) and wire channel-close
-     * to {@link CorrelationManager#onChannelClose()} so in-flight request futures
-     * are completed when the peer drops the connection.
-     */
-    private static Channel connectClient(EventLoopGroup group, String host, int port,
-                                         CorrelationManager correlationManager, KafkaClientHandler kafkaHandler)
-            throws InterruptedException {
-        var bootstrap = new Bootstrap()
-                .group(group)
-                .channel(NioSocketChannel.class)
-                .option(ChannelOption.TCP_NODELAY, true)
-                .handler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    protected void initChannel(SocketChannel ch) {
-                        ch.pipeline().addLast(HAProxyMessageEncoder.INSTANCE);
-                        ch.pipeline().addLast(new KafkaRequestEncoder(correlationManager));
-                        ch.pipeline().addLast(new KafkaResponseDecoder(correlationManager));
-                        ch.pipeline().addLast(kafkaHandler);
-                    }
-                });
-        var channel = bootstrap.connect(host, port).sync().channel();
-        channel.closeFuture().addListener(f -> correlationManager.onChannelClose());
-        return channel;
-    }
-
-    private static ConfigurationBuilder buildTlsProxyProtocolConfig(String mockBootstrap, CertificateGenerator.KeyStore keystore,
-                                                                    ProxyProtocolMode mode) {
+    private static ConfigurationBuilder plainConfig(String bootstrap, ProxyProtocolMode mode) {
         // @formatter:off
-        return KroxyliciousConfigUtils.baseConfigurationBuilder()
+        return baseConfigurationBuilder()
                 .addNewClusterDefinition()
                     .withName(DEFAULT_CLUSTER_DEF_NAME)
-                    .withBootstrapServers(mockBootstrap)
+                    .withBootstrapServers(bootstrap)
                 .endClusterDefinition()
                 .addNewVirtualCluster()
                     .withName("demo")
                     .withTarget(DEFAULT_CLUSTER_TARGET)
                     .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(OS_ASSIGNED_BOOTSTRAP)
+                            .withNewProxyProtocol()
+                                .withMode(mode)
+                            .endProxyProtocol()
+                            .build())
+                .endVirtualCluster();
+        // @formatter:on
+    }
+
+    private static ConfigurationBuilder tlsConfig(String bootstrap, ProxyProtocolMode mode) {
+        var keystore = TLS_KEYS.jksServerKeystore();
+        // @formatter:off
+        return baseConfigurationBuilder()
+                .addNewClusterDefinition()
+                    .withName(DEFAULT_CLUSTER_DEF_NAME)
+                    .withBootstrapServers(bootstrap)
+                .endClusterDefinition()
+                .addNewVirtualCluster()
+                    .withName("demo")
+                    .withTarget(DEFAULT_CLUSTER_TARGET)
+                    .addToGateways(defaultPortIdentifiesNodeGatewayBuilder(OS_ASSIGNED_BOOTSTRAP)
+                            .withNewProxyProtocol()
+                                .withMode(mode)
+                            .endProxyProtocol()
                             .withNewTls()
                                 .withNewKeyStoreKey()
                                     .withStoreFile(keystore.path().toString())
@@ -387,18 +235,7 @@ class ProxyProtocolIT {
                                 .endKeyStoreKey()
                             .endTls()
                             .build())
-                .endVirtualCluster()
-                .withProxyProtocol(new ProxyProtocolConfig(mode));
+                .endVirtualCluster();
         // @formatter:on
-    }
-
-    private static io.kroxylicious.testing.integration.codec.DecodedRequestFrame<?> toRequestFrame(Request request) {
-        var header = new org.apache.kafka.common.message.RequestHeaderData()
-                .setRequestApiKey(request.apiKeys().id)
-                .setRequestApiVersion(request.apiVersion())
-                .setClientId(request.clientIdHeader())
-                .setCorrelationId(0);
-        return new io.kroxylicious.testing.integration.codec.DecodedRequestFrame<>(
-                header.requestApiVersion(), header.correlationId(), header, request.message(), request.apiVersion());
     }
 }
