@@ -1454,6 +1454,54 @@ class ConfigParserTest {
                 .hasMessageContaining("Missing external type id property 'type'");
     }
 
+    @Test
+    void proxyProtocolWithoutMode_failsAtStartup() {
+        // Given / When / Then
+        assertThatThrownBy(() -> configParser.parseConfiguration("""
+                clusterDefinitions:
+                  - name: my-cluster
+                    bootstrapServers: kafka1.example:1234
+                virtualClusters:
+                  - name: demo
+                    target:
+                      cluster: my-cluster
+                    gateways:
+                    - name: default
+                      proxyProtocol: {}
+                      portIdentifiesNode:
+                        bootstrapAddress: localhost:9192
+                """))
+                .isInstanceOf(IllegalArgumentException.class)
+                .cause()
+                .isInstanceOf(ValueInstantiationException.class)
+                .cause()
+                .hasMessageContaining("proxyProtocol.mode must be specified");
+    }
+
+    @Test
+    void globalProxyProtocolField_failsAtStartup() {
+        // Given / When / Then
+        assertThatThrownBy(() -> configParser.parseConfiguration("""
+                proxyProtocol:
+                  mode: required
+                clusterDefinitions:
+                  - name: my-cluster
+                    bootstrapServers: kafka1.example:1234
+                virtualClusters:
+                  - name: demo
+                    target:
+                      cluster: my-cluster
+                    gateways:
+                    - name: default
+                      portIdentifiesNode:
+                        bootstrapAddress: localhost:9192
+                """))
+                .isInstanceOf(IllegalArgumentException.class)
+                .cause()
+                .isInstanceOf(JsonMappingException.class)
+                .hasMessageContaining("proxyProtocol");
+    }
+
     private record NonSerializableConfig(String id) {
         @Override
         @JsonGetter
