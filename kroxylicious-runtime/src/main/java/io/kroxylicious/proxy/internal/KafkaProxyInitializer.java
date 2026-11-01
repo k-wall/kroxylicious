@@ -34,7 +34,6 @@ import io.kroxylicious.kafka.common.protocol.ApiKeys;
 import io.kroxylicious.proxy.authentication.TransportSubjectBuilder;
 import io.kroxylicious.proxy.config.NettySettings;
 import io.kroxylicious.proxy.config.PluginFactoryRegistry;
-import io.kroxylicious.proxy.config.ProxyProtocolMode;
 import io.kroxylicious.proxy.internal.codec.KafkaMessageListener;
 import io.kroxylicious.proxy.internal.codec.KafkaRequestDecoder;
 import io.kroxylicious.proxy.internal.codec.KafkaResponseEncoder;
@@ -75,7 +74,6 @@ public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
     /** Pipeline name of the idle-state handler applied before the session has authenticated. */
     public static final String PRE_SESSION_IDLE_HANDLER = "preSessionIdleHandler";
 
-    private final ProxyProtocolMode proxyProtocolMode;
     private final boolean tls;
     private final EndpointBindingResolver bindingResolver;
     private final EndpointReconciler endpointReconciler;
@@ -95,23 +93,20 @@ public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
      * @param tls whether the listening port serves TLS connections
      * @param bindingResolver resolver mapping the accepted endpoint (and SNI hostname, if any) to an {@link EndpointBinding}
      * @param endpointReconciler reconciler notified of upstream cluster topology changes
-     * @param proxyProtocolMode whether/how the PROXY protocol is accepted on this port
      * @param apiVersionsService service used to intersect API versions with those supported by the proxy
      * @param proxyNettySettings optional Netty tuning settings (e.g. idle timeouts)
      * @param virtualClusterRegistry registry tracking active connections per virtual cluster
      */
-    @SuppressWarnings({ "OptionalUsedAsFieldOrParameterType", "java:S107" })
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public KafkaProxyInitializer(PluginFactoryRegistry pfr,
                                  boolean tls,
                                  EndpointBindingResolver bindingResolver,
                                  EndpointReconciler endpointReconciler,
-                                 ProxyProtocolMode proxyProtocolMode,
                                  ApiVersionsServiceImpl apiVersionsService,
                                  Optional<NettySettings> proxyNettySettings,
                                  VirtualClusterRegistry virtualClusterRegistry) {
         this.pfr = pfr;
         this.endpointReconciler = endpointReconciler;
-        this.proxyProtocolMode = proxyProtocolMode;
         this.tls = tls;
         this.bindingResolver = bindingResolver;
         this.apiVersionsService = apiVersionsService;
@@ -130,11 +125,9 @@ public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
 
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
 
-        if (proxyProtocolMode != ProxyProtocolMode.DISABLED) {
-            LOGGER.atDebug().log("Adding PROXY protocol detection handler (mode={})", proxyProtocolMode);
-            ch.pipeline().addLast("HaProxyProtocolDetectionHandler",
-                    new HaProxyProtocolDetectionHandler(proxyProtocolMode, kafkaSession));
-        }
+        LOGGER.atDebug().log("Adding PROXY protocol detection handler");
+        ch.pipeline().addLast("HaProxyProtocolDetectionHandler",
+                new HaProxyProtocolDetectionHandler(kafkaSession));
 
         if (tls) {
             initTlsChannel(ch, kafkaSession);
@@ -242,14 +235,17 @@ public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
             return;
         }
         ch.closeFuture().addListener(f -> virtualClusterRegistry.deregisterConnection(clusterName, clientConnectionStateMachine));
-        addHandlers(ch, binding, subjectBuilder, clientConnectionStateMachine);
+        addHandlers(ch, binding, kafkaSession, subjectBuilder, clientConnectionStateMachine);
     }
 
-    private void addHandlers(Channel ch, EndpointBinding binding, TransportSubjectBuilder subjectBuilder, ClientConnectionStateMachine clientConnectionStateMachine) {
+    private void addHandlers(Channel ch, EndpointBinding binding, KafkaSession kafkaSession, TransportSubjectBuilder subjectBuilder,
+                             ClientConnectionStateMachine clientConnectionStateMachine) {
         var virtualCluster = binding.endpointGateway().virtualCluster();
         ChannelPipeline pipeline = ch.pipeline();
 
         pipeline.remove(LOGGING_INBOUND_ERROR_HANDLER_NAME);
+        var gatewayMode = binding.endpointGateway().proxyProtocolMode();
+        pipeline.addLast("proxyProtocolEnforcer", new ProxyProtocolEnforcementHandler(gatewayMode, kafkaSession));
         if (virtualCluster.isLogNetwork()) {
             pipeline.addLast("networkLogger", new LoggingHandler("io.kroxylicious.proxy.internal.DownstreamNetworkLogger", LogLevel.INFO));
         }

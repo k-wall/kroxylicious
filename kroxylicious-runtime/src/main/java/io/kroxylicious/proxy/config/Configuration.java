@@ -49,10 +49,9 @@ import edu.umd.cs.findbugs.annotations.Nullable;
  * @param useIoUring true to use iouring
  * @param development Development options
  * @param network Controls aspects of network configuration for the proxy.
- * @param proxyProtocol PROXY protocol configuration.
  */
 @JsonPropertyOrder({ "management", "clusterDefinitions", "filterDefinitions", "defaultFilters", "routerDefinitions", "virtualClusters", "micrometer", "useIoUring",
-        "development", "network", "proxyProtocol" })
+        "development", "network" })
 @SuppressWarnings("removal") // targetCluster() scheduled for removal
 public record Configuration(
                             @Nullable ManagementConfiguration management,
@@ -64,8 +63,7 @@ public record Configuration(
                             @Nullable List<MicrometerDefinition> micrometer,
                             boolean useIoUring,
                             Optional<Map<String, Object>> development,
-                            @Nullable NetworkDefinition network,
-                            @Nullable ProxyProtocolConfig proxyProtocol) {
+                            @Nullable NetworkDefinition network) {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Configuration.class);
 
@@ -408,7 +406,7 @@ public record Configuration(
             try {
                 var nodeIdentificationStrategy = gateway.buildNodeIdentificationStrategy(virtualClusterModel.getClusterName());
                 var tls = gateway.tls();
-                virtualClusterModel.addGateway(gateway.name(), nodeIdentificationStrategy, tls);
+                virtualClusterModel.addGateway(gateway.name(), nodeIdentificationStrategy, tls, gateway.proxyProtocolMode());
             }
             catch (SniHostIdentifiesNodeIdentificationStrategy.UnresolvedHostException e) {
                 LOGGER.atWarn()
@@ -434,15 +432,6 @@ public record Configuration(
      */
     public boolean isUseIoUring() {
         return useIoUring();
-    }
-
-    /**
-     * The effective PROXY protocol mode.
-     *
-     * @return the configured mode, or {@link ProxyProtocolMode#DISABLED} if no PROXY protocol configuration was given
-     */
-    public ProxyProtocolMode proxyProtocolMode() {
-        return proxyProtocol != null ? proxyProtocol.mode() : ProxyProtocolMode.DISABLED;
     }
 
     /**

@@ -14,25 +14,24 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 
-import io.kroxylicious.proxy.config.ProxyProtocolMode;
-
 import edu.umd.cs.findbugs.annotations.Nullable;
-
-import static io.kroxylicious.proxy.internal.util.NettyFutures.logFailure;
 
 /**
  * Uses {@link HAProxyMessageDecoder#detectProtocol(ByteBuf)} on the first bytes
  * of a connection to decide whether to install the PROXY protocol decoder.
  * <p>
- * In {@link ProxyProtocolMode#REQUIRED} mode, non-PROXY bytes cause the
- * connection to be closed with a warning. In {@link ProxyProtocolMode#ALLOWED}
- * mode, non-PROXY bytes are simply passed through to the Kafka decoder.
+ * This handler is a <em>pure detector</em>: when a PROXY v1 or v2 header is found it
+ * installs {@code HAProxyMessageDecoder} + {@code HaProxyMessageHandler} and stores
+ * the decoded context in the {@link KafkaSession}. When no PROXY header is present the
+ * bytes are passed through to the next handler unchanged.
  * </p>
  * <p>
- * This handler is not used when the proxy is in {@link ProxyProtocolMode#DISABLED} mode.
+ * Per-gateway enforcement (reject if header missing on a {@code required} gateway, or
+ * reject if header present on a {@code forbidden} gateway) is handled downstream by
+ * {@link ProxyProtocolEnforcementHandler}.
  * </p>
  * <p>
- * This handler removes itself from the pipeline after the first read.
+ * This handler removes itself from the pipeline after the first complete read.
  * </p>
  */
 public class HaProxyProtocolDetectionHandler extends ChannelInboundHandlerAdapter {
@@ -42,18 +41,15 @@ public class HaProxyProtocolDetectionHandler extends ChannelInboundHandlerAdapte
     private static final String HAPROXY_MESSAGE_DECODER_HANDLER_NAME = "HAProxyMessageDecoder";
     private static final String HAPROXY_MESSAGE_HANDLER_NAME = "HaProxyMessageHandler";
 
-    private final ProxyProtocolMode mode;
     private final KafkaSession kafkaSession;
     @Nullable
     private ByteBuf cumulation;
 
     /**
      * Creates a PROXY protocol detection handler.
-     * @param mode how the PROXY protocol is accepted on this connection ({@code ALLOWED} or {@code REQUIRED})
      * @param kafkaSession the session in which any decoded PROXY context will be stored
      */
-    public HaProxyProtocolDetectionHandler(ProxyProtocolMode mode, KafkaSession kafkaSession) {
-        this.mode = mode;
+    public HaProxyProtocolDetectionHandler(KafkaSession kafkaSession) {
         this.kafkaSession = kafkaSession;
     }
 
@@ -81,35 +77,71 @@ public class HaProxyProtocolDetectionHandler extends ChannelInboundHandlerAdapte
             case DETECTED -> {
                 LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("PROXY protocol detected, adding decoder");
                 String thisName = ctx.name();
-                ctx.pipeline().addAfter(thisName, HAPROXY_MESSAGE_DECODER_HANDLER_NAME, new HAProxyMessageDecoder());
-                ctx.pipeline().addAfter(HAPROXY_MESSAGE_DECODER_HANDLER_NAME, HAPROXY_MESSAGE_HANDLER_NAME,
-                        new HaProxyMessageHandler(kafkaSession));
-                ctx.pipeline().remove(this);
-                ctx.fireChannelRead(cumulation);
-                cumulation = null;
-            }
-            case INVALID -> {
-                if (mode == ProxyProtocolMode.REQUIRED) {
-                    LOGGER.atWarn().addKeyValue("ctx", ctx.channel())
-                            .log("Connection rejected — expected PROXY protocol header but received non-PROXY data. "
-                                    + "Ensure the upstream load balancer is configured to send PROXY protocol headers, "
-                                    + "or set proxyProtocol mode to 'allowed' or 'disabled'.");
+                int headerLen = proxyHeaderLength(cumulation);
+                if (headerLen > 0 && headerLen < cumulation.readableBytes()) {
+                    // The cumulation contains the complete PROXY header plus additional bytes
+                    // (e.g. a TLS ClientHello that arrived in the same TCP segment). Feed only
+                    // the PROXY bytes to the decoder; the rest bypass the decoder and are fired
+                    // downstream by HaProxyMessageHandler once the PROXY context is stored.
+                    // This prevents HAProxyMessageDecoder from attempting to parse non-PROXY
+                    // bytes as a second header, which would throw HAProxyProtocolException.
+                    ByteBuf proxyPart = cumulation.readRetainedSlice(headerLen);
+                    ByteBuf postProxyBytes = cumulation.retain();
                     cumulation.release();
                     cumulation = null;
-                    ctx.close().addListener(logFailure(LOGGER, "close after PROXY protocol rejection"));
+                    ctx.pipeline().addAfter(thisName, HAPROXY_MESSAGE_DECODER_HANDLER_NAME, new HAProxyMessageDecoder());
+                    ctx.pipeline().addAfter(HAPROXY_MESSAGE_DECODER_HANDLER_NAME, HAPROXY_MESSAGE_HANDLER_NAME,
+                            new HaProxyMessageHandler(kafkaSession, postProxyBytes));
+                    ctx.pipeline().remove(this);
+                    ctx.fireChannelRead(proxyPart);
                 }
                 else {
-                    // ALLOWED mode — no PROXY header, pass through to Kafka decoder
-                    LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("No PROXY protocol header detected, passing through");
+                    // Either the full PROXY header length cannot yet be determined, or the
+                    // cumulation contains exactly (and only) the PROXY header with nothing
+                    // trailing. The standard pipeline approach is safe in both cases.
+                    ctx.pipeline().addAfter(thisName, HAPROXY_MESSAGE_DECODER_HANDLER_NAME, new HAProxyMessageDecoder());
+                    ctx.pipeline().addAfter(HAPROXY_MESSAGE_DECODER_HANDLER_NAME, HAPROXY_MESSAGE_HANDLER_NAME,
+                            new HaProxyMessageHandler(kafkaSession));
                     ctx.pipeline().remove(this);
                     ctx.fireChannelRead(cumulation);
                     cumulation = null;
                 }
             }
-            case NEEDS_MORE_DATA -> {
-                LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("PROXY protocol detection needs more data, waiting for next read");
+            case INVALID -> {
+                // No PROXY header detected — pass bytes through; enforcement is handled downstream
+                // by ProxyProtocolEnforcementHandler based on per-gateway configuration.
+                LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("No PROXY protocol header detected, passing through");
+                ctx.pipeline().remove(this);
+                ctx.fireChannelRead(cumulation);
+                cumulation = null;
             }
+            case NEEDS_MORE_DATA -> LOGGER.atDebug().addKeyValue("ctx", ctx.channel()).log("PROXY protocol detection needs more data, waiting for next read");
         }
+    }
+
+    /**
+     * Returns the total byte length of the PROXY header starting at {@code buf}'s
+     * current reader index, or {@code -1} if it cannot be determined yet (insufficient
+     * bytes in the buffer). Does not modify the reader index.
+     */
+    private static int proxyHeaderLength(ByteBuf buf) {
+        int ri = buf.readerIndex();
+        int readable = buf.readableBytes();
+        byte first = buf.getByte(ri);
+        if (first == 0x0D) {
+            // PROXY v2: 16-byte fixed header + variable-length address block.
+            // Bytes 14-15 (unsigned short, big-endian) give the address block length.
+            if (readable < 16) {
+                return -1;
+            }
+            return 16 + buf.getUnsignedShort(ri + 14);
+        }
+        else if (first == 'P') {
+            // PROXY v1: human-readable line terminated by CRLF.
+            int nlPos = buf.indexOf(ri, ri + readable, (byte) '\n');
+            return nlPos < 0 ? -1 : nlPos - ri + 1;
+        }
+        return -1;
     }
 
     @Override

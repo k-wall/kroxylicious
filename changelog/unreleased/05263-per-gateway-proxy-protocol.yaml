@@ -1,0 +1,8 @@
+title: "move PROXY protocol configuration from global to per-gateway"
+type: changed
+important: "The `proxyProtocol` configuration block has moved from the top-level proxy
+  configuration to the individual `virtualClusters[].gateways[]` level. Update your
+  configuration by moving the `proxyProtocol` block inside each gateway that requires
+  it. A bare `proxyProtocol: {}` entry without a `mode` key is now a startup error."
+merge_requests:
+  - 5263

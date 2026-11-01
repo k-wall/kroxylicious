@@ -95,7 +95,8 @@ class ProxyConfigGenerator {
                 GATEWAY_NAME,
                 portStrategy,
                 null,
-                Optional.empty());
+                Optional.empty(),
+                null);
 
         Optional<Tls> targetClusterTls = Optional.empty();
         if (targetClusterTrustStorePath != null) {

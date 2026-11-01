@@ -438,7 +438,8 @@ public class KafkaProxyReconciler implements
         return new ConfigurationFragment<>(new VirtualClusterGateway(name(gateway.ingress()),
                 portIdentifiesNode,
                 sniHostIdentifiesNode,
-                tlsConfigFragment.fragment()), volumes, mounts);
+                tlsConfigFragment.fragment(),
+                null), volumes, mounts);
     }
 
     private static ConfigurationFragment<Optional<Tls>> buildTlsFragment(io.kroxylicious.kubernetes.api.v1alpha1.virtualkafkaclusterspec.ingresses.Tls ingressTls) {

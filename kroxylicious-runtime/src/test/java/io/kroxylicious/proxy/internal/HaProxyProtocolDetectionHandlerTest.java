@@ -5,6 +5,8 @@
  */
 package io.kroxylicious.proxy.internal;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
@@ -14,10 +16,13 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 
-import io.kroxylicious.proxy.config.ProxyProtocolMode;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Tests for {@link HaProxyProtocolDetectionHandler}, which is a pure detector:
+ * it installs the PROXY decoder when a header is found, and passes bytes through
+ * unchanged otherwise. Per-gateway enforcement is handled by {@link ProxyProtocolEnforcementHandler}.
+ */
 class HaProxyProtocolDetectionHandlerTest {
 
     // PROXY protocol v2 binary signature (12 bytes)
@@ -27,13 +32,14 @@ class HaProxyProtocolDetectionHandlerTest {
 
     // Minimal valid PROXY v2 header: 12-byte sig + version/command + family + length + addresses
     private static final byte[] PROXY_V2_TCP4_HEADER = buildProxyV2Tcp4Header("192.168.1.100", 54321, "10.0.0.1", 9092);
+    private static final byte[] PROXY_V2_TCP6_HEADER = buildProxyV2Tcp6Header("::1", 54321, "::1", 9092);
 
-    // ---- REQUIRED mode ----
+    // ---- PROXY header detected ----
 
     @Test
-    void requiredModeShouldAddDecoderWhenProxyV2Detected() {
+    void shouldAddDecoderWhenProxyV2Detected() {
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.REQUIRED, kafkaSession);
+        var handler = new HaProxyProtocolDetectionHandler(kafkaSession);
         var channel = new EmbeddedChannel(handler);
 
         channel.writeInbound(Unpooled.wrappedBuffer(PROXY_V2_TCP4_HEADER));
@@ -45,51 +51,18 @@ class HaProxyProtocolDetectionHandlerTest {
         assertThat(kafkaSession.haProxyContext()).isNotNull();
     }
 
-    @Test
-    void requiredModeShouldCloseChannelWhenNonProxyBytesReceived() {
-        var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.REQUIRED, kafkaSession);
-        var channel = new EmbeddedChannel(handler);
-
-        channel.writeInbound(Unpooled.wrappedBuffer("not a proxy header at all!".getBytes(StandardCharsets.UTF_8)));
-
-        // Channel should be closed
-        assertThat(channel.isOpen()).isFalse();
-
-        // No inbound messages should have been passed through
-        assertThat((Object) channel.readInbound()).isNull();
-
-        // Session should not have context set
-        assertThat(kafkaSession.haProxyContext()).isNull();
-    }
-
-    // ---- ALLOWED mode ----
+    // ---- No PROXY header — pass through (enforcement is downstream) ----
 
     @Test
-    void allowedModeShouldAddDecoderWhenProxyV2Detected() {
+    void shouldPassThroughWhenNonProxyBytesReceived() {
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.ALLOWED, kafkaSession);
-        var channel = new EmbeddedChannel(handler);
-
-        channel.writeInbound(Unpooled.wrappedBuffer(PROXY_V2_TCP4_HEADER));
-
-        // Detection handler should have removed itself
-        assertThat(channel.pipeline().get(HaProxyProtocolDetectionHandler.class)).isNull();
-
-        // HaProxyMessageHandler consumes the message and stores context in session
-        assertThat(kafkaSession.haProxyContext()).isNotNull();
-    }
-
-    @Test
-    void allowedModeShouldPassThroughWhenNonProxyBytesReceived() {
-        var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.ALLOWED, kafkaSession);
+        var handler = new HaProxyProtocolDetectionHandler(kafkaSession);
         var channel = new EmbeddedChannel(handler);
 
         byte[] kafkaBytes = "some kafka data!".getBytes(StandardCharsets.UTF_8);
         channel.writeInbound(Unpooled.wrappedBuffer(kafkaBytes));
 
-        // Channel should remain open
+        // Channel should remain open — enforcement is a downstream concern
         assertThat(channel.isOpen()).isTrue();
 
         // Detection handler should have removed itself
@@ -99,18 +72,13 @@ class HaProxyProtocolDetectionHandlerTest {
         assertThat(channel.pipeline().get(HAProxyMessageDecoder.class)).isNull();
 
         // Bytes should have been passed through
-        ByteBuf passedThrough = channel.readInbound();
-        assertThat(passedThrough).isNotNull();
-        byte[] actual = new byte[passedThrough.readableBytes()];
-        passedThrough.readBytes(actual);
-        assertThat(actual).isEqualTo(kafkaBytes);
-        passedThrough.release();
+        assertForwarded(channel, kafkaBytes);
     }
 
     @Test
-    void allowedModeShouldNotSetContextWhenNonProxyBytesReceived() {
+    void shouldNotSetContextWhenNonProxyBytesReceived() {
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.ALLOWED, kafkaSession);
+        var handler = new HaProxyProtocolDetectionHandler(kafkaSession);
         var channel = new EmbeddedChannel(handler);
 
         channel.writeInbound(Unpooled.wrappedBuffer("kafka bytes here".getBytes(StandardCharsets.UTF_8)));
@@ -118,10 +86,12 @@ class HaProxyProtocolDetectionHandlerTest {
         assertThat(kafkaSession.haProxyContext()).isNull();
     }
 
+    // ---- Non-ByteBuf messages pass through ----
+
     @Test
     void shouldPassThroughNonByteBufMessages() {
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.REQUIRED, kafkaSession);
+        var handler = new HaProxyProtocolDetectionHandler(kafkaSession);
         var channel = new EmbeddedChannel(handler);
 
         String stringMsg = "hello";
@@ -135,9 +105,9 @@ class HaProxyProtocolDetectionHandlerTest {
     // ---- PROXY v1 detection ----
 
     @Test
-    void allowedModeShouldDetectProxyV1Header() {
+    void shouldDetectProxyV1Header() {
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.ALLOWED, kafkaSession);
+        var handler = new HaProxyProtocolDetectionHandler(kafkaSession);
         var channel = new EmbeddedChannel(handler);
 
         // PROXY v1 text header
@@ -154,33 +124,9 @@ class HaProxyProtocolDetectionHandlerTest {
     // ---- NEEDS_MORE_DATA handling ----
 
     @Test
-    void requiredModeShouldWaitForMoreDataWhenNotEnoughBytesReceived() {
+    void shouldWaitForMoreDataWhenNotEnoughBytesReceived() {
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.REQUIRED, kafkaSession);
-        var channel = new EmbeddedChannel(handler);
-
-        // Send only first few bytes of the PROXY v2 signature (not enough to detect)
-        byte[] partialSignature = new byte[4];
-        System.arraycopy(PROXY_V2_SIGNATURE, 0, partialSignature, 0, 4);
-        channel.writeInbound(Unpooled.wrappedBuffer(partialSignature));
-
-        // Handler should still be in the pipeline
-        assertThat(channel.pipeline().get(HaProxyProtocolDetectionHandler.class)).isNotNull();
-
-        // Channel should still be open
-        assertThat(channel.isOpen()).isTrue();
-
-        // No inbound messages should have been forwarded
-        assertThat((Object) channel.readInbound()).isNull();
-
-        // Session should not have context yet
-        assertThat(kafkaSession.haProxyContext()).isNull();
-    }
-
-    @Test
-    void allowedModeShouldWaitForMoreDataWhenNotEnoughBytesReceived() {
-        var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.ALLOWED, kafkaSession);
+        var handler = new HaProxyProtocolDetectionHandler(kafkaSession);
         var channel = new EmbeddedChannel(handler);
 
         // Send only first few bytes of the PROXY v2 signature (not enough to detect)
@@ -204,7 +150,7 @@ class HaProxyProtocolDetectionHandlerTest {
     @Test
     void shouldDetectProxyAfterReceivingRemainingBytes() {
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.REQUIRED, kafkaSession);
+        var handler = new HaProxyProtocolDetectionHandler(kafkaSession);
         var channel = new EmbeddedChannel(handler);
 
         // First send a partial PROXY v2 signature
@@ -230,7 +176,7 @@ class HaProxyProtocolDetectionHandlerTest {
     @Test
     void shouldReleaseCumulationWhenChannelBecomesInactive() {
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
-        var handler = new HaProxyProtocolDetectionHandler(ProxyProtocolMode.REQUIRED, kafkaSession);
+        var handler = new HaProxyProtocolDetectionHandler(kafkaSession);
         var channel = new EmbeddedChannel(handler);
 
         // Send partial data to trigger cumulation
@@ -245,6 +191,67 @@ class HaProxyProtocolDetectionHandlerTest {
 
         // Verify no leak (partial buf should have been released)
         assertThat(partial.refCnt()).isZero();
+    }
+
+    // ---- PROXY v1 TCP6 — exercises the CRLF-scan path in proxyHeaderLength() for IPv6 addresses ----
+
+    @Test
+    void shouldDetectV1Tcp6HeaderAndSplitTrailingBytes() {
+        // Given
+        var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
+        var channel = new EmbeddedChannel(new HaProxyProtocolDetectionHandler(kafkaSession));
+
+        String v1Header = "PROXY TCP6 2001:db8::1 2001:db8::2 54321 9092\r\n";
+        byte[] trailing = "trailing".getBytes(StandardCharsets.UTF_8);
+        byte[] headerBytes = v1Header.getBytes(StandardCharsets.US_ASCII);
+        byte[] combined = new byte[headerBytes.length + trailing.length];
+        System.arraycopy(headerBytes, 0, combined, 0, headerBytes.length);
+        System.arraycopy(trailing, 0, combined, headerBytes.length, trailing.length);
+
+        // When
+        channel.writeInbound(Unpooled.wrappedBuffer(combined));
+
+        // Then
+        assertThat(kafkaSession.haProxyContext()).isNotNull();
+        assertThat(channel.pipeline().get(HaProxyProtocolDetectionHandler.class)).isNull();
+
+        assertForwarded(channel, trailing);
+
+        channel.finishAndReleaseAll();
+    }
+
+    // ---- PROXY v2 TCP6 — exercises the byte-split path for a larger (52-byte) header ----
+
+    @Test
+    void shouldDetectTcp6HeaderAndSplitTrailingBytes() {
+        // Given
+        var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
+        var channel = new EmbeddedChannel(new HaProxyProtocolDetectionHandler(kafkaSession));
+
+        byte[] trailing = "trailing".getBytes(StandardCharsets.UTF_8);
+        byte[] combined = new byte[PROXY_V2_TCP6_HEADER.length + trailing.length];
+        System.arraycopy(PROXY_V2_TCP6_HEADER, 0, combined, 0, PROXY_V2_TCP6_HEADER.length);
+        System.arraycopy(trailing, 0, combined, PROXY_V2_TCP6_HEADER.length, trailing.length);
+
+        // When
+        channel.writeInbound(Unpooled.wrappedBuffer(combined));
+
+        // Then
+        assertThat(kafkaSession.haProxyContext()).isNotNull();
+        assertThat(channel.pipeline().get(HaProxyProtocolDetectionHandler.class)).isNull();
+
+        assertForwarded(channel, trailing);
+
+        channel.finishAndReleaseAll();
+    }
+
+    private void assertForwarded(EmbeddedChannel channel, byte[] expectedTrailing) {
+        ByteBuf forwarded = channel.readInbound();
+        assertThat(forwarded).isNotNull();
+        byte[] actual = new byte[forwarded.readableBytes()];
+        forwarded.readBytes(actual);
+        assertThat(actual).isEqualTo(expectedTrailing);
+        forwarded.release();
     }
 
     // ---- Helper to build a minimal valid PROXY v2 TCP4 header ----
@@ -283,6 +290,32 @@ class HaProxyProtocolDetectionHandlerTest {
         header[26] = (byte) (dstPort >> 8);
         header[27] = (byte) dstPort;
 
+        return header;
+    }
+
+    // ---- Helper to build a minimal valid PROXY v2 TCP6 header (52 bytes total) ----
+
+    private static byte[] buildProxyV2Tcp6Header(String srcAddr, int srcPort, String dstAddr, int dstPort) {
+        // PROXY v2 TCP6: 12 sig + 1 ver/cmd + 1 family + 2 len + 16 src + 16 dst + 2 srcPort + 2 dstPort
+        byte[] header = new byte[52];
+        System.arraycopy(PROXY_V2_SIGNATURE, 0, header, 0, 12);
+        header[12] = 0x21; // version 2, PROXY command
+        header[13] = 0x21; // AF_INET6 (0x2), STREAM (0x1)
+        header[14] = 0x00; // address block length high byte
+        header[15] = 0x24; // address block length low byte (36 = 16+16+2+2)
+        try {
+            byte[] src = InetAddress.getByName(srcAddr).getAddress();
+            byte[] dst = InetAddress.getByName(dstAddr).getAddress();
+            System.arraycopy(src, 0, header, 16, 16);
+            System.arraycopy(dst, 0, header, 32, 16);
+        }
+        catch (UnknownHostException e) {
+            throw new IllegalArgumentException(e);
+        }
+        header[48] = (byte) (srcPort >> 8);
+        header[49] = (byte) srcPort;
+        header[50] = (byte) (dstPort >> 8);
+        header[51] = (byte) dstPort;
         return header;
     }
 }

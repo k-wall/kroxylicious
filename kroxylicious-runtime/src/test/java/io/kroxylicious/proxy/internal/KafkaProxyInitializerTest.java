@@ -60,7 +60,6 @@ import io.kroxylicious.kafka.common.protocol.ApiKeys;
 import io.kroxylicious.proxy.bootstrap.RouterChainFactory;
 import io.kroxylicious.proxy.config.CacheConfiguration;
 import io.kroxylicious.proxy.config.NettySettings;
-import io.kroxylicious.proxy.config.ProxyProtocolMode;
 import io.kroxylicious.proxy.config.ServiceBasedPluginFactoryRegistry;
 import io.kroxylicious.proxy.config.TargetCluster;
 import io.kroxylicious.proxy.config.tls.Tls;
@@ -255,6 +254,7 @@ class KafkaProxyInitializerTest {
         // Then
         final InOrder orderedVerifyer = inOrder(channelPipeline);
         verifyErrorHandlerRemoved(orderedVerifyer);
+        verifyProxyProtocolEnforcerAdded(orderedVerifyer);
         verifyEncoderAndOrdererAdded(orderedVerifyer);
         verifyFrontendHandlerAdded(orderedVerifyer);
         verifyForwardingHandlerAdded(orderedVerifyer);
@@ -277,6 +277,7 @@ class KafkaProxyInitializerTest {
         // Then
         final InOrder orderedVerifyer = inOrder(channelPipeline);
         verifyErrorHandlerRemoved(orderedVerifyer);
+        verifyProxyProtocolEnforcerAdded(orderedVerifyer);
         verifyEncoderAndOrdererAdded(orderedVerifyer);
         verifyFrameLoggerAdded(orderedVerifyer);
         verifyFrontendHandlerAdded(orderedVerifyer);
@@ -300,6 +301,7 @@ class KafkaProxyInitializerTest {
         // Then
         final InOrder orderedVerifyer = inOrder(channelPipeline);
         verifyErrorHandlerRemoved(orderedVerifyer);
+        verifyProxyProtocolEnforcerAdded(orderedVerifyer);
         verifyNetworkLoggerAdded(orderedVerifyer);
         verifyEncoderAndOrdererAdded(orderedVerifyer);
         verifyFrontendHandlerAdded(orderedVerifyer);
@@ -310,40 +312,15 @@ class KafkaProxyInitializerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    void shouldAddDetectionHandlerWhenProxyProtocolRequired(boolean tls) {
+    void shouldAlwaysAddDetectionHandler(boolean tls) {
         // Given
-        kafkaProxyInitializer = createKafkaProxyInitializer(tls, ProxyProtocolMode.REQUIRED, (endpoint, sniHostname) -> bindingStage);
+        kafkaProxyInitializer = createKafkaProxyInitializer(tls, (endpoint, sniHostname) -> bindingStage);
 
         // When
         kafkaProxyInitializer.initChannel(channel);
 
         // Then
         verify(channelPipeline).addLast(eq("HaProxyProtocolDetectionHandler"), isA(HaProxyProtocolDetectionHandler.class));
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    void shouldAddDetectionHandlerWhenProxyProtocolAllowed(boolean tls) {
-        // Given
-        kafkaProxyInitializer = createKafkaProxyInitializer(tls, ProxyProtocolMode.ALLOWED, (endpoint, sniHostname) -> bindingStage);
-
-        // When
-        kafkaProxyInitializer.initChannel(channel);
-
-        // Then
-        verify(channelPipeline).addLast(eq("HaProxyProtocolDetectionHandler"), isA(HaProxyProtocolDetectionHandler.class));
-    }
-
-    @Test
-    void shouldNotAddDetectionHandlerWhenProxyProtocolDisabled() {
-        // Given
-        kafkaProxyInitializer = createKafkaProxyInitializer(false, ProxyProtocolMode.DISABLED, (endpoint, sniHostname) -> bindingStage);
-
-        // When
-        kafkaProxyInitializer.initChannel(channel);
-
-        // Then
-        verify(channelPipeline, never()).addLast(eq("HaProxyProtocolDetectionHandler"), any());
     }
 
     @Test
@@ -479,8 +456,7 @@ class KafkaProxyInitializerTest {
         // given
         var vcc = mock(VirtualClusterRegistry.class);
         when(vcc.registerConnection(any(), any())).thenReturn(false);
-        kafkaProxyInitializer = createKafkaProxyInitializer(false, ProxyProtocolMode.DISABLED,
-                (endpoint, sniHostname) -> bindingStage, vcc);
+        kafkaProxyInitializer = createKafkaProxyInitializer(false, (endpoint, sniHostname) -> bindingStage, vcc);
 
         // when
         kafkaProxyInitializer.initConnection(channel, endpointBinding, new KafkaSession(KafkaSessionState.ESTABLISHING));
@@ -508,7 +484,9 @@ class KafkaProxyInitializerTest {
     @SuppressWarnings("DataFlowIssue")
     private KafkaProxyInitializer createKafkaProxyInitializer(boolean tls,
                                                               EndpointBindingResolver bindingResolver) {
-        return createKafkaProxyInitializer(tls, ProxyProtocolMode.DISABLED, bindingResolver);
+        var vcc = mock(VirtualClusterRegistry.class);
+        lenient().when(vcc.registerConnection(any(), any())).thenReturn(true);
+        return createKafkaProxyInitializer(tls, bindingResolver, vcc);
     }
 
     @Test
@@ -570,23 +548,12 @@ class KafkaProxyInitializerTest {
 
     @SuppressWarnings("DataFlowIssue")
     private KafkaProxyInitializer createKafkaProxyInitializer(boolean tls,
-                                                              ProxyProtocolMode proxyProtocolMode,
-                                                              EndpointBindingResolver bindingResolver) {
-        var vcc = mock(VirtualClusterRegistry.class);
-        lenient().when(vcc.registerConnection(any(), any())).thenReturn(true);
-        return createKafkaProxyInitializer(tls, proxyProtocolMode, bindingResolver, vcc);
-    }
-
-    @SuppressWarnings("DataFlowIssue")
-    private KafkaProxyInitializer createKafkaProxyInitializer(boolean tls,
-                                                              ProxyProtocolMode proxyProtocolMode,
                                                               EndpointBindingResolver bindingResolver,
                                                               VirtualClusterRegistry vcc) {
         return new KafkaProxyInitializer(pfr,
                 tls,
                 bindingResolver,
                 mock(EndpointReconciler.class),
-                proxyProtocolMode,
                 new ApiVersionsServiceImpl(),
                 Optional.ofNullable(proxyNettySettings),
                 vcc);
@@ -614,6 +581,10 @@ class KafkaProxyInitializerTest {
 
     private void verifyErrorHandlerRemoved(InOrder orderedVerifyer) {
         orderedVerifyer.verify(channelPipeline).remove(LOGGING_INBOUND_ERROR_HANDLER_NAME);
+    }
+
+    private void verifyProxyProtocolEnforcerAdded(InOrder orderedVerifyer) {
+        orderedVerifyer.verify(channelPipeline).addLast(eq("proxyProtocolEnforcer"), isA(ProxyProtocolEnforcementHandler.class));
     }
 
     private void verifyNetworkLoggerAdded(InOrder orderedVerifyer) {
