@@ -305,6 +305,20 @@ class VirtualClusterTest {
     }
 
     @Test
+    void sameAsReturnsFalseWhenGatewayProxyProtocolModeChanges() {
+        // Given
+        var gw1 = new VirtualClusterGateway("gw", portIdentifiesNode1, null, Optional.empty(),
+                new ProxyProtocolConfig(ProxyProtocolMode.FORBIDDEN));
+        var gw2 = new VirtualClusterGateway("gw", portIdentifiesNode1, null, Optional.empty(),
+                new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED));
+        var vc1 = new VirtualCluster("mycluster", routeTarget, List.of(gw1), false, false, NO_FILTERS);
+        var vc2 = new VirtualCluster("mycluster", routeTarget, List.of(gw2), false, false, NO_FILTERS);
+
+        // When / Then
+        assertThat(vc1.sameAs(vc2)).isFalse();
+    }
+
+    @Test
     void rejectsBothTargetClusterAndTarget() {
         var gateways = List.of(new VirtualClusterGateway("mygateway1", portIdentifiesNode1, null, Optional.empty(), null));
 
