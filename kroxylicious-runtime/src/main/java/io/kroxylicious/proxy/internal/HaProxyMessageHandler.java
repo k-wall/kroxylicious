@@ -13,9 +13,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.haproxy.HAProxyMessage;
 
-import edu.umd.cs.findbugs.annotations.Nullable;
-
 import io.kroxylicious.proxy.internal.net.HaProxyContext;
+
+import edu.umd.cs.findbugs.annotations.Nullable;
 
 /**
  * A channel handler that intercepts {@link HAProxyMessage} objects emitted by

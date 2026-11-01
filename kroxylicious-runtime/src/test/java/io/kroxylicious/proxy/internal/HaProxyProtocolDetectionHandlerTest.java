@@ -5,6 +5,8 @@
  */
 package io.kroxylicious.proxy.internal;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,7 @@ class HaProxyProtocolDetectionHandlerTest {
 
     // Minimal valid PROXY v2 header: 12-byte sig + version/command + family + length + addresses
     private static final byte[] PROXY_V2_TCP4_HEADER = buildProxyV2Tcp4Header("192.168.1.100", 54321, "10.0.0.1", 9092);
+    private static final byte[] PROXY_V2_TCP6_HEADER = buildProxyV2Tcp6Header("::1", 54321, "::1", 9092);
 
     // ---- PROXY header detected ----
 
@@ -69,12 +72,7 @@ class HaProxyProtocolDetectionHandlerTest {
         assertThat(channel.pipeline().get(HAProxyMessageDecoder.class)).isNull();
 
         // Bytes should have been passed through
-        ByteBuf passedThrough = channel.readInbound();
-        assertThat(passedThrough).isNotNull();
-        byte[] actual = new byte[passedThrough.readableBytes()];
-        passedThrough.readBytes(actual);
-        assertThat(actual).isEqualTo(kafkaBytes);
-        passedThrough.release();
+        assertForwarded(channel, kafkaBytes);
     }
 
     @Test
@@ -195,6 +193,67 @@ class HaProxyProtocolDetectionHandlerTest {
         assertThat(partial.refCnt()).isZero();
     }
 
+    // ---- PROXY v1 TCP6 — exercises the CRLF-scan path in proxyHeaderLength() for IPv6 addresses ----
+
+    @Test
+    void shouldDetectV1Tcp6HeaderAndSplitTrailingBytes() {
+        // Given
+        var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
+        var channel = new EmbeddedChannel(new HaProxyProtocolDetectionHandler(kafkaSession));
+
+        String v1Header = "PROXY TCP6 2001:db8::1 2001:db8::2 54321 9092\r\n";
+        byte[] trailing = "trailing".getBytes(StandardCharsets.UTF_8);
+        byte[] headerBytes = v1Header.getBytes(StandardCharsets.US_ASCII);
+        byte[] combined = new byte[headerBytes.length + trailing.length];
+        System.arraycopy(headerBytes, 0, combined, 0, headerBytes.length);
+        System.arraycopy(trailing, 0, combined, headerBytes.length, trailing.length);
+
+        // When
+        channel.writeInbound(Unpooled.wrappedBuffer(combined));
+
+        // Then
+        assertThat(kafkaSession.haProxyContext()).isNotNull();
+        assertThat(channel.pipeline().get(HaProxyProtocolDetectionHandler.class)).isNull();
+
+        assertForwarded(channel, trailing);
+
+        channel.finishAndReleaseAll();
+    }
+
+    // ---- PROXY v2 TCP6 — exercises the byte-split path for a larger (52-byte) header ----
+
+    @Test
+    void shouldDetectTcp6HeaderAndSplitTrailingBytes() {
+        // Given
+        var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
+        var channel = new EmbeddedChannel(new HaProxyProtocolDetectionHandler(kafkaSession));
+
+        byte[] trailing = "trailing".getBytes(StandardCharsets.UTF_8);
+        byte[] combined = new byte[PROXY_V2_TCP6_HEADER.length + trailing.length];
+        System.arraycopy(PROXY_V2_TCP6_HEADER, 0, combined, 0, PROXY_V2_TCP6_HEADER.length);
+        System.arraycopy(trailing, 0, combined, PROXY_V2_TCP6_HEADER.length, trailing.length);
+
+        // When
+        channel.writeInbound(Unpooled.wrappedBuffer(combined));
+
+        // Then
+        assertThat(kafkaSession.haProxyContext()).isNotNull();
+        assertThat(channel.pipeline().get(HaProxyProtocolDetectionHandler.class)).isNull();
+
+        assertForwarded(channel, trailing);
+
+        channel.finishAndReleaseAll();
+    }
+
+    private void assertForwarded(EmbeddedChannel channel, byte[] expectedTrailing) {
+        ByteBuf forwarded = channel.readInbound();
+        assertThat(forwarded).isNotNull();
+        byte[] actual = new byte[forwarded.readableBytes()];
+        forwarded.readBytes(actual);
+        assertThat(actual).isEqualTo(expectedTrailing);
+        forwarded.release();
+    }
+
     // ---- Helper to build a minimal valid PROXY v2 TCP4 header ----
 
     private static byte[] buildProxyV2Tcp4Header(String srcAddr, int srcPort, String dstAddr, int dstPort) {
@@ -231,6 +290,32 @@ class HaProxyProtocolDetectionHandlerTest {
         header[26] = (byte) (dstPort >> 8);
         header[27] = (byte) dstPort;
 
+        return header;
+    }
+
+    // ---- Helper to build a minimal valid PROXY v2 TCP6 header (52 bytes total) ----
+
+    private static byte[] buildProxyV2Tcp6Header(String srcAddr, int srcPort, String dstAddr, int dstPort) {
+        // PROXY v2 TCP6: 12 sig + 1 ver/cmd + 1 family + 2 len + 16 src + 16 dst + 2 srcPort + 2 dstPort
+        byte[] header = new byte[52];
+        System.arraycopy(PROXY_V2_SIGNATURE, 0, header, 0, 12);
+        header[12] = 0x21; // version 2, PROXY command
+        header[13] = 0x21; // AF_INET6 (0x2), STREAM (0x1)
+        header[14] = 0x00; // address block length high byte
+        header[15] = 0x24; // address block length low byte (36 = 16+16+2+2)
+        try {
+            byte[] src = InetAddress.getByName(srcAddr).getAddress();
+            byte[] dst = InetAddress.getByName(dstAddr).getAddress();
+            System.arraycopy(src, 0, header, 16, 16);
+            System.arraycopy(dst, 0, header, 32, 16);
+        }
+        catch (UnknownHostException e) {
+            throw new IllegalArgumentException(e);
+        }
+        header[48] = (byte) (srcPort >> 8);
+        header[49] = (byte) srcPort;
+        header[50] = (byte) (dstPort >> 8);
+        header[51] = (byte) dstPort;
         return header;
     }
 }

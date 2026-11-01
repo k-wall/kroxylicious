@@ -5,22 +5,25 @@
  */
 package io.kroxylicious.it;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import io.github.nettyplus.leakdetector.junit.NettyLeakDetectorExtension;
-import io.netty.handler.codec.haproxy.HAProxyCommand;
 import io.netty.handler.codec.haproxy.HAProxyMessage;
-import io.netty.handler.codec.haproxy.HAProxyProtocolVersion;
-import io.netty.handler.codec.haproxy.HAProxyProxiedProtocol;
 
 import io.kroxylicious.proxy.config.ConfigurationBuilder;
 import io.kroxylicious.proxy.config.ProxyProtocolMode;
+import io.kroxylicious.proxy.service.HostPort;
 import io.kroxylicious.testing.certificate.CertificateGenerator;
 import io.kroxylicious.testing.integration.Request;
 import io.kroxylicious.testing.integration.ResponsePayload;
@@ -33,34 +36,58 @@ import static io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils
 import static io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils.baseConfigurationBuilder;
 import static io.kroxylicious.testing.integration.tester.KroxyliciousConfigUtils.defaultPortIdentifiesNodeGatewayBuilder;
 import static io.kroxylicious.testing.integration.tester.KroxyliciousTesters.mockKafkaKroxyliciousTester;
+import static io.netty.handler.codec.haproxy.HAProxyCommand.LOCAL;
+import static io.netty.handler.codec.haproxy.HAProxyCommand.PROXY;
+import static io.netty.handler.codec.haproxy.HAProxyProtocolVersion.V1;
+import static io.netty.handler.codec.haproxy.HAProxyProtocolVersion.V2;
+import static io.netty.handler.codec.haproxy.HAProxyProxiedProtocol.TCP4;
+import static io.netty.handler.codec.haproxy.HAProxyProxiedProtocol.TCP6;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integration tests for per-gateway HAProxy PROXY protocol support.
- * Covers both plain-channel and TLS-channel cases for REQUIRED and FORBIDDEN modes.
+ * Covers both plain-channel and TLS-channel cases for REQUIRED and FORBIDDEN modes,
+ * parameterized across PROXY v1, PROXY v2 PROXY command, and PROXY v2 LOCAL command.
  */
 @ExtendWith(NettyLeakDetectorExtension.class)
 class ProxyProtocolIT {
 
     private static final CertificateGenerator.Keys TLS_KEYS = CertificateGenerator.generate();
 
-    // Factory method — HAProxyMessage is ref-counted; the encoder releases it after writing,
-    // so each test must get a fresh instance rather than sharing a static one.
-    private static HAProxyMessage proxyMessage() {
-        return new HAProxyMessage(HAProxyProtocolVersion.V2, HAProxyCommand.PROXY,
-                HAProxyProxiedProtocol.TCP4, "192.168.1.100", "127.0.0.1", 54321, 9092);
+    /**
+     * PROXY messages to exercise in "with header" tests. Each call produces a fresh stream
+     * of new HAProxyMessage instances — HAProxyMessage is ref-counted and the encoder releases
+     * it after writing, so instances must not be shared across test invocations.
+     */
+    static Stream<Arguments> proxyMessages() {
+        return Stream.of(
+                Arguments.argumentSet("v1-proxy-tcp4",
+                        new HAProxyMessage(V1, PROXY, TCP4, "192.168.1.100", "127.0.0.1", 54321, 9092)),
+                Arguments.argumentSet("v1-proxy-tcp6",
+                        new HAProxyMessage(V1, PROXY, TCP6, "2001:db8::1", "2001:db8::2", 54321, 9092)),
+                Arguments.argumentSet("v2-proxy-tcp4",
+                        new HAProxyMessage(V2, PROXY, TCP4, "192.168.1.100", "127.0.0.1", 54321, 9092)),
+                Arguments.argumentSet("v2-proxy-tcp6",
+                        new HAProxyMessage(V2, PROXY, TCP6, "::1", "::1", 54321, 9092)),
+                // LOCAL command is used for health-check / loopback traffic. It is still a valid
+                // PROXY v2 frame: REQUIRED mode must accept it, FORBIDDEN mode must reject it.
+                // Netty's public HAProxyMessage constructor does not support AF_UNSPEC addresses,
+                // so we use TCP4+localhost which produces a valid LOCAL-command frame on the wire.
+                Arguments.argumentSet("v2-local",
+                        new HAProxyMessage(V2, LOCAL, TCP4, "127.0.0.1", "127.0.0.1", 0, 0)));
     }
 
     // ---- plain channel ----
 
-    @Test
-    void requiredMode_plainChannel_withProxyHeader_succeeds() {
+    @ParameterizedTest
+    @MethodSource("proxyMessages")
+    void requiredMode_plainChannel_withProxyHeader_succeeds(HAProxyMessage msg) {
         // Given
         try (var tester = mockKafkaKroxyliciousTester(bootstrap -> plainConfig(bootstrap, ProxyProtocolMode.REQUIRED))) {
             tester.addMockResponseForApiKey(new ResponsePayload(ApiKeys.API_VERSIONS,
                     ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, new ApiVersionsResponseData()));
-            var parts = tester.getBootstrapAddress().split(":", 2);
-            try (var client = KafkaClient.withProxyProtocol(parts[0], Integer.parseInt(parts[1]), proxyMessage())) {
+            var bootstrap = HostPort.parse(tester.getBootstrapAddress());
+            try (var client = KafkaClient.withProxyProtocol(bootstrap.host(), bootstrap.port(), msg)) {
 
                 // When
                 var response = client.get(apiVersionsRequest());
@@ -68,6 +95,7 @@ class ProxyProtocolIT {
                 // Then
                 assertThat(response).succeedsWithin(5, TimeUnit.SECONDS);
             }
+            tester.assertAllMockInteractionsInvoked();
         }
     }
 
@@ -98,15 +126,17 @@ class ProxyProtocolIT {
 
             // Then
             assertThat(response).succeedsWithin(5, TimeUnit.SECONDS);
+            tester.assertAllMockInteractionsInvoked();
         }
     }
 
-    @Test
-    void forbiddenMode_plainChannel_withProxyHeader_rejects() {
+    @ParameterizedTest
+    @MethodSource("proxyMessages")
+    void forbiddenMode_plainChannel_withProxyHeader_rejects(HAProxyMessage msg) {
         // Given
         try (var tester = mockKafkaKroxyliciousTester(bootstrap -> plainConfig(bootstrap, ProxyProtocolMode.FORBIDDEN))) {
-            var parts = tester.getBootstrapAddress().split(":", 2);
-            try (var client = KafkaClient.withProxyProtocol(parts[0], Integer.parseInt(parts[1]), proxyMessage())) {
+            var bootstrap = HostPort.parse(tester.getBootstrapAddress());
+            try (var client = KafkaClient.withProxyProtocol(bootstrap.host(), bootstrap.port(), msg)) {
 
                 // When
                 var response = client.get(apiVersionsRequest());
@@ -119,15 +149,16 @@ class ProxyProtocolIT {
 
     // ---- TLS channel ----
 
-    @Test
-    void requiredMode_tlsChannel_withProxyHeader_succeeds() {
+    @ParameterizedTest
+    @MethodSource("proxyMessages")
+    void requiredMode_tlsChannel_withProxyHeader_succeeds(HAProxyMessage msg) {
         // Given
         try (var tester = mockKafkaKroxyliciousTester(bootstrap -> tlsConfig(bootstrap, ProxyProtocolMode.REQUIRED))) {
             tester.addMockResponseForApiKey(new ResponsePayload(ApiKeys.API_VERSIONS,
                     ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION, new ApiVersionsResponseData()));
-            var parts = tester.getBootstrapAddress().split(":", 2);
-            try (var client = KafkaClient.withProxyProtocol(parts[0], Integer.parseInt(parts[1]),
-                    proxyMessage(), TRUST_ALL_CLIENT_SSL_CONTEXT)) {
+            var bootstrap = HostPort.parse(tester.getBootstrapAddress());
+            try (var client = KafkaClient.withProxyProtocol(bootstrap.host(), bootstrap.port(),
+                    msg, TRUST_ALL_CLIENT_SSL_CONTEXT)) {
 
                 // When
                 var response = client.get(apiVersionsRequest());
@@ -135,6 +166,7 @@ class ProxyProtocolIT {
                 // Then
                 assertThat(response).succeedsWithin(5, TimeUnit.SECONDS);
             }
+            tester.assertAllMockInteractionsInvoked();
         }
     }
 
@@ -165,16 +197,18 @@ class ProxyProtocolIT {
 
             // Then
             assertThat(response).succeedsWithin(5, TimeUnit.SECONDS);
+            tester.assertAllMockInteractionsInvoked();
         }
     }
 
-    @Test
-    void forbiddenMode_tlsChannel_withProxyHeader_rejects() {
+    @ParameterizedTest
+    @MethodSource("proxyMessages")
+    void forbiddenMode_tlsChannel_withProxyHeader_rejects(HAProxyMessage msg) {
         // Given
         try (var tester = mockKafkaKroxyliciousTester(bootstrap -> tlsConfig(bootstrap, ProxyProtocolMode.FORBIDDEN))) {
-            var parts = tester.getBootstrapAddress().split(":", 2);
-            try (var client = KafkaClient.withProxyProtocol(parts[0], Integer.parseInt(parts[1]),
-                    proxyMessage(), TRUST_ALL_CLIENT_SSL_CONTEXT)) {
+            var bootstrap = HostPort.parse(tester.getBootstrapAddress());
+            try (var client = KafkaClient.withProxyProtocol(bootstrap.host(), bootstrap.port(),
+                    msg, TRUST_ALL_CLIENT_SSL_CONTEXT)) {
 
                 // When
                 var response = client.get(apiVersionsRequest());
@@ -230,8 +264,8 @@ class ProxyProtocolIT {
                                 .withNewKeyStoreKey()
                                     .withStoreFile(keystore.path().toString())
                                     .withStoreType(keystore.type())
-                                    .withNewInlinePasswordStoreProvider(keystore.storePassword())
-                                    .withNewInlinePasswordKeyProvider(keystore.keyPassword())
+                                    .withNewInlinePasswordStoreProvider(Objects.requireNonNull(keystore.storePassword()))
+                                    .withNewInlinePasswordKeyProvider(Objects.requireNonNull(keystore.keyPassword()))
                                 .endKeyStoreKey()
                             .endTls()
                             .build())
