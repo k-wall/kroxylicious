@@ -67,6 +67,7 @@ jobs:
 
   operator-tests-microshift:
     name: Operator integration & system tests on MicroShift
+    # Testing qemu-system-x86 fix on ubuntu-26.04
     runs-on: ubuntu-latest
     timeout-minutes: 60
     needs: preflight
@@ -113,7 +114,7 @@ jobs:
           restore-keys: ${{ runner.os }}-crc
 
       - name: Start MicroShift cluster
-        uses: crc-org/crc-github-action@466b8741bd91b9ee59f37db92b69f285cacada41
+        uses: k-wall/crc-github-action@fix-ubuntu-26-qemu
         with:
           pull-secret: ${{ secrets.REDHAT_PULL_SECRET }}
           preset: microshift
