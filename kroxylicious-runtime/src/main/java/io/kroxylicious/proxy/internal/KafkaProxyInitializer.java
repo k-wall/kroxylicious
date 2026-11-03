@@ -23,6 +23,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
+import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SniHandler;
@@ -34,6 +35,7 @@ import io.kroxylicious.kafka.common.protocol.ApiKeys;
 import io.kroxylicious.proxy.authentication.TransportSubjectBuilder;
 import io.kroxylicious.proxy.config.NettySettings;
 import io.kroxylicious.proxy.config.PluginFactoryRegistry;
+import io.kroxylicious.proxy.config.ProxyProtocolMode;
 import io.kroxylicious.proxy.internal.codec.KafkaMessageListener;
 import io.kroxylicious.proxy.internal.codec.KafkaRequestDecoder;
 import io.kroxylicious.proxy.internal.codec.KafkaResponseEncoder;
@@ -41,6 +43,7 @@ import io.kroxylicious.proxy.internal.metrics.MetricEmittingKafkaMessageListener
 import io.kroxylicious.proxy.internal.net.EndpointBinding;
 import io.kroxylicious.proxy.internal.net.EndpointBindingResolver;
 import io.kroxylicious.proxy.internal.net.EndpointReconciler;
+import io.kroxylicious.proxy.internal.net.EndpointRegistry;
 import io.kroxylicious.proxy.internal.routing.DirectRouting;
 import io.kroxylicious.proxy.internal.routing.DynamicRouting;
 import io.kroxylicious.proxy.internal.routing.RouteDescriptor;
@@ -125,9 +128,17 @@ public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
 
         var kafkaSession = new KafkaSession(KafkaSessionState.ESTABLISHING);
 
-        LOGGER.atDebug().log("Adding PROXY protocol detection handler");
-        ch.pipeline().addLast("HaProxyProtocolDetectionHandler",
-                new HaProxyProtocolDetectionHandler(kafkaSession));
+        var bindingCtx = Objects.requireNonNull(
+                Optional.ofNullable(ch.parent())
+                        .map(p -> p.attr(EndpointRegistry.BINDING_CONTEXT).get())
+                        .orElse(null),
+                "No BindingContext on parent channel — EndpointRegistry must set BINDING_CONTEXT before accepting connections");
+        var mode = bindingCtx.proxyProtocolMode();
+        if (mode == ProxyProtocolMode.REQUIRED) {
+            LOGGER.atDebug().log("Adding static PROXY protocol decoder (mode=required)");
+            ch.pipeline().addLast("HAProxyMessageDecoder", new HAProxyMessageDecoder());
+            ch.pipeline().addLast("HAProxyMessageHandler", new HAProxyMessageHandler(kafkaSession));
+        }
 
         if (tls) {
             initTlsChannel(ch, kafkaSession);
@@ -235,17 +246,15 @@ public class KafkaProxyInitializer extends ChannelInitializer<Channel> {
             return;
         }
         ch.closeFuture().addListener(f -> virtualClusterRegistry.deregisterConnection(clusterName, clientConnectionStateMachine));
-        addHandlers(ch, binding, kafkaSession, subjectBuilder, clientConnectionStateMachine);
+        addHandlers(ch, binding, subjectBuilder, clientConnectionStateMachine);
     }
 
-    private void addHandlers(Channel ch, EndpointBinding binding, KafkaSession kafkaSession, TransportSubjectBuilder subjectBuilder,
+    private void addHandlers(Channel ch, EndpointBinding binding, TransportSubjectBuilder subjectBuilder,
                              ClientConnectionStateMachine clientConnectionStateMachine) {
         var virtualCluster = binding.endpointGateway().virtualCluster();
         ChannelPipeline pipeline = ch.pipeline();
 
         pipeline.remove(LOGGING_INBOUND_ERROR_HANDLER_NAME);
-        var gatewayMode = binding.endpointGateway().proxyProtocolMode();
-        pipeline.addLast("proxyProtocolEnforcer", new ProxyProtocolEnforcementHandler(gatewayMode, kafkaSession));
         if (virtualCluster.isLogNetwork()) {
             pipeline.addLast("networkLogger", new LoggingHandler("io.kroxylicious.proxy.internal.DownstreamNetworkLogger", LogLevel.INFO));
         }

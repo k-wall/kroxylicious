@@ -50,23 +50,28 @@ import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.MessageToByteEncoder;
+import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.timeout.IdleStateHandler;
+import io.netty.util.Attribute;
 import io.netty.util.internal.StringUtil;
 
 import io.kroxylicious.kafka.common.protocol.ApiKeys;
 import io.kroxylicious.proxy.bootstrap.RouterChainFactory;
 import io.kroxylicious.proxy.config.CacheConfiguration;
 import io.kroxylicious.proxy.config.NettySettings;
+import io.kroxylicious.proxy.config.ProxyProtocolMode;
 import io.kroxylicious.proxy.config.ServiceBasedPluginFactoryRegistry;
 import io.kroxylicious.proxy.config.TargetCluster;
 import io.kroxylicious.proxy.config.tls.Tls;
+import io.kroxylicious.proxy.internal.net.BindingContext;
 import io.kroxylicious.proxy.internal.net.EndpointBinding;
 import io.kroxylicious.proxy.internal.net.EndpointBindingResolver;
 import io.kroxylicious.proxy.internal.net.EndpointGateway;
 import io.kroxylicious.proxy.internal.net.EndpointReconciler;
+import io.kroxylicious.proxy.internal.net.EndpointRegistry;
 import io.kroxylicious.proxy.internal.net.EndpointResolutionException;
 import io.kroxylicious.proxy.internal.routing.DirectRouting;
 import io.kroxylicious.proxy.internal.routing.DynamicRouting;
@@ -117,6 +122,10 @@ class KafkaProxyInitializerTest {
     @Mock(strictness = Mock.Strictness.LENIENT)
     private ServerSocketChannel acceptingSocketChannel;
 
+    @SuppressWarnings("rawtypes")
+    @Mock(strictness = Mock.Strictness.LENIENT)
+    private Attribute bindingContextAttribute;
+
     @Captor
     ArgumentCaptor<ChannelInboundHandlerAdapter> plainChannelResolverCaptor;
 
@@ -145,6 +154,9 @@ class KafkaProxyInitializerTest {
         when(channel.close()).thenReturn(closeFuture);
 
         when(acceptingSocketChannel.localAddress()).thenReturn(localhost);
+        // noinspection unchecked
+        when(acceptingSocketChannel.attr(EndpointRegistry.BINDING_CONTEXT)).thenReturn(bindingContextAttribute);
+        when(bindingContextAttribute.get()).thenReturn(new BindingContext(ProxyProtocolMode.FORBIDDEN));
         when(endpointBinding.endpointGateway()).thenReturn(virtualClusterModel.gateways().values().iterator().next());
     }
 
@@ -254,7 +266,6 @@ class KafkaProxyInitializerTest {
         // Then
         final InOrder orderedVerifyer = inOrder(channelPipeline);
         verifyErrorHandlerRemoved(orderedVerifyer);
-        verifyProxyProtocolEnforcerAdded(orderedVerifyer);
         verifyEncoderAndOrdererAdded(orderedVerifyer);
         verifyFrontendHandlerAdded(orderedVerifyer);
         verifyForwardingHandlerAdded(orderedVerifyer);
@@ -277,7 +288,6 @@ class KafkaProxyInitializerTest {
         // Then
         final InOrder orderedVerifyer = inOrder(channelPipeline);
         verifyErrorHandlerRemoved(orderedVerifyer);
-        verifyProxyProtocolEnforcerAdded(orderedVerifyer);
         verifyEncoderAndOrdererAdded(orderedVerifyer);
         verifyFrameLoggerAdded(orderedVerifyer);
         verifyFrontendHandlerAdded(orderedVerifyer);
@@ -301,7 +311,6 @@ class KafkaProxyInitializerTest {
         // Then
         final InOrder orderedVerifyer = inOrder(channelPipeline);
         verifyErrorHandlerRemoved(orderedVerifyer);
-        verifyProxyProtocolEnforcerAdded(orderedVerifyer);
         verifyNetworkLoggerAdded(orderedVerifyer);
         verifyEncoderAndOrdererAdded(orderedVerifyer);
         verifyFrontendHandlerAdded(orderedVerifyer);
@@ -312,15 +321,31 @@ class KafkaProxyInitializerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    void shouldAlwaysAddDetectionHandler(boolean tls) {
+    void shouldNotAddHaProxyDecoderWhenModeForbidden(boolean tls) {
         // Given
+        when(bindingContextAttribute.get()).thenReturn(new BindingContext(ProxyProtocolMode.FORBIDDEN));
         kafkaProxyInitializer = createKafkaProxyInitializer(tls, (endpoint, sniHostname) -> bindingStage);
 
         // When
         kafkaProxyInitializer.initChannel(channel);
 
         // Then
-        verify(channelPipeline).addLast(eq("HaProxyProtocolDetectionHandler"), isA(HaProxyProtocolDetectionHandler.class));
+        verify(channelPipeline, never()).addLast(eq("HAProxyMessageDecoder"), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    void shouldAddHaProxyDecoderWhenModeRequired(boolean tls) {
+        // Given
+        when(bindingContextAttribute.get()).thenReturn(new BindingContext(ProxyProtocolMode.REQUIRED));
+        kafkaProxyInitializer = createKafkaProxyInitializer(tls, (endpoint, sniHostname) -> bindingStage);
+
+        // When
+        kafkaProxyInitializer.initChannel(channel);
+
+        // Then
+        verify(channelPipeline).addLast(eq("HAProxyMessageDecoder"), isA(HAProxyMessageDecoder.class));
+        verify(channelPipeline).addLast(eq("HAProxyMessageHandler"), isA(HAProxyMessageHandler.class));
     }
 
     @Test
@@ -581,10 +606,6 @@ class KafkaProxyInitializerTest {
 
     private void verifyErrorHandlerRemoved(InOrder orderedVerifyer) {
         orderedVerifyer.verify(channelPipeline).remove(LOGGING_INBOUND_ERROR_HANDLER_NAME);
-    }
-
-    private void verifyProxyProtocolEnforcerAdded(InOrder orderedVerifyer) {
-        orderedVerifyer.verify(channelPipeline).addLast(eq("proxyProtocolEnforcer"), isA(ProxyProtocolEnforcementHandler.class));
     }
 
     private void verifyNetworkLoggerAdded(InOrder orderedVerifyer) {

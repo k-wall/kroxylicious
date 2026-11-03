@@ -36,6 +36,7 @@ import io.netty.handler.codec.haproxy.HAProxyMessage;
 import io.netty.handler.codec.haproxy.HAProxyMessageEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslHandler;
 
 import io.kroxylicious.testing.integration.Request;
 import io.kroxylicious.testing.integration.Response;
@@ -53,7 +54,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * KafkaClient for testing.
  * <p>
  * The kafka client closes its channel after it gets a response. A new
- * connection is bootstrapped on every call to `get`.
+ * connection is bootstrapped on first call to `get`.
  * </p>
  * <p>
  * The intention is that it should be used to fire a single RPC at a server
@@ -209,6 +210,8 @@ public final class KafkaClient implements AutoCloseable {
         var candidate = new CompletableFuture<Channel>();
 
         if (connected.compareAndSet(null, candidate)) {
+            var proxyPhaseFuture = new CompletableFuture<Void>();
+
             Bootstrap b = new Bootstrap();
             b.group(bossGroup)
                     .channel(eventGroupConfig.clientChannelClass())
@@ -216,50 +219,73 @@ public final class KafkaClient implements AutoCloseable {
                     .handler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         public void initChannel(SocketChannel ch) {
-                            ChannelPipeline p = ch.pipeline();
-                            if (proxyMessage != null) {
-                                p.addLast(HAProxyMessageEncoder.INSTANCE);
-                                p.addLast(new ChannelInboundHandlerAdapter() {
-                                    @Override
-                                    public void channelActive(ChannelHandlerContext ctx) {
-                                        ctx.writeAndFlush(proxyMessage).addListener(writeFuture -> {
-                                            ctx.pipeline().remove(HAProxyMessageEncoder.class);
-                                            ctx.pipeline().remove(this);
-                                            if (sslContext != null) {
-                                                var sslHandler = sslContext.newHandler(ctx.alloc(), host, port);
-                                                ctx.pipeline().addFirst(sslHandler);
-                                                sslHandler.handshakeFuture().addListener(hf -> {
-                                                    ctx.fireChannelActive();
-                                                    candidate.complete(ctx.channel());
-                                                });
-                                            }
-                                            else {
-                                                ctx.fireChannelActive();
-                                                candidate.complete(ctx.channel());
-                                            }
-                                        });
-                                    }
-                                });
-                            }
-                            else if (sslContext != null) {
-                                p.addLast(sslContext.newHandler(ch.alloc(), host, port));
-                            }
-                            p.addLast(new KafkaRequestEncoder(correlationManager));
-                            p.addLast(new KafkaResponseDecoder(correlationManager));
-                            p.addLast(kafkaClientHandler);
+                            buildClientPipeline(ch, proxyPhaseFuture, candidate);
                         }
                     });
 
             ChannelFuture connect = b.connect(host, port);
-            if (proxyMessage == null) {
-                connect.addListeners((ChannelFutureListener) channelFuture -> candidate.complete(channelFuture.channel()));
-            }
+            connect.addListener((ChannelFutureListener) channelFuture -> {
+                if (!channelFuture.isSuccess()) {
+                    proxyPhaseFuture.completeExceptionally(channelFuture.cause());
+                }
+                else if (proxyMessage == null) {
+                    proxyPhaseFuture.complete(null);
+                }
+                // proxy case: ProxyPreambleSender completes proxyPhaseFuture after the write
+            });
             connect.channel().closeFuture().addListener(future -> correlationManager.onChannelClose());
             return candidate;
         }
         else {
             return connected.get();
         }
+    }
+
+    private void buildClientPipeline(SocketChannel ch, CompletableFuture<Void> proxyPhaseFuture, CompletableFuture<Channel> candidate) {
+        ChannelPipeline p = ch.pipeline();
+        if (proxyMessage != null) {
+            p.addLast(HAProxyMessageEncoder.INSTANCE);
+            p.addLast(new ProxyPreambleSender(proxyPhaseFuture));
+        }
+        SslHandler sslHandler = null;
+        if (sslContext != null) {
+            sslHandler = sslContext.newHandler(ch.alloc(), host, port);
+            p.addLast(sslHandler);
+        }
+        wireReadySignal(proxyPhaseFuture, candidate, ch, sslHandler);
+        p.addLast(new KafkaRequestEncoder(correlationManager));
+        p.addLast(new KafkaResponseDecoder(correlationManager));
+        p.addLast(kafkaClientHandler);
+    }
+
+    private static void wireReadySignal(CompletableFuture<Void> proxyPhaseFuture, CompletableFuture<Channel> candidate,
+                                        Channel ch, @Nullable SslHandler sslHandler) {
+        proxyPhaseFuture
+                .thenCompose(v -> toHandshakeFuture(sslHandler))
+                .whenComplete((v, ex) -> {
+                    if (ex != null) {
+                        candidate.completeExceptionally(ex);
+                    }
+                    else {
+                        candidate.complete(ch);
+                    }
+                });
+    }
+
+    private static CompletableFuture<Void> toHandshakeFuture(@Nullable SslHandler sslHandler) {
+        if (sslHandler == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        var result = new CompletableFuture<Void>();
+        sslHandler.handshakeFuture().addListener(hf -> {
+            if (hf.isSuccess()) {
+                result.complete(null);
+            }
+            else {
+                result.completeExceptionally(hf.cause());
+            }
+        });
+        return result;
     }
 
     /**
@@ -326,6 +352,29 @@ public final class KafkaClient implements AutoCloseable {
         }
         catch (SSLException e) {
             throw new RuntimeException("Failed to build SslContext", e);
+        }
+    }
+
+    private class ProxyPreambleSender extends ChannelInboundHandlerAdapter {
+        private final CompletableFuture<Void> phaseFuture;
+
+        ProxyPreambleSender(CompletableFuture<Void> phaseFuture) {
+            this.phaseFuture = phaseFuture;
+        }
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) {
+            ctx.writeAndFlush(proxyMessage).addListener(writeFuture -> {
+                ctx.pipeline().remove(HAProxyMessageEncoder.class);
+                ctx.pipeline().remove(this);
+                if (writeFuture.isSuccess()) {
+                    ctx.fireChannelActive();
+                    phaseFuture.complete(null);
+                }
+                else {
+                    phaseFuture.completeExceptionally(writeFuture.cause());
+                }
+            });
         }
     }
 

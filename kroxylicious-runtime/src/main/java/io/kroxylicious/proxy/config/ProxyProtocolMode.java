@@ -29,9 +29,13 @@ public enum ProxyProtocolMode {
     REQUIRED,
 
     /**
-     * PROXY protocol headers are not permitted. Connections that begin with a PROXY
-     * header will be rejected. This is the default when no {@code proxyProtocol} block
-     * is configured on a gateway.
+     * PROXY protocol headers are not permitted. This is the default when no
+     * {@code proxyProtocol} block is configured on a gateway.
+     * <p>
+     * No PROXY-protocol decoder is installed in the pipeline. If a client sends a PROXY
+     * header, the raw bytes reach the Kafka frame decoder, which raises a protocol error
+     * and closes the connection.
+     * </p>
      */
     @JsonProperty("forbidden")
     FORBIDDEN

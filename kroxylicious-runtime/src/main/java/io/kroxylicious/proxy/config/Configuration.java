@@ -102,6 +102,8 @@ public record Configuration(
         if (filterDefinitions != null) {
             checkAllNamedFilterAreUsed(filterDefinitions, virtualClusters, defaultFilters, routerDefinitions);
         }
+
+        validateProxyProtocolPortConsistency(virtualClusters);
     }
 
     /**
@@ -453,6 +455,30 @@ public record Configuration(
                             filterDefinitionsByName, routersByName, clustersByName, pfr);
                 })
                 .toList();
+    }
+
+    private static void validateProxyProtocolPortConsistency(List<VirtualCluster> virtualClusters) {
+        Map<Integer, ProxyProtocolMode> portModes = new HashMap<>();
+        Map<Integer, String> portGatewayDescriptions = new HashMap<>();
+        for (VirtualCluster vc : virtualClusters) {
+            for (VirtualClusterGateway gw : vc.gateways()) {
+                int port = gw.bootstrapPort();
+                if (port == 0) {
+                    continue; // OS-assigned ports are always unique, no conflict possible
+                }
+                ProxyProtocolMode mode = gw.proxyProtocolMode();
+                String description = "gateway '%s' in virtual cluster '%s'".formatted(gw.name(), vc.name());
+                ProxyProtocolMode existing = portModes.put(port, mode);
+                String existingDescription = portGatewayDescriptions.put(port, description);
+                if (existing != null && existing != mode) {
+                    throw new IllegalConfigurationException(
+                            ("Gateway '%s' in virtual cluster '%s' on port %d has proxyProtocol mode %s "
+                                    + "but %s on the same port uses %s. "
+                                    + "All gateways sharing a port must use the same proxyProtocol mode.")
+                                    .formatted(gw.name(), vc.name(), port, mode, existingDescription, existing));
+                }
+            }
+        }
     }
 
     /**

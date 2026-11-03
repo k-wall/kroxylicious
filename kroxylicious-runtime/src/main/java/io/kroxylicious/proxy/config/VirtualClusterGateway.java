@@ -60,6 +60,23 @@ public record VirtualClusterGateway(@JsonProperty(required = true) String name,
     }
 
     /**
+     * Returns the configured bootstrap port for this gateway, or {@code 0} if the port is
+     * OS-assigned (i.e. not yet known).
+     *
+     * @return bootstrap port, or 0 for ephemeral/OS-assigned ports
+     */
+    int bootstrapPort() {
+        if (portIdentifiesNode != null) {
+            var addr = portIdentifiesNode.getBootstrapAddress();
+            return addr != null ? addr.port() : 0;
+        }
+        if (sniHostIdentifiesNode != null) {
+            return sniHostIdentifiesNode.getBootstrapPort();
+        }
+        return 0;
+    }
+
+    /**
      * Builds the {@link NodeIdentificationStrategy} from whichever of the port-based or
      * SNI-based configurations was specified.
      *

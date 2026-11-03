@@ -25,6 +25,7 @@ import io.kroxylicious.proxy.model.VirtualClusterModel;
 import io.kroxylicious.proxy.router.Router;
 import io.kroxylicious.proxy.router.RouterFactory;
 import io.kroxylicious.proxy.router.RouterFactoryContext;
+import io.kroxylicious.proxy.service.HostPort;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -44,7 +45,7 @@ class ConfigurationValidationTest {
     private static VirtualClusterGateway simpleGateway(String name) {
         return new VirtualClusterGateway(name,
                 new PortIdentifiesNodeIdentificationStrategy(
-                        new io.kroxylicious.proxy.service.HostPort("localhost", 9192), null, null, null),
+                        new HostPort("localhost", 9192), null, null, null),
                 null, Optional.empty(), null);
     }
 
@@ -418,6 +419,88 @@ class ConfigurationValidationTest {
         assertThatThrownBy(() -> new Configuration(null, null, null, null, null, List.of(), null, false, Optional.empty(), null))
                 .isInstanceOf(IllegalConfigurationException.class)
                 .hasMessageContaining("At least one virtual cluster");
+    }
+
+    @Test
+    void shouldRejectGatewaysSharingPortWithDifferingProxyProtocolModes() {
+        // Given
+        var gwForbidden = new VirtualClusterGateway("gw-forbidden",
+                new PortIdentifiesNodeIdentificationStrategy(
+                        new HostPort("localhost", 9192), null, null, null),
+                null, Optional.empty(), null); // null → FORBIDDEN
+        var gwRequired = new VirtualClusterGateway("gw-required",
+                new PortIdentifiesNodeIdentificationStrategy(
+                        new HostPort("localhost", 9192), null, null, null),
+                null, Optional.empty(), new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED));
+        var vc1 = new VirtualCluster("vc1", CLUSTER_TARGET, List.of(gwForbidden), false, false, null);
+        var vc2 = new VirtualCluster("vc2", CLUSTER_TARGET, List.of(gwRequired), false, false, null);
+        var vcs = List.of(vc1, vc2);
+
+        // When / Then
+        assertThatThrownBy(() -> config(vcs))
+                .isInstanceOf(IllegalConfigurationException.class)
+                .hasMessageContaining(
+                        "Gateway 'gw-required' in virtual cluster 'vc2' on port 9192 has proxyProtocol mode REQUIRED "
+                                + "but gateway 'gw-forbidden' in virtual cluster 'vc1' on the same port uses FORBIDDEN");
+    }
+
+    @Test
+    void shouldRejectGatewaysInSameVirtualClusterSharingPortWithDifferingProxyProtocolModes() {
+        // Given
+        var gwForbidden = new VirtualClusterGateway("gw-forbidden",
+                new PortIdentifiesNodeIdentificationStrategy(
+                        new HostPort("localhost", 9192), null, null, null),
+                null, Optional.empty(), null); // null → FORBIDDEN
+        var gwRequired = new VirtualClusterGateway("gw-required",
+                new PortIdentifiesNodeIdentificationStrategy(
+                        new HostPort("localhost", 9192), null, null, null),
+                null, Optional.empty(), new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED));
+
+        // When / Then - validation fires in VirtualCluster constructor, before config() is called
+        assertThatThrownBy(() -> new VirtualCluster("vc1", CLUSTER_TARGET, List.of(gwForbidden, gwRequired), false, false, null))
+                .isInstanceOf(IllegalConfigurationException.class)
+                .hasMessageContaining(
+                        "Gateway 'gw-required' on port 9192 has proxyProtocol mode REQUIRED "
+                                + "but gateway 'gw-forbidden' on the same port uses FORBIDDEN. "
+                                + "All gateways in virtual cluster 'vc1' sharing a port must use the same proxyProtocol mode");
+    }
+
+    @Test
+    void shouldAllowGatewaysOnPortZeroWithDifferingProxyProtocolModes() {
+        // Given
+        var gwForbidden = new VirtualClusterGateway("gw-forbidden",
+                new PortIdentifiesNodeIdentificationStrategy(
+                        new HostPort("localhost", 0), null, null, null),
+                null, Optional.empty(), null); // null → FORBIDDEN
+        var gwRequired = new VirtualClusterGateway("gw-required",
+                new PortIdentifiesNodeIdentificationStrategy(
+                        new HostPort("localhost", 0), null, null, null),
+                null, Optional.empty(), new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED));
+        var vc1 = new VirtualCluster("vc1", CLUSTER_TARGET, List.of(gwForbidden), false, false, null);
+        var vc2 = new VirtualCluster("vc2", CLUSTER_TARGET, List.of(gwRequired), false, false, null);
+
+        // When / Then - port 0 gateways always receive their own unique OS-assigned port, so mode conflicts cannot occur
+        assertThatCode(() -> config(List.of(vc1, vc2)))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldAcceptGatewaysSharingPortWithSameProxyProtocolMode() {
+        // Given
+        var gw1 = new VirtualClusterGateway("gw1",
+                new PortIdentifiesNodeIdentificationStrategy(
+                        new HostPort("localhost", 9192), null, null, null),
+                null, Optional.empty(), new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED));
+        var gw2 = new VirtualClusterGateway("gw2",
+                new PortIdentifiesNodeIdentificationStrategy(
+                        new HostPort("localhost", 9192), null, null, null),
+                null, Optional.empty(), new ProxyProtocolConfig(ProxyProtocolMode.REQUIRED));
+        var vc1 = new VirtualCluster("vc1", CLUSTER_TARGET, List.of(gw1), false, false, null);
+        var vc2 = new VirtualCluster("vc2", CLUSTER_TARGET, List.of(gw2), false, false, null);
+
+        // When / Then
+        assertThatCode(() -> config(List.of(vc1, vc2)))
+                .doesNotThrowAnyException();
     }
 
     @Test
