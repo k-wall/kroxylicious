@@ -33,6 +33,7 @@ import io.prometheus.metrics.exporter.httpserver.MetricsHandler;
 import io.kroxylicious.kubernetes.operator.informer.SharedInformerManager;
 import io.kroxylicious.kubernetes.operator.management.UnsupportedHttpMethodFilter;
 import io.kroxylicious.kubernetes.operator.reconciler.kafkaprotocolfilter.KafkaProtocolFilterReconciler;
+import io.kroxylicious.kubernetes.operator.reconciler.kafkaprotocolrouter.KafkaProtocolRouterReconciler;
 import io.kroxylicious.kubernetes.operator.reconciler.kafkaproxy.KafkaProxyReconciler;
 import io.kroxylicious.kubernetes.operator.reconciler.kafkaproxyingress.KafkaProxyIngressReconciler;
 import io.kroxylicious.kubernetes.operator.reconciler.kafkaservice.KafkaServiceReconciler;
@@ -157,6 +158,8 @@ public class OperatorMain {
         operator.register(new KafkaProxyIngressReconciler(Clock.systemUTC()), controllerConfigurer.configurationOverrider());
         operator.register(new KafkaServiceReconciler(Clock.systemUTC(), sharedInformerManager), controllerConfigurer.configurationOverrider());
         operator.register(new KafkaProtocolFilterReconciler(Clock.systemUTC(), SecureConfigInterpolator.DEFAULT_INTERPOLATOR, sharedInformerManager),
+                controllerConfigurer.configurationOverrider());
+        operator.register(new KafkaProtocolRouterReconciler(Clock.systemUTC(), SecureConfigInterpolator.DEFAULT_INTERPOLATOR, sharedInformerManager),
                 controllerConfigurer.configurationOverrider());
 
         addHttpGetHandler("/", () -> 404);

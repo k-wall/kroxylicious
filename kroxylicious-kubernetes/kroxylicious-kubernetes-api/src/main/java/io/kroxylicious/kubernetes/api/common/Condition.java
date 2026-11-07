@@ -41,6 +41,8 @@ public class Condition implements io.fabric8.kubernetes.api.builder.Editable<Con
     public static final String REASON_REFERENCED_RESOURCE_NOT_RECONCILED = "ReferencedResourceNotReconciled";
     public static final String REASON_REQUESTED_RESOURCE_KIND_NOT_SUPPORTED = "RequestedResourceKindNotSupported";
     public static final String REASON_INVALID = "Invalid";
+    public static final String REASON_ROUTER_DAG_CYCLE = "RouterDAGCycle";
+    public static final String REASON_TARGET_KAFKA_SERVICE_REF_DEPRECATED = "TargetKafkaServiceRefDeprecated";
 
     @Override
     public ConditionBuilder edit() {
